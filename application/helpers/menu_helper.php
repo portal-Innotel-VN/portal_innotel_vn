@@ -24,6 +24,16 @@ function app_init_admin_sidebar_menu_items()
         ]);
     }
 
+    // demo code of hiep
+    $CI->app_menu->add_sidebar_menu_item('my_customers', [
+        'name' => 'Khách Hàng Của Tôi',
+        'href' => admin_url('my_customers'),
+        'position' => 6,
+        'icon' => 'fa fa-address-book',
+    ]);
+
+
+
     $CI->app_menu->add_sidebar_menu_item('sales', [
             'collapse' => true,
             'name'     => _l('als_sales'),
