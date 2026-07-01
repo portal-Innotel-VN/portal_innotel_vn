@@ -407,7 +407,7 @@ class Sales_pipeline_model extends App_Model
                         . '<p><b>Tuần này có kết quả chưa? Tại sao chưa đóng được deal?</b></p>'
                         . '<p><a href="' . admin_url('sales_pipeline/deal/' . $deal['id']) . '">Cập nhật tiến độ tại đây</a></p>';
 
-            send_mail_template($email_body, $email_subject, $staff->email);
+            $this->emails_model->send_simple_email($staff->email, $email_subject, $email_body);
         }
 
         // Log nhắc nhở
