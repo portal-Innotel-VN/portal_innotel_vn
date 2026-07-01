@@ -53,7 +53,7 @@
                                 <span id="file_name" class="font-bold text-info"></span>
                             </div>
                             <input type="file" name="import_file" id="import_file"
-                                   accept=".xls,.xlsx" required style="display: none;">
+                                   accept=".xls,.xlsx" style="display: none;">
                         </div>
 
                         <hr />
@@ -111,6 +111,15 @@ $(function() {
         zone.css('border-color', '#27ae60').css('background', '');
         input[0].files = e.originalEvent.dataTransfer.files;
         $('#file_name').text(e.originalEvent.dataTransfer.files[0].name);
+    });
+
+    // Validate form on submit
+    $('form').on('submit', function(e) {
+        if (!input.val()) {
+            e.preventDefault();
+            alert('Vui lòng kéo thả hoặc click chọn tệp tin Excel (.xls, .xlsx) trước khi nhấn Import.');
+            return false;
+        }
     });
 });
 </script>
