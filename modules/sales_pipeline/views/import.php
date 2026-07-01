@@ -50,10 +50,10 @@
                                     <?php echo _l('sales_pipeline_drag_file'); ?>
                                 </p>
                                 <p class="text-muted"><small><?php echo _l('sales_pipeline_file_types'); ?>: .xls, .xlsx</small></p>
-                                <input type="file" name="import_file" id="import_file"
-                                       accept=".xls,.xlsx" required style="display: none;">
                                 <span id="file_name" class="font-bold text-info"></span>
                             </div>
+                            <input type="file" name="import_file" id="import_file"
+                                   accept=".xls,.xlsx" required style="display: none;">
                         </div>
 
                         <hr />
