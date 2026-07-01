@@ -57,8 +57,8 @@ class Tech_reports extends AdminController
         $data['end_date'] = $end_date;
         
         // Get statistics
-        $data['daily_summary'] = $this->tech_reports_model->get_daily_summary($start_date, $end_date);
-        $data['compliance_report'] = $this->tech_reports_model->get_compliance_report($start_date, $end_date);
+        $data['daily_summary'] = $this->tech_reports_model->get_daily_summary_range($start_date, $end_date);
+        $data['compliance_report'] = $this->tech_reports_model->get_staff_compliance_report($start_date, $end_date);
         $data['tech_staff'] = $this->tech_reports_model->get_tech_staff();
         
         // Calculate totals

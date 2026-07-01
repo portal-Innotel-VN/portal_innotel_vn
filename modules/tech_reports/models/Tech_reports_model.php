@@ -344,17 +344,32 @@ class Tech_reports_model extends App_Model
      * @param string $report_date
      * @param bool $has_submitted
      */
-    public function update_compliance_status($staff_id, $report_date, $has_submitted)
+    public function update_compliance_status($staff_id, $report_date = null, $has_submitted = null)
     {
-        $this->db->where('staff_id', $staff_id);
-        $this->db->where('check_date', $report_date);
-        $existing = $this->db->get(db_prefix() . 'tech_compliance_log')->row();
+        if (is_numeric($staff_id) && is_string($report_date) && ($has_submitted !== null)) {
+            $this->db->where('staff_id', $staff_id);
+            $this->db->where('check_date', $report_date);
+            $existing = $this->db->get(db_prefix() . 'tech_compliance_log')->row();
 
-        if ($existing) {
-            $this->db->where('id', $existing->id);
+            if ($existing) {
+                $this->db->where('id', $existing->id);
+                $this->db->update(db_prefix() . 'tech_compliance_log', [
+                    'has_submitted' => $has_submitted ? 1 : 0,
+                ]);
+            }
+            return true;
+        } else {
+            // Trường hợp gọi từ controller: cập nhật ghi chú giải quyết tuân thủ bằng ID dòng log
+            $log_id = $staff_id;
+            $notes = $report_date;
+
+            $this->db->where('id', $log_id);
             $this->db->update(db_prefix() . 'tech_compliance_log', [
-                'has_submitted' => $has_submitted ? 1 : 0,
+                'resolved_by' => get_staff_user_id(),
+                'resolved_at' => date('Y-m-d H:i:s'),
+                'notes'       => $notes,
             ]);
+            return $this->db->affected_rows() > 0;
         }
     }
 
@@ -459,5 +474,79 @@ class Tech_reports_model extends App_Model
         $this->db->order_by('check_date', 'DESC');
 
         return $this->db->get(db_prefix() . 'tech_compliance_log')->result_array();
+    }
+
+    /**
+     * Thống kê tổng số giờ và số báo cáo theo từng ngày trong khoảng thời gian
+     * @param string $from_date
+     * @param string $to_date
+     * @return array
+     */
+    public function get_daily_summary_range($from_date, $to_date)
+    {
+        $this->db->select('report_date, SUM(hours_spent) as total_hours, COUNT(*) as report_count');
+        $this->db->where('report_date >=', $from_date);
+        $this->db->where('report_date <=', $to_date);
+        $this->db->group_by('report_date');
+        $this->db->order_by('report_date', 'ASC');
+
+        return $this->db->get(db_prefix() . 'tech_daily_reports')->result_array();
+    }
+
+    /**
+     * Báo cáo tuân thủ của từng nhân viên phòng kỹ thuật
+     * @param string $from_date
+     * @param string $to_date
+     * @return array
+     */
+    public function get_staff_compliance_report($from_date, $to_date)
+    {
+        // 1. Tính toán số ngày làm việc kỳ vọng (Mon-Fri)
+        $start = new DateTime($from_date);
+        $end   = new DateTime($to_date);
+        $end->modify('+1 day'); // Bao gồm cả ngày kết thúc
+        
+        $interval = new DateInterval('P1D');
+        $daterange = new DatePeriod($start, $interval, $end);
+        
+        $expected_days = 0;
+        $work_dates = [];
+        foreach ($daterange as $date) {
+            $day_of_week = $date->format('N'); // 1 = Thứ hai, 7 = Chủ nhật
+            if ($day_of_week < 6) { // Thứ hai đến thứ sáu
+                $expected_days++;
+                $work_dates[] = $date->format('Y-m-d');
+            }
+        }
+
+        // 2. Lấy nhân sự phòng kỹ thuật đang hoạt động
+        $tech_staff = $this->get_tech_staff(true);
+        $report = [];
+
+        foreach ($tech_staff as $staff) {
+            $submitted = 0;
+            if (!empty($work_dates)) {
+                $this->db->select('report_date');
+                $this->db->distinct();
+                $this->db->where('staff_id', $staff['staff_id']);
+                $this->db->where_in('report_date', $work_dates);
+                $res = $this->db->get(db_prefix() . 'tech_daily_reports')->result_array();
+                $submitted = count($res);
+            }
+
+            $missing = max(0, $expected_days - $submitted);
+            $rate = $expected_days > 0 ? round(($submitted / $expected_days) * 100, 1) : 100;
+
+            $report[] = [
+                'staff_id'          => $staff['staff_id'],
+                'staff_name'        => $staff['staff_name'],
+                'role'              => $staff['role'],
+                'reports_submitted' => $submitted,
+                'reports_missing'   => $missing,
+                'compliance_rate'   => $rate,
+            ];
+        }
+
+        return $report;
     }
 }
