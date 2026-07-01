@@ -119,8 +119,25 @@ class Import_sales_pipeline
     {
         $python_script = __DIR__ . '/parse_excel.py';
         
+        // Tìm đường dẫn thực thi python3 có sẵn trên macOS có cài đặt thư viện
+        $python_path = 'python3';
+        $common_paths = [
+            '/Users/dieterhoang/.pyenv/versions/3.12.9/bin/python3',
+            '/usr/local/bin/python3',
+            '/Library/Frameworks/Python.framework/Versions/3.14/bin/python3',
+            '/usr/bin/python3',
+            '/opt/homebrew/bin/python3',
+            '/Users/dieterhoang/.pyenv/shims/python3',
+        ];
+        foreach ($common_paths as $path) {
+            if (file_exists($path) && is_executable($path)) {
+                $python_path = $path;
+                break;
+            }
+        }
+
         // Escape parameters for CLI security
-        $cmd = 'python3 ' . escapeshellarg($python_script) . ' ' . escapeshellarg($file_path);
+        $cmd = escapeshellcmd($python_path) . ' ' . escapeshellarg($python_script) . ' ' . escapeshellarg($file_path) . ' 2>&1';
         
         $output = shell_exec($cmd);
         
@@ -130,6 +147,11 @@ class Import_sales_pipeline
         }
         
         $data = json_decode($output, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            log_activity('Import_sales_pipeline - Non-JSON output (could be python/cmd error): ' . $output);
+            return [];
+        }
         
         if (isset($data['error'])) {
             log_activity('Import_sales_pipeline - Python error: ' . $data['error']);
