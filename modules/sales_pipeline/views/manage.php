@@ -118,12 +118,12 @@
                                         <th width="3%">#</th>
                                         <th width="10%"><?php echo _l('sales_pipeline_expected_date'); ?></th>
                                         <th width="18%"><?php echo _l('sales_pipeline_customer_name'); ?></th>
-                                        <th width="20%"><?php echo _l('sales_pipeline_deal_name'); ?></th>
+                                        <th width="18%"><?php echo _l('sales_pipeline_deal_name'); ?></th>
+                                        <th width="10%"><?php echo _l('staff'); ?></th>
                                         <th width="12%" class="text-right"><?php echo _l('sales_pipeline_deal_value'); ?></th>
                                         <th width="6%" class="text-center">% LN</th>
                                         <th width="11%" class="text-right"><?php echo _l('sales_pipeline_profit'); ?></th>
-                                        <th width="12%"><?php echo _l('sales_pipeline_status'); ?></th>
-                                        <th width="4%" class="text-center">HĐ</th>
+                                        <th width="8%"><?php echo _l('sales_pipeline_status'); ?></th>
                                         <th width="4%" class="text-center"><?php echo _l('options'); ?></th>
                                     </tr>
                                 </thead>
@@ -142,6 +142,12 @@
                                             <?php } ?>
                                         </td>
                                         <td><?php echo html_escape($deal['deal_name']); ?></td>
+                                        <td>
+                                            <a href="<?php echo admin_url('staff/profile/' . $deal['staff_id']); ?>">
+                                                <?php echo staff_profile_image($deal['staff_id'], ['staff-profile-image-small']); ?>
+                                                <?php echo html_escape($deal['staff_name']); ?>
+                                            </a>
+                                        </td>
                                         <td class="text-right font-bold"><?php echo number_format($deal['deal_value']); ?></td>
                                         <td class="text-center"><?php echo round($deal['profit_margin'] * 100); ?>%</td>
                                         <td class="text-right"><?php echo number_format($deal['expected_profit']); ?></td>
@@ -149,14 +155,6 @@
                                             <span class="label" style="background:<?php echo $deal['status_color']; ?>; color:#fff;">
                                                 <?php echo $deal['status_name']; ?>
                                             </span>
-                                        </td>
-                                        <td class="text-center">
-                                            <?php if ($deal['contract_signed']) { ?>
-                                            <i class="fa fa-check-circle text-success" data-toggle="tooltip" title="Đã ký HĐ"></i>
-                                            <?php } ?>
-                                            <?php if ($deal['invoice_issued']) { ?>
-                                            <i class="fa fa-file-text text-info" data-toggle="tooltip" title="Đã xuất HĐ"></i>
-                                            <?php } ?>
                                         </td>
                                         <td class="text-center">
                                             <?php if (has_permission('sales_pipeline', '', 'edit')) { ?>

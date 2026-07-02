@@ -32,14 +32,16 @@ class Import_sales_pipeline
      *
      * @param array $file $_FILES['import_file']
      * @param int $staff_id ID nhân viên phụ trách
-     * @return array ['success' => bool, 'imported' => int, 'message' => string]
+     * @return array ['success' => bool, 'imported' => int, 'skipped' => int, 'message' => string, 'log_id' => int]
      */
     public function process($file, $staff_id)
     {
         $result = [
             'success'  => false,
             'imported' => 0,
+            'skipped'  => 0,
             'message'  => '',
+            'log_id'   => null,
         ];
 
         // Validate file type
@@ -67,32 +69,108 @@ class Import_sales_pipeline
             return $result;
         }
 
+        // Tạo log import batch
+        $log_id = $this->CI->sales_pipeline_model->log_import_batch([
+            'file_name'     => $file['name'],
+            'file_path'     => $temp_file,
+            'uploaded_by'   => $staff_id,
+            'import_status' => 'processing',
+        ]);
+
         try {
             $rows = $this->read_excel($temp_file, $ext);
 
             if (empty($rows)) {
                 $result['message'] = 'File Excel không có dữ liệu hợp lệ.';
+                $this->CI->sales_pipeline_model->update_import_log($log_id, [
+                    'import_status'  => 'failed',
+                    'error_message'  => $result['message'],
+                    'rows_imported'  => 0,
+                    'rows_skipped'   => 0,
+                ]);
                 @unlink($temp_file);
                 return $result;
             }
 
             $imported = 0;
+            $updated_count = 0;
+            $skipped = 0;
+            
             foreach ($rows as $row) {
-                $data = $this->map_row_to_deal($row, $staff_id);
+                $data = $this->map_row_to_deal($row, $staff_id, $log_id);
                 if ($data) {
-                    $insert_id = $this->CI->sales_pipeline_model->add($data);
-                    if ($insert_id) {
-                        $imported++;
+                    $year = date('Y', strtotime($data['expected_close_date']));
+                    $existing_id = $this->CI->sales_pipeline_model->find_existing_deal($staff_id, $data['customer_name'], $data['deal_name'], $year);
+                    
+                    if ($existing_id) {
+                        $existing_deal = $this->CI->sales_pipeline_model->get($existing_id);
+                        
+                        // Bỏ qua nếu deal đã đóng (Won hoặc Lost)
+                        if (isset($existing_deal['is_won']) && $existing_deal['is_won'] == 1) {
+                            $skipped++;
+                            continue;
+                        }
+                        if (isset($existing_deal['is_lost']) && $existing_deal['is_lost'] == 1) {
+                            $skipped++;
+                            continue;
+                        }
+                        
+                        // Loại bỏ các trường định danh khỏi bản cập nhật
+                        unset($data['staff_id']);
+                        unset($data['customer_name']);
+                        unset($data['deal_name']);
+                        unset($data['import_batch_id']); // Giữ log ID của lần đầu tạo
+                        
+                        $updated = $this->CI->sales_pipeline_model->update($data, $existing_id);
+                        if ($updated) {
+                            $updated_count++;
+                            if (!empty($data['notes'])) {
+                                $this->process_activity_notes($existing_id, $data['notes']);
+                            }
+                        } else {
+                            $skipped++;
+                        }
+                    } else {
+                        // Thêm mới
+                        $insert_id = $this->CI->sales_pipeline_model->add($data);
+                        if ($insert_id) {
+                            $imported++;
+                            if (!empty($data['notes'])) {
+                                $this->process_activity_notes($insert_id, $data['notes']);
+                            }
+                        } else {
+                            $skipped++;
+                        }
                     }
+                } else {
+                    $skipped++;
                 }
             }
 
+            // Cập nhật log thành công
+            $this->CI->sales_pipeline_model->update_import_log($log_id, [
+                'import_status'  => 'completed',
+                'rows_imported'  => $imported + $updated_count,
+                'rows_skipped'   => $skipped,
+            ]);
+
             $result['success']  = true;
             $result['imported'] = $imported;
-            $result['message']  = 'Import thành công ' . $imported . ' deal.';
+            $result['updated']  = $updated_count;
+            $result['skipped']  = $skipped;
+            $result['log_id']   = $log_id;
+            $result['message']  = 'Import thành công: Thêm mới ' . $imported . ', Cập nhật ' . $updated_count . ', Bỏ qua ' . $skipped . ' dòng.';
 
         } catch (Exception $e) {
             $result['message'] = 'Lỗi đọc file: ' . $e->getMessage();
+            
+            // Cập nhật log lỗi
+            $this->CI->sales_pipeline_model->update_import_log($log_id, [
+                'import_status'  => 'failed',
+                'error_message'  => $e->getMessage(),
+                'rows_imported'  => $result['imported'],
+                'rows_skipped'   => $result['skipped'],
+            ]);
         }
 
         // Xóa file tạm
@@ -162,13 +240,14 @@ class Import_sales_pipeline
     }
 
     /**
-     * Map 1 row Excel → deal data
+     * Map 1 row Excel → deal data (với các trường mở rộng)
      *
      * @param array $row
      * @param int $staff_id
+     * @param int $log_id Import batch ID
      * @return array|false
      */
-    private function map_row_to_deal($row, $staff_id)
+    private function map_row_to_deal($row, $staff_id, $log_id)
     {
         // Bỏ qua row header, row tổng, row rỗng
         if (count($row) < 5) {
@@ -179,12 +258,12 @@ class Import_sales_pipeline
         $customer_name = isset($row[2]) ? trim($row[2]) : '';
         $deal_name     = isset($row[3]) ? trim($row[3]) : '';
 
-        if (empty($customer_name) || empty($deal_name)) {
+        if (empty($customer_name)) {
             return false;
         }
 
         // Bỏ qua row tổng (QUÍ 1, THÁNG 4-6, 6 THÁNG, etc.)
-        $skip_keywords = ['QUÍ', 'THÁNG', 'Doanh số', '6 THÁNG', '12 THÁNG', 'Các khách hàng'];
+        $skip_keywords = ['QUÍ', 'THÁNG', 'Doanh số', '6 THÁNG', '12 THÁNG', 'Các khách hàng', 'TỔNG'];
         foreach ($skip_keywords as $kw) {
             if (stripos($customer_name, $kw) !== false || stripos($deal_name, $kw) !== false) {
                 return false;
@@ -193,12 +272,12 @@ class Import_sales_pipeline
 
         // Col 4 = Doanh số
         $deal_value = isset($row[4]) ? floatval($row[4]) : 0;
-        if ($deal_value <= 0) {
-            return false;
-        }
-
-        // Col 5 = % Lợi nhuận
+        
+        // Col 5 = % Lợi nhuận (có thể là 10 hoặc 0.1 - chuẩn hóa về decimal)
         $profit_margin = isset($row[5]) ? floatval($row[5]) : 0;
+        if ($profit_margin > 1) {
+            $profit_margin = $profit_margin / 100; // 10% → 0.1
+        }
 
         // Col 1 = Ngày
         $expected_close_date = $this->parse_date($row[1] ?? null);
@@ -210,17 +289,25 @@ class Import_sales_pipeline
         $contract_signed = (isset($row[7]) && strtolower(trim($row[7])) === 'x') ? 1 : 0;
         $invoice_issued  = (isset($row[8]) && strtolower(trim($row[8])) === 'x') ? 1 : 0;
 
-        // Col 9 = Ghi chú → dùng làm activity description
+        // Col 9 = Ghi chú → lưu vào notes và phân tích
         $notes = isset($row[9]) ? trim($row[9]) : '';
 
+        // Xác định các trường mở rộng
+        $confidence_level = $this->detect_confidence_level($notes, $contract_signed, $invoice_issued);
+        $deal_phase = $this->detect_deal_phase($deal_value, $contract_signed, $invoice_issued, $notes);
+        $reporting_period = $this->extract_reporting_period($expected_close_date, $notes);
+        
         // Xác định trạng thái từ ghi chú
         $status = $this->detect_status($notes, $contract_signed, $invoice_issued);
+
+        // Phân biệt Deal vs Prospect
+        $is_prospect = ($deal_value <= 0 || empty($deal_name));
 
         $data = [
             'staff_id'            => $staff_id,
             'customer_name'       => $customer_name,
-            'deal_name'           => $deal_name,
-            'deal_value'          => $deal_value,
+            'deal_name'           => $is_prospect ? null : $deal_name,
+            'deal_value'          => $is_prospect ? 0 : $deal_value,
             'profit_margin'       => $profit_margin,
             'expected_close_date' => $expected_close_date,
             'status'              => $status,
@@ -228,6 +315,11 @@ class Import_sales_pipeline
             'invoice_issued'      => $invoice_issued,
             'reminder_enabled'    => 1,
             'reminder_frequency'  => 7,
+            'confidence_level'    => $confidence_level,
+            'deal_phase'          => $deal_phase,
+            'reporting_period'    => $reporting_period,
+            'import_batch_id'     => $log_id,
+            'notes'               => $notes,
         ];
 
         // Ghi chú → activity
@@ -286,6 +378,132 @@ class Import_sales_pipeline
         }
 
         return 1; // Mặc định: Đang tư vấn
+    }
+
+    /**
+     * Xác định mức độ tin cậy (confidence_level)
+     *
+     * @param string $notes
+     * @param int $contract_signed
+     * @param int $invoice_issued
+     * @return string prospect|tracking|confirmed
+     */
+    private function detect_confidence_level($notes, $contract_signed, $invoice_issued)
+    {
+        $notes_lower = mb_strtolower($notes, 'UTF-8');
+
+        // CHẮC CHẮN RA PO / Đã ký HĐ → confirmed
+        if ($contract_signed || $invoice_issued || 
+            strpos($notes_lower, 'chắc chắn') !== false || 
+            strpos($notes_lower, 'đã ký') !== false ||
+            strpos($notes_lower, 'đã duyệt') !== false) {
+            return 'confirmed';
+        }
+
+        // CẦN THEO DÕI / Đang duyệt → tracking
+        if (strpos($notes_lower, 'cần theo dõi') !== false || 
+            strpos($notes_lower, 'đang theo dõi') !== false ||
+            strpos($notes_lower, 'đang trình') !== false ||
+            strpos($notes_lower, 'đang duyệt') !== false) {
+            return 'tracking';
+        }
+
+        // Không có giá trị hoặc chỉ tư vấn → prospect
+        return 'prospect';
+    }
+
+    /**
+     * Xác định giai đoạn deal (deal_phase)
+     *
+     * @param float $deal_value
+     * @param int $contract_signed
+     * @param int $invoice_issued
+     * @param string $notes
+     * @return string lead|active|won|lost
+     */
+    private function detect_deal_phase($deal_value, $contract_signed, $invoice_issued, $notes)
+    {
+        $notes_lower = mb_strtolower($notes, 'UTF-8');
+
+        // Won: Đã xuất HĐ, triển khai thành công
+        if ($invoice_issued || 
+            strpos($notes_lower, 'nghiệm thu') !== false || 
+            strpos($notes_lower, 'đã triển khai') !== false ||
+            strpos($notes_lower, 'hoàn thành') !== false) {
+            return 'won';
+        }
+
+        // Lost: KH chọn NCC khác, không phê duyệt, vượt ngân sách
+        if (strpos($notes_lower, 'chọn ncc khác') !== false || 
+            strpos($notes_lower, 'không hợp tác') !== false ||
+            strpos($notes_lower, 'không phê duyệt') !== false ||
+            strpos($notes_lower, 'vượt ngân sách') !== false ||
+            strpos($notes_lower, 'hủy') !== false) {
+            return 'lost';
+        }
+
+        // Active: Có giá trị, đang chào giá, duyệt, ký HĐ
+        if ($deal_value > 0 && ($contract_signed || 
+            strpos($notes_lower, 'đang báo giá') !== false ||
+            strpos($notes_lower, 'đã gửi') !== false ||
+            strpos($notes_lower, 'đang duyệt') !== false ||
+            strpos($notes_lower, 'đã ký') !== false)) {
+            return 'active';
+        }
+
+        // Lead: Prospect, chưa có giá trị cụ thể
+        return 'lead';
+    }
+
+    /**
+     * Trích xuất reporting_period từ ngày hoặc ghi chú
+     *
+     * @param string $date Y-m-d format
+     * @param string $notes
+     * @return string Q1-2026, Q2-2026, etc.
+     */
+    private function extract_reporting_period($date, $notes)
+    {
+        // Ưu tiên từ ghi chú nếu có đề cập quý/tháng
+        $notes_upper = mb_strtoupper($notes, 'UTF-8');
+        
+        // Tìm pattern "QUÍ X" hoặc "Q X"
+        if (preg_match('/(QUÍ|Q)\s*([1-4])/u', $notes_upper, $matches)) {
+            $quarter = $matches[2];
+            $year = date('Y', strtotime($date));
+            return 'Q' . $quarter . '-' . $year;
+        }
+
+        // Tính từ ngày
+        $timestamp = strtotime($date);
+        $month = (int)date('n', $timestamp);
+        $year = date('Y', $timestamp);
+        
+        $quarter = ceil($month / 3);
+        return 'Q' . $quarter . '-' . $year;
+    }
+
+    /**
+     * Xử lý ghi chú có ký tự "→" thành các activity riêng
+     *
+     * @param int $pipeline_id
+     * @param string $notes
+     */
+    private function process_activity_notes($pipeline_id, $notes)
+    {
+        // Tách các ghi chú bằng dấu "→"
+        $activities = preg_split('/→|->/', $notes);
+        
+        foreach ($activities as $activity) {
+            $activity = trim($activity);
+            if (!empty($activity) && strlen($activity) > 3) {
+                // Thêm activity log riêng
+                $this->CI->sales_pipeline_model->add_activity(
+                    $pipeline_id,
+                    $activity
+                );
+            }
+        }
     }
 
     /**

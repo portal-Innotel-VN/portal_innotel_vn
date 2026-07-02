@@ -17,7 +17,7 @@ class Sales_pipeline extends AdminController
      */
     public function index()
     {
-        if (!has_permission('sales_pipeline', '', 'view')) {
+        if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
             access_denied('sales_pipeline');
         }
 
@@ -198,7 +198,7 @@ class Sales_pipeline extends AdminController
      */
     public function import()
     {
-        if (!has_permission('sales_pipeline', '', 'create')) {
+        if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
             access_denied('sales_pipeline');
         }
 
@@ -211,7 +211,7 @@ class Sales_pipeline extends AdminController
                 $result   = $this->import->process($_FILES['import_file'], $staff_id);
 
                 if ($result['success']) {
-                    set_alert('success', _l('sales_pipeline_import_success', $result['imported']));
+                    set_alert('success', $result['message']);
                 } else {
                     set_alert('danger', $result['message']);
                 }

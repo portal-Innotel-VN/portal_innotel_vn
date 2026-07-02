@@ -90,14 +90,15 @@ class Sales_pipeline_model extends App_Model
 
         if ($insert_id) {
             // Log activity: tạo mới
-            $this->add_activity($insert_id, 'Tạo deal mới: ' . $data['deal_name'], null, $data['status']);
+            $deal_name = $data['deal_name'] ?? ($data['customer_name'] ?? 'Deal mới');
+            $this->add_activity($insert_id, 'Tạo deal mới: ' . $deal_name, null, $data['status']);
 
             // Log activity bổ sung nếu có ghi chú
             if (!empty($activity_description)) {
                 $this->add_activity($insert_id, $activity_description);
             }
 
-            log_activity('Sales Pipeline - Deal mới [ID: ' . $insert_id . '] ' . $data['deal_name']);
+            log_activity('Sales Pipeline - Deal mới [ID: ' . $insert_id . '] ' . $deal_name);
         }
 
         return $insert_id;
@@ -191,6 +192,34 @@ class Sales_pipeline_model extends App_Model
         }
 
         return false;
+    }
+
+    /**
+     * Tìm deal đã tồn tại (Upsert logic)
+     * @param int $staff_id
+     * @param string $customer_name
+     * @param string $deal_name
+     * @param string $year
+     * @return int|false ID của deal hoặc false
+     */
+    public function find_existing_deal($staff_id, $customer_name, $deal_name, $year = null)
+    {
+        $this->db->select('id');
+        $this->db->where('staff_id', $staff_id);
+        $this->db->where('customer_name', $customer_name);
+        
+        if (empty($deal_name)) {
+            $this->db->where('(deal_name IS NULL OR deal_name = "")');
+        } else {
+            $this->db->where('deal_name', $deal_name);
+        }
+
+        if ($year) {
+            $this->db->where('YEAR(expected_close_date)', $year);
+        }
+
+        $row = $this->db->get(db_prefix() . 'sales_pipeline')->row();
+        return $row ? $row->id : false;
     }
 
     // =========================================================================
@@ -324,6 +353,71 @@ class Sales_pipeline_model extends App_Model
         }
 
         return $summary;
+    }
+
+    // =========================================================================
+    // IMPORT LOG
+    // =========================================================================
+
+    /**
+     * Ghi log import batch
+     * @param array $data
+     * @return int Insert ID
+     */
+    public function log_import_batch($data)
+    {
+        $log_data = [
+            'file_name'      => $data['file_name'],
+            'file_path'      => $data['file_path'] ?? null,
+            'uploaded_by'    => $data['uploaded_by'] ?? get_staff_user_id(),
+            'uploaded_at'    => date('Y-m-d H:i:s'),
+            'rows_imported'  => $data['rows_imported'] ?? 0,
+            'rows_skipped'   => $data['rows_skipped'] ?? 0,
+            'import_status'  => $data['import_status'] ?? 'processing',
+            'error_message'  => $data['error_message'] ?? null,
+        ];
+
+        $this->db->insert(db_prefix() . 'sales_pipeline_import_log', $log_data);
+        return $this->db->insert_id();
+    }
+
+    /**
+     * Cập nhật log import
+     * @param int $log_id
+     * @param array $data
+     * @return bool
+     */
+    public function update_import_log($log_id, $data)
+    {
+        $this->db->where('id', $log_id);
+        $this->db->update(db_prefix() . 'sales_pipeline_import_log', $data);
+        return $this->db->affected_rows() > 0;
+    }
+
+    /**
+     * Lấy lịch sử import
+     * @param int|null $log_id
+     * @return mixed
+     */
+    public function get_import_logs($log_id = null)
+    {
+        $this->db->select(
+            db_prefix() . 'sales_pipeline_import_log.*,' .
+            'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as uploader_name'
+        );
+        $this->db->join(
+            db_prefix() . 'staff',
+            db_prefix() . 'staff.staffid = ' . db_prefix() . 'sales_pipeline_import_log.uploaded_by',
+            'left'
+        );
+
+        if ($log_id) {
+            $this->db->where(db_prefix() . 'sales_pipeline_import_log.id', $log_id);
+            return $this->db->get(db_prefix() . 'sales_pipeline_import_log')->row_array();
+        }
+
+        $this->db->order_by('uploaded_at', 'DESC');
+        return $this->db->get(db_prefix() . 'sales_pipeline_import_log')->result_array();
     }
 
     // =========================================================================
