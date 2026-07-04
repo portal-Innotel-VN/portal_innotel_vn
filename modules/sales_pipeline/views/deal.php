@@ -75,16 +75,15 @@
                                             </div>
                                         </div>
                                         <div class="form-group">
-                                            <label for="source" class="control-label"><?php echo _l('sales_pipeline_source'); ?></label>
-                                            <select name="source" id="source" class="selectpicker" data-width="100%"
+                                            <label for="source_id" class="control-label"><?php echo _l('sales_pipeline_source'); ?></label>
+                                            <select name="source_id" id="source_id" class="selectpicker" data-width="100%"
                                                     data-none-selected-text="<?php echo _l('sales_pipeline_select_source'); ?>">
                                                 <option value="">-- <?php echo _l('sales_pipeline_select_source'); ?> --</option>
                                                 <?php
-                                                $sources = ['Giới thiệu', 'Cold Call', 'SEO', 'Quảng cáo', 'Đấu thầu', 'Đối tác', 'Khác'];
                                                 foreach ($sources as $src) { ?>
-                                                <option value="<?php echo $src; ?>"
-                                                    <?php echo (isset($deal) && $deal['source'] == $src) ? 'selected' : ''; ?>>
-                                                    <?php echo $src; ?>
+                                                <option value="<?php echo $src['id']; ?>"
+                                                    <?php echo (isset($deal) && $deal['source_id'] == $src['id']) ? 'selected' : ''; ?>>
+                                                    <?php echo $src['name']; ?>
                                                 </option>
                                                 <?php } ?>
                                             </select>
@@ -146,13 +145,13 @@
                                             </div>
                                         </div>
                                         <div class="form-group">
-                                            <label for="expected_close_date" class="control-label">
+                                            <label for="deal_date" class="control-label">
                                                 <span class="text-danger">*</span> <?php echo _l('sales_pipeline_expected_date'); ?>
                                             </label>
                                             <div class="input-group date">
-                                                <input type="text" class="form-control datepicker" name="expected_close_date"
-                                                       id="expected_close_date"
-                                                       value="<?php echo isset($deal) ? _d($deal['expected_close_date']) : ''; ?>"
+                                                <input type="text" class="form-control datepicker" name="deal_date"
+                                                       id="deal_date"
+                                                       value="<?php echo isset($deal) ? _d($deal['deal_date']) : ''; ?>"
                                                        required autocomplete="off">
                                                 <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
                                             </div>
@@ -343,15 +342,6 @@ function calculateProfit() {
 }
 
 $(function() {
-    // Khởi tạo datepicker
-    if (typeof $.fn.datepicker !== 'undefined') {
-        $('.datepicker').datepicker({
-            format: app_date_format || 'dd/mm/yyyy',
-            autoclose: true,
-            todayHighlight: true
-        });
-    }
-
     // Tính lợi nhuận ban đầu
     calculateProfit();
 });

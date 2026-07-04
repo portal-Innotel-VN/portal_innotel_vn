@@ -36,10 +36,10 @@ class Sales_pipeline extends AdminController
 
         $where = [];
         if ($quarter) {
-            $where['QUARTER(expected_close_date)'] = $quarter;
+            $where['QUARTER(deal_date)'] = $quarter;
         }
         if ($year) {
-            $where['YEAR(expected_close_date)'] = $year;
+            $where['YEAR(deal_date)'] = $year;
         }
         if ($staff_id) {
             $where[db_prefix() . 'sales_pipeline.staff_id'] = $staff_id;
@@ -76,7 +76,7 @@ class Sales_pipeline extends AdminController
         $this->form_validation->set_rules('customer_name', _l('sales_pipeline_customer_name'), 'trim|required');
         $this->form_validation->set_rules('deal_name', _l('sales_pipeline_deal_name'), 'trim|required');
         $this->form_validation->set_rules('deal_value', _l('sales_pipeline_deal_value'), 'trim|required|numeric');
-        $this->form_validation->set_rules('expected_close_date', _l('sales_pipeline_expected_date'), 'trim|required');
+        $this->form_validation->set_rules('deal_date', _l('sales_pipeline_expected_date'), 'trim|required');
         $this->form_validation->set_rules('status', _l('sales_pipeline_status'), 'trim|required|numeric');
 
         if ($this->input->post()) {
@@ -86,11 +86,11 @@ class Sales_pipeline extends AdminController
                     'contact_name'        => $this->input->post('contact_name'),
                     'contact_phone'       => $this->input->post('contact_phone'),
                     'contact_email'       => $this->input->post('contact_email'),
-                    'source'              => $this->input->post('source'),
+                    'source_id'           => $this->input->post('source_id'),
                     'deal_name'           => $this->input->post('deal_name'),
                     'deal_value'          => $this->input->post('deal_value'),
                     'profit_margin'       => floatval($this->input->post('profit_margin')) / 100,
-                    'expected_close_date' => $this->input->post('expected_close_date'),
+                    'deal_date'           => to_sql_date($this->input->post('deal_date')),
                     'status'              => $this->input->post('status'),
                     'staff_id'            => $this->input->post('staff_id') ?: get_staff_user_id(),
                     'contract_signed'     => $this->input->post('contract_signed'),
@@ -123,6 +123,7 @@ class Sales_pipeline extends AdminController
         }
 
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
+        $data['sources']  = $this->sales_pipeline_model->get_sources();
         $data['staff']    = $this->staff_model->get('', ['active' => 1]);
 
         $data['title'] = ($id == '') ? _l('sales_pipeline_new_deal') : _l('sales_pipeline_edit_deal');
@@ -198,7 +199,8 @@ class Sales_pipeline extends AdminController
      */
     public function import()
     {
-        if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
+        // Import = tạo deal mới → yêu cầu quyền create
+        if (!has_permission('sales_pipeline', '', 'create')) {
             access_denied('sales_pipeline');
         }
 
@@ -208,7 +210,20 @@ class Sales_pipeline extends AdminController
                 $this->load->library('sales_pipeline/Import_sales_pipeline', [], 'import');
 
                 $staff_id = $this->input->post('staff_id') ?: get_staff_user_id();
-                $result   = $this->import->process($_FILES['import_file'], $staff_id);
+
+                // Chỉ admin mới được import và gán cho nhân viên khác
+                if (!is_admin()) {
+                    $staff_id = get_staff_user_id();
+                }
+
+                // Validate staff_id tồn tại và active
+                $target_staff = $this->staff_model->get($staff_id);
+                if (!$target_staff || (is_array($target_staff) ? $target_staff['active'] : $target_staff->active) != 1) {
+                    set_alert('danger', 'Nhân viên được chọn không hợp lệ hoặc đã ngừng hoạt động.');
+                    redirect(admin_url('sales_pipeline/import'));
+                }
+
+                $result = $this->import->process($_FILES['import_file'], $staff_id);
 
                 if ($result['success']) {
                     set_alert('success', $result['message']);
@@ -219,8 +234,106 @@ class Sales_pipeline extends AdminController
             }
         }
 
-        $data['staff'] = $this->staff_model->get('', ['active' => 1]);
+        // Admin hoặc có quyền view global → thấy tất cả staff
+        // Ngược lại → chỉ thấy chính mình
+        if (is_admin()) {
+            $data['staff'] = $this->staff_model->get('', ['active' => 1]);
+        } else {
+            $data['staff'] = [$this->staff_model->get(get_staff_user_id())];
+        }
+        $data['can_assign_others'] = is_admin();
         $data['title'] = _l('sales_pipeline_import');
         $this->load->view('sales_pipeline/import', $data);
+    }
+    // =========================================================================
+    // CÀI ĐẶT (SETTINGS)
+    // =========================================================================
+
+    public function settings()
+    {
+        if (!is_admin()) {
+            access_denied('sales_pipeline_settings');
+        }
+
+        if ($this->input->post()) {
+            $data = $this->input->post();
+            $type = $this->input->post('setting_type'); // 'status' or 'source'
+            unset($data['setting_type']);
+            
+            if ($type == 'status') {
+                $id = $data['id'];
+                unset($data['id']);
+                // Default checkboxes
+                if (!isset($data['is_won'])) $data['is_won'] = 0;
+                if (!isset($data['is_lost'])) $data['is_lost'] = 0;
+
+                if ($id == '') {
+                    $success = $this->sales_pipeline_model->add_status($data);
+                    if ($success) {
+                        set_alert('success', _l('added_successfully', _l('sales_pipeline_status')));
+                    }
+                } else {
+                    $success = $this->sales_pipeline_model->update_status($data, $id);
+                    if ($success) {
+                        set_alert('success', _l('updated_successfully', _l('sales_pipeline_status')));
+                    }
+                }
+            } elseif ($type == 'source') {
+                $id = $data['id'];
+                unset($data['id']);
+                
+                if ($id == '') {
+                    $success = $this->sales_pipeline_model->add_source($data);
+                    if ($success) {
+                        set_alert('success', _l('added_successfully', _l('sales_pipeline_source')));
+                    }
+                } else {
+                    $success = $this->sales_pipeline_model->update_source($data, $id);
+                    if ($success) {
+                        set_alert('success', _l('updated_successfully', _l('sales_pipeline_source')));
+                    }
+                }
+            }
+            redirect(admin_url('sales_pipeline/settings'));
+        }
+
+        $data['statuses'] = $this->sales_pipeline_model->get_statuses();
+        $data['sources'] = $this->sales_pipeline_model->get_sources();
+        $data['title'] = _l('sales_pipeline_settings');
+
+        $this->load->view('sales_pipeline/settings', $data);
+    }
+
+    public function delete_setting($type, $id)
+    {
+        if (!is_admin()) {
+            access_denied('sales_pipeline_settings');
+        }
+
+        if (!$id) {
+            redirect(admin_url('sales_pipeline/settings'));
+        }
+
+        if ($type == 'status') {
+            $response = $this->sales_pipeline_model->delete_status($id);
+            if (isset($response['referenced'])) {
+                set_alert('warning', 'Không thể xóa Trạng thái này vì đang có Deal sử dụng.');
+            } elseif ($response['success']) {
+                set_alert('success', _l('deleted', _l('sales_pipeline_status')));
+            } else {
+                set_alert('warning', _l('problem_deleting', _l('sales_pipeline_status')));
+            }
+        } elseif ($type == 'source') {
+            $response = $this->sales_pipeline_model->delete_source($id);
+            if (isset($response['referenced'])) {
+                set_alert('warning', 'Không thể xóa Nguồn này vì đang có Deal sử dụng.');
+            } elseif ($response['success']) {
+                set_alert('success', _l('deleted', _l('sales_pipeline_source')));
+            } else {
+                set_alert('warning', _l('problem_deleting', _l('sales_pipeline_source')));
+            }
+        }
+
+        redirect(admin_url('sales_pipeline/settings'));
     }
 }

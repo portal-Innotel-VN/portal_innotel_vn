@@ -28,7 +28,7 @@
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
                                 <h3 class="no-margin text-success font-bold"><?php echo $summary['won_deals']; ?></h3>
-                                <p class="text-muted no-margin">✅ <?php echo _l('sales_pipeline_won'); ?></p>
+                                <p class="text-muted no-margin"><?php echo _l('sales_pipeline_won'); ?></p>
                             </div>
                         </div>
                     </div>
@@ -36,7 +36,7 @@
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
                                 <h3 class="no-margin text-warning font-bold"><?php echo $summary['active_deals']; ?></h3>
-                                <p class="text-muted no-margin">⏳ <?php echo _l('sales_pipeline_active'); ?></p>
+                                <p class="text-muted no-margin"><?php echo _l('sales_pipeline_active'); ?></p>
                             </div>
                         </div>
                     </div>
@@ -44,7 +44,7 @@
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
                                 <h3 class="no-margin text-danger font-bold"><?php echo $summary['lost_deals']; ?></h3>
-                                <p class="text-muted no-margin">❌ <?php echo _l('sales_pipeline_lost'); ?></p>
+                                <p class="text-muted no-margin"><?php echo _l('sales_pipeline_lost'); ?></p>
                             </div>
                         </div>
                     </div>
@@ -58,6 +58,12 @@
                                 <i class="fa fa-line-chart"></i> <?php echo $title; ?>
                             </h4>
                             <div class="pull-right">
+                                <?php if (is_admin()) { ?>
+                                <a href="<?php echo admin_url('sales_pipeline/settings'); ?>"
+                                   class="btn btn-default mright5" data-toggle="tooltip" title="Cài đặt Nguồn & Trạng Thái">
+                                    <i class="fa fa-cogs"></i> Cài đặt
+                                </a>
+                                <?php } ?>
                                 <?php if (has_permission('sales_pipeline', '', 'create')) { ?>
                                 <a href="<?php echo admin_url('sales_pipeline/import'); ?>"
                                    class="btn btn-default mright5">
@@ -134,7 +140,7 @@
                                             $stt++; ?>
                                     <tr>
                                         <td><?php echo $stt; ?></td>
-                                        <td><?php echo _d($deal['expected_close_date']); ?></td>
+                                        <td><?php echo _d($deal['deal_date']); ?></td>
                                         <td>
                                             <strong><?php echo html_escape($deal['customer_name']); ?></strong>
                                             <?php if (!empty($deal['contact_name'])) { ?>

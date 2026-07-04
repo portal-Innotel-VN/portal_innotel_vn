@@ -260,10 +260,6 @@ function get_available_staff_permissions($data = [])
                 'delete' => _l('permission_delete'),
             ],
         ],
-        'my_customers' => [
-            'name'         => 'Khách Hàng Của Tôi',
-            'capabilities' => $withoutViewOwnPermissionsArray,
-        ],
     ];
 
 

@@ -18,11 +18,12 @@
                             <br>
                             <?php echo _l('sales_pipeline_import_format'); ?>:
                             <br>
-                            <code>STT | Ngày | Tên KH | Mô tả deal | Doanh số | % LN | Lợi nhuận | Ký HĐ (x) | Xuất HĐ (x) | Ghi chú</code>
+                            <code>STT | Ngày Tạo| Tên KH | Mô tả deal | Doanh số | % LN | Lợi nhuận | Ghi chú</code>
                         </div>
 
                         <?php echo form_open_multipart(admin_url('sales_pipeline/import')); ?>
 
+                        <?php if (!empty($can_assign_others)) { ?>
                         <div class="form-group">
                             <label for="staff_id" class="control-label">
                                 <span class="text-danger">*</span> <?php echo _l('sales_pipeline_assigned_staff'); ?>
@@ -30,13 +31,26 @@
                             <select name="staff_id" id="staff_id" class="selectpicker" data-width="100%"
                                     data-live-search="true" required>
                                 <?php foreach ($staff as $member) { ?>
-                                <option value="<?php echo $member['staffid']; ?>"
-                                    <?php echo ($member['staffid'] == get_staff_user_id()) ? 'selected' : ''; ?>>
-                                    <?php echo $member['firstname'] . ' ' . $member['lastname']; ?>
+                                <?php $sid = is_array($member) ? $member['staffid'] : $member->staffid; ?>
+                                <?php $fname = is_array($member) ? $member['firstname'] : $member->firstname; ?>
+                                <?php $lname = is_array($member) ? $member['lastname'] : $member->lastname; ?>
+                                <option value="<?php echo $sid; ?>"
+                                    <?php echo ($sid == get_staff_user_id()) ? 'selected' : ''; ?>>
+                                    <?php echo $fname . ' ' . $lname; ?>
                                 </option>
                                 <?php } ?>
                             </select>
                         </div>
+                        <?php } else { ?>
+                        <input type="hidden" name="staff_id" value="<?php echo get_staff_user_id(); ?>">
+                        <div class="form-group">
+                            <label class="control-label"><?php echo _l('sales_pipeline_assigned_staff'); ?></label>
+                            <p class="form-control-static">
+                                <strong><?php echo get_staff_full_name(get_staff_user_id()); ?></strong>
+                                <!-- <small class="text-muted">(Chỉ được import cho chính mình)</small> -->
+                            </p>
+                        </div>
+                        <?php } ?>
 
                         <div class="form-group">
                             <label for="import_file" class="control-label">

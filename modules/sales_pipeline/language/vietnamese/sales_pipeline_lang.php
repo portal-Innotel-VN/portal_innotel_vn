@@ -3,7 +3,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 // Module name
-$lang['sales_pipeline']           = 'Pipeline Kinh Doanh';
+$lang['sales_pipeline']           = 'Tiến Độ Kinh Doanh';
 $lang['sales_pipeline_new_deal']  = 'Thêm Deal Mới';
 $lang['sales_pipeline_edit_deal'] = 'Sửa Deal';
 
@@ -26,7 +26,7 @@ $lang['sales_pipeline_deal_name']        = 'Mô tả sản phẩm/dịch vụ';
 $lang['sales_pipeline_deal_value']       = 'Doanh số';
 $lang['sales_pipeline_profit_margin']    = 'Lợi nhuận';
 $lang['sales_pipeline_expected_profit']  = 'Lợi nhuận dự kiến';
-$lang['sales_pipeline_expected_date']    = 'Ngày dự kiến kết quả';
+$lang['sales_pipeline_expected_date']    = 'Ngày tạo';
 $lang['sales_pipeline_profit']           = 'Lợi nhuận';
 
 $lang['sales_pipeline_status_progress']  = 'Trạng Thái & Tiến Độ';
@@ -49,9 +49,9 @@ $lang['sales_pipeline_back']      = 'Quay Lại';
 // Summary
 $lang['sales_pipeline_total_deals'] = 'Tổng deal';
 $lang['sales_pipeline_total_value'] = 'Tổng doanh số';
-$lang['sales_pipeline_won']         = 'Thắng';
-$lang['sales_pipeline_lost']        = 'Thua';
-$lang['sales_pipeline_active']      = 'Đang theo';
+$lang['sales_pipeline_won']         = 'Đã chốt';
+$lang['sales_pipeline_lost']        = 'Khách từ chối';
+$lang['sales_pipeline_active']      = 'Đang theo dõi';
 $lang['sales_pipeline_view_all']    = 'Xem tất cả';
 
 // Filter
@@ -64,7 +64,7 @@ $lang['sales_pipeline_all_staff']      = 'Tất cả nhân viên';
 $lang['sales_pipeline_import']          = 'Import Excel';
 $lang['sales_pipeline_import_excel']    = 'Upload Excel';
 $lang['sales_pipeline_import_note']     = 'Upload file Excel báo cáo kinh doanh';
-$lang['sales_pipeline_import_format']   = 'Định dạng file theo cấu trúc chuẩn (10 cột)';
+$lang['sales_pipeline_import_format']   = 'Định dạng các trường có cấu trúc chuẩn theo tệp dưới đây';
 $lang['sales_pipeline_select_file']     = 'Chọn file Excel';
 $lang['sales_pipeline_drag_file']       = 'Kéo thả file vào đây hoặc click để chọn';
 $lang['sales_pipeline_file_types']      = 'Định dạng hỗ trợ';
@@ -76,3 +76,6 @@ $lang['sales_pipeline_no_deals'] = 'Chưa có deal nào. Hãy thêm deal mới h
 
 // Notification / Reminder
 $lang['sales_pipeline_reminder'] = 'Nhắc nhở Pipeline';
+
+// Settings
+$lang['sales_pipeline_settings'] = 'Cài đặt';

@@ -56,7 +56,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         `deal_value` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Doanh số VNĐ',
         `profit_margin` decimal(5,4) DEFAULT 0.0000 COMMENT 'Tỷ lệ lợi nhuận (0.10 = 10%)',
         `expected_profit` decimal(15,2) DEFAULT 0.00 COMMENT 'Tự tính = deal_value * profit_margin',
-        `expected_close_date` date NOT NULL COMMENT 'Ngày dự kiến kết quả',
+        `deal_date` date NOT NULL COMMENT 'Ngày tạo deal',
 
         `status` int(11) NOT NULL DEFAULT 1 COMMENT 'FK tblsales_pipeline_statuses',
         `contract_signed` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Đã ký HĐ',
@@ -75,7 +75,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         PRIMARY KEY (`id`),
         KEY `staff_id` (`staff_id`),
         KEY `status` (`status`),
-        KEY `expected_close_date` (`expected_close_date`)
+        KEY `deal_date` (`deal_date`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 }
 

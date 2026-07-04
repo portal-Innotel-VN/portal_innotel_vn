@@ -70,7 +70,7 @@ $config['migration_auto_latest'] = FALSE;
 */
 // $config['migration_version'] = 244; // 2.4.4
 // $config['migration_version'] = 245; // 2.4.5
-$config['migration_version'] = 246; // Sales Pipeline Extended
+$config['migration_version'] = 248;
 
 /*
 |--------------------------------------------------------------------------

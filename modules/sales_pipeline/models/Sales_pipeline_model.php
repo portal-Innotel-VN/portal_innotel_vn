@@ -53,7 +53,7 @@ class Sales_pipeline_model extends App_Model
             return $deal;
         }
 
-        $this->db->order_by(db_prefix() . 'sales_pipeline.expected_close_date', 'ASC');
+        $this->db->order_by(db_prefix() . 'sales_pipeline.deal_date', 'ASC');
 
         return $this->db->get(db_prefix() . 'sales_pipeline')->result_array();
     }
@@ -215,7 +215,7 @@ class Sales_pipeline_model extends App_Model
         }
 
         if ($year) {
-            $this->db->where('YEAR(expected_close_date)', $year);
+            $this->db->where('YEAR(deal_date)', $year);
         }
 
         $row = $this->db->get(db_prefix() . 'sales_pipeline')->row();
@@ -246,6 +246,69 @@ class Sales_pipeline_model extends App_Model
         $this->db->where('id', $status_id);
         $row = $this->db->get(db_prefix() . 'sales_pipeline_statuses')->row();
         return $row ? $row->name : 'Không xác định';
+    }
+
+    public function add_status($data)
+    {
+        $this->db->insert(db_prefix() . 'sales_pipeline_statuses', $data);
+        return $this->db->insert_id();
+    }
+
+    public function update_status($data, $id)
+    {
+        $this->db->where('id', $id);
+        $this->db->update(db_prefix() . 'sales_pipeline_statuses', $data);
+        return $this->db->affected_rows() > 0;
+    }
+
+    public function delete_status($id)
+    {
+        // Kiểm tra xem có deal nào đang dùng trạng thái này không
+        $this->db->where('status', $id);
+        $deals = $this->db->get(db_prefix() . 'sales_pipeline')->num_rows();
+        if ($deals > 0) {
+            return ['referenced' => true];
+        }
+
+        $this->db->where('id', $id);
+        $this->db->delete(db_prefix() . 'sales_pipeline_statuses');
+        return ['success' => $this->db->affected_rows() > 0];
+    }
+
+    // =========================================================================
+    // SOURCES
+    // =========================================================================
+
+    public function get_sources()
+    {
+        $this->db->order_by('name', 'ASC');
+        return $this->db->get(db_prefix() . 'sales_pipeline_sources')->result_array();
+    }
+
+    public function add_source($data)
+    {
+        $this->db->insert(db_prefix() . 'sales_pipeline_sources', $data);
+        return $this->db->insert_id();
+    }
+
+    public function update_source($data, $id)
+    {
+        $this->db->where('id', $id);
+        $this->db->update(db_prefix() . 'sales_pipeline_sources', $data);
+        return $this->db->affected_rows() > 0;
+    }
+
+    public function delete_source($id)
+    {
+        $this->db->where('source_id', $id);
+        $deals = $this->db->get(db_prefix() . 'sales_pipeline')->num_rows();
+        if ($deals > 0) {
+            return ['referenced' => true];
+        }
+
+        $this->db->where('id', $id);
+        $this->db->delete(db_prefix() . 'sales_pipeline_sources');
+        return ['success' => $this->db->affected_rows() > 0];
     }
 
     // =========================================================================
@@ -311,9 +374,9 @@ class Sales_pipeline_model extends App_Model
 
         $where = [];
         if ($quarter) {
-            $where['QUARTER(expected_close_date)'] = $quarter;
+            $where['QUARTER(deal_date)'] = $quarter;
         }
-        $where['YEAR(expected_close_date)'] = $year;
+        $where['YEAR(deal_date)'] = $year;
 
         if ($staff_id) {
             $where['staff_id'] = $staff_id;
@@ -496,7 +559,7 @@ class Sales_pipeline_model extends App_Model
                         . '<li><b>Khách hàng:</b> ' . $deal['customer_name'] . '</li>'
                         . '<li><b>Deal:</b> ' . $deal['deal_name'] . '</li>'
                         . '<li><b>Doanh số:</b> ' . number_format($deal['deal_value']) . ' VNĐ</li>'
-                        . '<li><b>Ngày dự kiến:</b> ' . _d($deal['expected_close_date']) . '</li>'
+                        . '<li><b>Ngày tạo:</b> ' . _d($deal['deal_date']) . '</li>'
                         . '</ul>'
                         . '<p><b>Tuần này có kết quả chưa? Tại sao chưa đóng được deal?</b></p>'
                         . '<p><a href="' . admin_url('sales_pipeline/deal/' . $deal['id']) . '">Cập nhật tiến độ tại đây</a></p>';

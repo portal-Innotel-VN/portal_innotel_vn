@@ -24,11 +24,11 @@ $summary = $CI->sales_pipeline_model->get_summary($current_quarter, date('Y'));
             </div>
             <div class="col-xs-4">
                 <h4 class="no-margin text-success font-bold"><?php echo $summary['won_deals']; ?></h4>
-                <small class="text-muted">✅ <?php echo _l('sales_pipeline_won'); ?></small>
+                <small class="text-muted"> <?php echo _l('sales_pipeline_won'); ?></small>
             </div>
             <div class="col-xs-4">
                 <h4 class="no-margin text-danger font-bold"><?php echo $summary['lost_deals']; ?></h4>
-                <small class="text-muted">❌ <?php echo _l('sales_pipeline_lost'); ?></small>
+                <small class="text-muted"> <?php echo _l('sales_pipeline_lost'); ?></small>
             </div>
         </div>
         <div class="mtop10 text-center">

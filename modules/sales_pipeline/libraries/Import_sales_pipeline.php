@@ -99,7 +99,7 @@ class Import_sales_pipeline
             foreach ($rows as $row) {
                 $data = $this->map_row_to_deal($row, $staff_id, $log_id);
                 if ($data) {
-                    $year = date('Y', strtotime($data['expected_close_date']));
+                    $year = date('Y', strtotime($data['deal_date']));
                     $existing_id = $this->CI->sales_pipeline_model->find_existing_deal($staff_id, $data['customer_name'], $data['deal_name'], $year);
                     
                     if ($existing_id) {
@@ -280,9 +280,9 @@ class Import_sales_pipeline
         }
 
         // Col 1 = Ngày
-        $expected_close_date = $this->parse_date($row[1] ?? null);
-        if (!$expected_close_date) {
-            $expected_close_date = date('Y-m-d'); // Mặc định ngày hôm nay
+        $deal_date = $this->parse_date($row[1] ?? null);
+        if (!$deal_date) {
+            $deal_date = date('Y-m-d'); // Mặc định ngày hôm nay
         }
 
         // Col 7 = Ký HĐ, Col 8 = Xuất HĐ
@@ -295,7 +295,7 @@ class Import_sales_pipeline
         // Xác định các trường mở rộng
         $confidence_level = $this->detect_confidence_level($notes, $contract_signed, $invoice_issued);
         $deal_phase = $this->detect_deal_phase($deal_value, $contract_signed, $invoice_issued, $notes);
-        $reporting_period = $this->extract_reporting_period($expected_close_date, $notes);
+        $reporting_period = $this->extract_reporting_period($deal_date, $notes);
         
         // Xác định trạng thái từ ghi chú
         $status = $this->detect_status($notes, $contract_signed, $invoice_issued);
@@ -309,7 +309,7 @@ class Import_sales_pipeline
             'deal_name'           => $is_prospect ? null : $deal_name,
             'deal_value'          => $is_prospect ? 0 : $deal_value,
             'profit_margin'       => $profit_margin,
-            'expected_close_date' => $expected_close_date,
+            'deal_date'           => $deal_date,
             'status'              => $status,
             'contract_signed'     => $contract_signed,
             'invoice_issued'      => $invoice_issued,
