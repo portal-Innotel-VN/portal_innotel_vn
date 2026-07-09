@@ -106,6 +106,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                     <?php } ?>
                                 </select>
                             </div>
+                            <?php if ($switch_kanban == 1) { // Only show pagination dropdown in List view ?>
                             <div class="col-md-2">
                                 <select name="per_page" id="per_page" class="selectpicker" data-width="100%"
                                         onchange="applyFilters()">
@@ -115,6 +116,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                     <option value="100" <?php echo ($per_page == 100) ? 'selected' : ''; ?>>100 / trang</option>
                                 </select>
                             </div>
+                            <?php } ?>
                         </div>
 
 
