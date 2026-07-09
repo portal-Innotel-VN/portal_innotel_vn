@@ -54,6 +54,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
 
         `deal_name` varchar(500) NOT NULL COMMENT 'Mô tả sản phẩm/dịch vụ',
         `deal_value` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Doanh số VNĐ',
+        `purchase_price` decimal(15,2) DEFAULT NULL COMMENT 'Giá nhập VNĐ',
         `profit_margin` decimal(5,4) DEFAULT 0.0000 COMMENT 'Tỷ lệ lợi nhuận (0.10 = 10%)',
         `expected_profit` decimal(15,2) DEFAULT 0.00 COMMENT 'Tự tính = deal_value * profit_margin',
         `deal_date` date NOT NULL COMMENT 'Ngày tạo deal',
@@ -63,7 +64,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         `invoice_issued` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Đã xuất HĐ',
 
         `reminder_enabled` tinyint(1) NOT NULL DEFAULT 1,
-        `reminder_frequency` int(11) DEFAULT 7 COMMENT 'Tần suất nhắc (ngày)',
+        `reminder_frequency` int(11) DEFAULT 2 COMMENT 'Tần suất nhắc (ngày)',
         `last_reminder_sent` datetime DEFAULT NULL,
 
         `estimate_id` int(11) DEFAULT NULL COMMENT 'FK tblestimates',
@@ -77,6 +78,11 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         KEY `status` (`status`),
         KEY `deal_date` (`deal_date`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
+} else {
+    // Nếu bảng đã tồn tại, kiểm tra xem đã có cột purchase_price chưa để alter table
+    if (!$CI->db->field_exists('purchase_price', db_prefix() . 'sales_pipeline')) {
+        $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` ADD `purchase_price` decimal(15,2) DEFAULT NULL COMMENT "Giá nhập VNĐ" AFTER `deal_value`;');
+    }
 }
 
 // Bảng activity log (timeline tiến độ thay cho cột ghi chú nối →)

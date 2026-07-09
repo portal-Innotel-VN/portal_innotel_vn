@@ -20,6 +20,9 @@
 
                         <?php
                         $action_url = isset($deal) ? admin_url('sales_pipeline/deal/' . $deal['id']) : admin_url('sales_pipeline/deal');
+                        if (!empty($_SERVER['QUERY_STRING'])) {
+                            $action_url .= '?' . $_SERVER['QUERY_STRING'];
+                        }
                         echo form_open($action_url);
                         ?>
 
@@ -125,22 +128,31 @@
                                             </div>
                                             <div class="col-md-4">
                                                 <div class="form-group">
-                                                    <label for="profit_margin" class="control-label">% <?php echo _l('sales_pipeline_profit_margin'); ?></label>
-                                                    <div class="input-group">
-                                                        <input type="number" class="form-control" name="profit_margin" id="profit_margin"
-                                                               value="<?php echo isset($deal) ? round($deal['profit_margin'] * 100, 2) : '10'; ?>"
-                                                               min="0" max="100" step="0.01"
-                                                               onchange="calculateProfit()" onkeyup="calculateProfit()">
-                                                        <span class="input-group-addon">%</span>
-                                                    </div>
+                                                    <label for="cost_price" class="control-label">
+                                                        <?php echo _l('sales_pipeline_cost_price'); ?> (VNĐ)
+                                                        <i class="fa fa-question-circle" data-toggle="tooltip" 
+                                                           title="<?php echo _l('sales_pipeline_cost_price_hint'); ?>"></i>
+                                                    </label>
+                                                    <input type="number" class="form-control" name="cost_price" id="cost_price"
+                                                           value="<?php echo isset($deal) && isset($deal['cost_price']) ? $deal['cost_price'] : ''; ?>"
+                                                           min="0" step="1000" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>"
+                                                           onchange="calculateProfit()" onkeyup="calculateProfit()">
+                                                    <small class="text-muted">
+                                                        <?php echo _l('sales_pipeline_cost_price_hint'); ?>
+                                                    </small>
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
                                                 <div class="form-group">
-                                                    <label class="control-label"><?php echo _l('sales_pipeline_expected_profit'); ?> (VNĐ)</label>
+                                                    <label class="control-label"><?php echo _l('sales_pipeline_profit'); ?> (VNĐ)</label>
                                                     <input type="text" class="form-control" id="expected_profit_display"
-                                                           value="<?php echo isset($deal) ? number_format($deal['expected_profit']) : '0'; ?>"
+                                                           value="<?php echo isset($deal) && isset($deal['actual_profit']) && $deal['actual_profit'] !== null ? number_format($deal['actual_profit']) : '--'; ?>"
                                                            readonly style="background: #f0f0f0; font-weight: bold; color: #27ae60;">
+                                                    <small class="text-muted" id="profit_percent_display">
+                                                        <?php if (isset($deal) && isset($deal['profit_percentage']) && $deal['profit_percentage'] !== null) {
+                                                            echo '(' . round($deal['profit_percentage'], 1) . '%)';
+                                                        } ?>
+                                                    </small>
                                                 </div>
                                             </div>
                                         </div>
@@ -253,7 +265,7 @@
                                                     <label for="reminder_frequency" class="control-label"><?php echo _l('sales_pipeline_reminder_frequency'); ?></label>
                                                     <div class="input-group">
                                                         <input type="number" class="form-control" name="reminder_frequency" id="reminder_frequency"
-                                                               value="<?php echo isset($deal) ? $deal['reminder_frequency'] : '7'; ?>"
+                                                               value="<?php echo isset($deal) ? $deal['reminder_frequency'] : '2'; ?>"
                                                                min="1" max="30">
                                                         <span class="input-group-addon"><?php echo _l('sales_pipeline_days'); ?></span>
                                                     </div>
@@ -287,7 +299,7 @@
 
                         <hr />
                         <div class="text-right">
-                            <a href="<?php echo admin_url('sales_pipeline'); ?>" class="btn btn-default mright5">
+                            <a href="<?php echo admin_url('sales_pipeline') . (!empty($_SERVER['QUERY_STRING']) ? '?' . $_SERVER['QUERY_STRING'] : ''); ?>" class="btn btn-default mright5">
                                 <i class="fa fa-arrow-left"></i> <?php echo _l('sales_pipeline_back'); ?>
                             </a>
                             <button type="submit" class="btn btn-info">
@@ -334,16 +346,27 @@
 
 <script>
 function calculateProfit() {
-    var value  = parseFloat($('#deal_value').val()) || 0;
-    var margin = parseFloat($('#profit_margin').val()) || 0;
-    var profit = value * (margin / 100);
+    var dealValue = parseFloat($('#deal_value').val()) || 0;
+    var costPrice = parseFloat($('#cost_price').val()) || 0;
 
-    $('#expected_profit_display').val(profit.toLocaleString('vi-VN'));
+    if (costPrice > 0 && dealValue > 0) {
+        var profit = dealValue - costPrice;
+        var profitPercent = (profit / dealValue) * 100;
+
+        $('#expected_profit_display').val(profit.toLocaleString('vi-VN'));
+        $('#profit_percent_display').text('(' + profitPercent.toFixed(1) + '%)');
+    } else {
+        $('#expected_profit_display').val('--');
+        $('#profit_percent_display').text('');
+    }
 }
 
 $(function() {
     // Tính lợi nhuận ban đầu
     calculateProfit();
+    
+    // Enable tooltip
+    $('[data-toggle="tooltip"]').tooltip();
 });
 </script>
 </body>

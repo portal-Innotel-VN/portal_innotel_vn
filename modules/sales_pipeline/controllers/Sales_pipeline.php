@@ -21,13 +21,27 @@ class Sales_pipeline extends AdminController
             access_denied('sales_pipeline');
         }
 
+        $data['switch_kanban'] = 1;
+
+        if ($this->session->userdata('sales_pipeline_kanban_view') == 'true') {
+            $data['switch_kanban'] = 0;
+            $data['bodyclass']     = 'kan-ban-body';
+        }
+
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
-        $data['staff']    = $this->staff_model->get('', ['active' => 1]);
+        
+        // Chỉ lấy tất cả staff nếu có quyền xem toàn cục, ngược lại chỉ hiện chính mình
+        if (has_permission('sales_pipeline', '', 'view')) {
+            $data['staff'] = $this->staff_model->get('', ['active' => 1]);
+        } else {
+            $data['staff'] = [(array) $this->staff_model->get(get_staff_user_id())];
+        }
 
         // Lọc theo quý và nhân viên
         $quarter  = $this->input->get('quarter') ?: null;
         $year     = $this->input->get('year') ?: date('Y');
         $staff_id = $this->input->get('staff_id') ?: null;
+        $search   = $this->input->get('search') ?: '';
 
         // Chỉ cho xem deal của mình nếu không có quyền view global
         if (!has_permission('sales_pipeline', '', 'view')) {
@@ -45,12 +59,36 @@ class Sales_pipeline extends AdminController
             $where[db_prefix() . 'sales_pipeline.staff_id'] = $staff_id;
         }
 
-        $data['deals']   = $this->sales_pipeline_model->get('', $where);
-        $data['summary'] = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id);
+        // Pagination setup
+        $per_page = $this->input->get('per_page') ?: 25; // Default 25 records per page
+        $page = $this->input->get('page') ?: 1;
+        
+        // Validate per_page values
+        $allowed_per_page = [10, 25, 50, 100];
+        if (!in_array($per_page, $allowed_per_page)) {
+            $per_page = 25;
+        }
+        
+        // Calculate offset
+        $offset = ($page - 1) * $per_page;
+        
+        // Get total count for pagination
+        $total_deals = $this->sales_pipeline_model->count_deals($where, $search);
+        
+        // Get paginated deals
+        $data['deals'] = $this->sales_pipeline_model->get('', $where, $per_page, $offset, $search);
+        $data['summary'] = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search);
+
+        // Pagination data
+        $data['total_deals'] = $total_deals;
+        $data['current_page'] = $page;
+        $data['per_page'] = $per_page;
+        $data['total_pages'] = ceil($total_deals / $per_page);
 
         $data['current_quarter']  = $quarter;
         $data['current_year']     = $year;
         $data['current_staff_id'] = $staff_id;
+        $data['current_search']   = $search;
 
         $data['title'] = _l('sales_pipeline');
         $this->load->view('sales_pipeline/manage', $data);
@@ -67,7 +105,7 @@ class Sales_pipeline extends AdminController
                 access_denied('sales_pipeline');
             }
         } else {
-            if (!has_permission('sales_pipeline', '', 'edit')) {
+            if (!has_permission('sales_pipeline', '', 'edit') && !has_permission('sales_pipeline', '', 'view_deal_details')) {
                 access_denied('sales_pipeline');
             }
         }
@@ -81,6 +119,16 @@ class Sales_pipeline extends AdminController
 
         if ($this->input->post()) {
             if ($this->form_validation->run() !== false) {
+                // Handle cost_price: convert to float or NULL if empty
+                $cost_price_input = $this->input->post('cost_price');
+                $cost_price = null;
+                if ($cost_price_input !== '' && $cost_price_input !== null) {
+                    $cost_price = floatval($cost_price_input);
+                    if ($cost_price < 0) {
+                        $cost_price = null; // Negative values not allowed
+                    }
+                }
+
                 $post_data = [
                     'customer_name'       => $this->input->post('customer_name'),
                     'contact_name'        => $this->input->post('contact_name'),
@@ -89,14 +137,14 @@ class Sales_pipeline extends AdminController
                     'source_id'           => $this->input->post('source_id'),
                     'deal_name'           => $this->input->post('deal_name'),
                     'deal_value'          => $this->input->post('deal_value'),
-                    'profit_margin'       => floatval($this->input->post('profit_margin')) / 100,
+                    'cost_price'          => $cost_price,  // NEW: cost price instead of profit_margin
                     'deal_date'           => to_sql_date($this->input->post('deal_date')),
                     'status'              => $this->input->post('status'),
                     'staff_id'            => $this->input->post('staff_id') ?: get_staff_user_id(),
                     'contract_signed'     => $this->input->post('contract_signed'),
                     'invoice_issued'      => $this->input->post('invoice_issued'),
                     'reminder_enabled'    => $this->input->post('reminder_enabled'),
-                    'reminder_frequency'  => $this->input->post('reminder_frequency') ?: 7,
+                    'reminder_frequency'  => $this->input->post('reminder_frequency') ?: 2,
                     'activity_description' => $this->input->post('activity_description'),
                 ];
 
@@ -111,7 +159,11 @@ class Sales_pipeline extends AdminController
                         set_alert('success', _l('sales_pipeline_deal_updated'));
                     }
                 }
-                redirect(admin_url('sales_pipeline'));
+                $redirect_url = admin_url('sales_pipeline');
+                if (!empty($_SERVER['QUERY_STRING'])) {
+                    $redirect_url .= '?' . $_SERVER['QUERY_STRING'];
+                }
+                redirect($redirect_url);
             }
         }
 
@@ -194,11 +246,309 @@ class Sales_pipeline extends AdminController
     }
 
     /**
+     * Cập nhật giá nhập (cost price) qua AJAX
+     * URL: admin/sales_pipeline/update_cost_price
+     * POST: pipeline_id, cost_price
+     */
+    public function update_cost_price()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        $pipeline_id = $this->input->post('pipeline_id');
+        $cost_price  = $this->input->post('cost_price');
+
+        if (!$pipeline_id) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'ID deal không hợp lệ'
+            ]);
+            return;
+        }
+
+        // Kiểm tra quyền: Admin hoặc staff sở hữu deal hoặc người import
+        $deal = $this->sales_pipeline_model->get($pipeline_id);
+        if (!$deal) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Deal không tồn tại'
+            ]);
+            return;
+        }
+
+        $current_user_id = get_staff_user_id();
+        $is_owner = ($deal['staff_id'] == $current_user_id);
+        $is_importer = (isset($deal['imported_by']) && $deal['imported_by'] == $current_user_id);
+
+        if (!is_admin() && !$is_owner && !$is_importer) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật giá nhập cho deal này'
+            ]);
+            return;
+        }
+
+        // Validate cost_price: phải là số dương hoặc NULL
+        if ($cost_price !== '' && $cost_price !== null) {
+            $cost_price = floatval(str_replace([',', ' '], '', $cost_price));
+            if ($cost_price < 0) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Giá nhập phải là số dương'
+                ]);
+                return;
+            }
+        } else {
+            $cost_price = null;
+        }
+
+        // Gọi model để update
+        $success = $this->sales_pipeline_model->update_cost_price($pipeline_id, $cost_price);
+
+        if ($success) {
+            // Tính lại profit sau khi update
+            $updated_deal = $this->sales_pipeline_model->get($pipeline_id);
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Cập nhật giá nhập thành công',
+                'data' => [
+                    'cost_price' => $cost_price,
+                    'actual_profit' => $updated_deal['actual_profit'],
+                    'profit_percentage' => $updated_deal['profit_percentage'],
+                    'missing_cost_price' => $updated_deal['missing_cost_price']
+                ]
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Cập nhật thất bại. Vui lòng thử lại.'
+            ]);
+        }
+    }
+
+    /**
+     * Danh sách deal thiếu giá nhập (cho Manager/Admin)
+     * URL: admin/sales_pipeline/missing_cost_prices
+     */
+    public function missing_cost_prices()
+    {
+        if (!is_admin() && !has_permission('sales_pipeline', '', 'view')) {
+            access_denied('sales_pipeline');
+        }
+
+        $filters = [];
+        
+        // Lọc theo staff nếu có
+        $staff_id = $this->input->get('staff_id');
+        if ($staff_id) {
+            $filters['staff_id'] = $staff_id;
+        }
+
+        // Lọc theo quý/năm
+        $quarter = $this->input->get('quarter');
+        $year = $this->input->get('year') ?: date('Y');
+        if ($quarter) {
+            $filters['quarter'] = $quarter;
+        }
+        if ($year) {
+            $filters['year'] = $year;
+        }
+
+        $data['deals'] = $this->sales_pipeline_model->get_deals_missing_cost_price($filters);
+        $data['staff'] = $this->staff_model->get('', ['active' => 1]);
+        $data['statuses'] = $this->sales_pipeline_model->get_statuses();
+        
+        $data['current_staff_id'] = $staff_id;
+        $data['current_quarter'] = $quarter;
+        $data['current_year'] = $year;
+
+        $data['title'] = _l('sales_pipeline_missing_cost_prices');
+        $this->load->view('sales_pipeline/missing_cost_prices', $data);
+    }
+
+    /**
+     * Tải file Excel Template mẫu về máy
+     * URL: admin/sales_pipeline/download_template
+     */
+    public function download_template()
+    {
+        if (!has_permission('sales_pipeline', '', 'create')) {
+            access_denied('sales_pipeline');
+        }
+
+        $file_path = module_dir_path('sales_pipeline', 'assets/') . 'INNOTEL_BaoCaoKinhDoanh_Template.xlsx';
+        $file_name = 'INNOTEL_BaoCaoKinhDoanh_Template.xlsx';
+
+        if (!file_exists($file_path)) {
+            set_alert('danger', 'File template không tồn tại. Vui lòng liên hệ bộ phận IT.');
+            redirect(admin_url('sales_pipeline/import'));
+        }
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $file_name . '"');
+        header('Content-Length: ' . filesize($file_path));
+        header('Cache-Control: no-cache, must-revalidate');
+        readfile($file_path);
+        exit;
+    }
+
+    /**
+     * Kanban view (AJAX)
+     * URL: admin/sales_pipeline/kanban
+     */
+    public function kanban()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
+            ajax_access_denied();
+        }
+
+        $data['statuses'] = $this->sales_pipeline_model->get_statuses();
+        $data['search'] = $this->input->post('search') ?: '';
+        $data['sort_by'] = $this->input->post('sort') ?: 'deal_date';
+        $data['sort_type'] = $this->input->post('sort_type') ?: 'desc';
+        $data['quarter'] = $this->input->post('quarter') ?: '';
+        $data['year'] = $this->input->post('year') ?: '';
+        $data['staff_id'] = $this->input->post('staff_id') ?: '';
+        
+        // Build query string to preserve filter states when clicking kanban cards
+        $query_params = [];
+        if ($data['quarter']) $query_params['quarter'] = $data['quarter'];
+        if ($data['year'])    $query_params['year'] = $data['year'];
+        if ($data['staff_id']) $query_params['staff_id'] = $data['staff_id'];
+        if ($data['search'])  $query_params['search'] = $data['search'];
+        $data['query_string'] = !empty($query_params) ? '?' . http_build_query($query_params) : '';
+
+        $html = $this->load->view('sales_pipeline/kan-ban', $data, true);
+        
+        header('Content-Type: application/json');
+        echo json_encode(['kanban' => $html]);
+    }
+
+    /**
+     * Load more deals for kanban (AJAX)
+     * URL: admin/sales_pipeline/kanban_load_more
+     */
+    public function kanban_load_more()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
+            ajax_access_denied();
+        }
+
+        $status = $this->input->post('status_id');
+        $page = $this->input->post('page');
+        $search = $this->input->post('search');
+
+        $deals = $this->sales_pipeline_model->do_kanban_query($status, $search, $page, [
+            'sort_by' => $this->input->post('sort'),
+            'sort' => $this->input->post('sort_type'),
+            'quarter' => $this->input->post('quarter'),
+            'year' => $this->input->post('year'),
+            'staff_id' => $this->input->post('staff_id')
+        ]);
+
+        foreach ($deals as $deal) {
+            $this->load->view('sales_pipeline/_kanban_card', ['deal' => $deal, 'status' => $status]);
+        }
+    }
+
+    /**
+     * Switch between kanban and list view
+     * URL: admin/sales_pipeline/switch_kanban/{0|1}
+     */
+    public function switch_kanban($set = 0)
+    {
+        $this->session->set_userdata([
+            'sales_pipeline_kanban_view' => $set == 1 ? 'true' : 'false',
+        ]);
+        
+        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
+            redirect($_SERVER['HTTP_REFERER']);
+        } else {
+            redirect(admin_url('sales_pipeline'));
+        }
+    }
+
+    /**
+     * Update deal status (drag-and-drop in Kanban)
+     * URL: admin/sales_pipeline/update_deal_status (POST via AJAX)
+     */
+    public function update_deal_status()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        $deal_id = $this->input->post('deal_id');
+        $status_id = $this->input->post('status_id');
+
+        if (!$deal_id || !$status_id) {
+            echo json_encode(['success' => false, 'message' => 'Thiếu thông tin deal hoặc trạng thái']);
+            return;
+        }
+
+        // Get current deal to check permissions
+        $deal = $this->sales_pipeline_model->get($deal_id);
+        
+        if (!$deal) {
+            echo json_encode(['success' => false, 'message' => 'Không tìm thấy deal']);
+            return;
+        }
+
+        // Check permissions
+        $can_edit = is_admin() || 
+                    has_permission('sales_pipeline', '', 'edit') ||
+                    ($deal->staff_id == get_staff_user_id() && has_permission('sales_pipeline', '', 'edit_own'));
+
+        if (!$can_edit) {
+            echo json_encode(['success' => false, 'message' => 'Bạn không có quyền cập nhật deal này']);
+            return;
+        }
+
+        // Update status
+        $this->db->where('id', $deal_id);
+        $this->db->update(db_prefix() . 'sales_pipeline', [
+            'status_id' => $status_id,
+            'updated_at' => date('Y-m-d H:i:s')
+        ]);
+
+        if ($this->db->affected_rows() > 0) {
+            // Get new status info
+            $status = $this->sales_pipeline_model->get_status($status_id);
+            
+            // Log activity
+            $this->sales_pipeline_model->log_activity($deal_id, 
+                'Cập nhật trạng thái', 
+                'Chuyển sang trạng thái: ' . $status->name
+            );
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Đã cập nhật trạng thái deal',
+                'status_color' => $status->color,
+                'status_name' => $status->name
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Không thể cập nhật trạng thái']);
+        }
+    }
+
+    /**
      * Trang import Excel
      * URL: admin/sales_pipeline/import
      */
     public function import()
     {
+
         // Import = tạo deal mới → yêu cầu quyền create
         if (!has_permission('sales_pipeline', '', 'create')) {
             access_denied('sales_pipeline');

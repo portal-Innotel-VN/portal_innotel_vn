@@ -26,11 +26,12 @@ function sales_pipeline_permissions()
     $capabilities = [];
 
     $capabilities['capabilities'] = [
-        'view'     => _l('permission_view') . '(' . _l('permission_global') . ')',
-        'view_own' => _l('permission_view_own'),
-        'create'   => _l('permission_create'),
-        'edit'   => _l('permission_edit'),
-        'delete' => _l('permission_delete'),
+        'view'              => _l('permission_view') . '(' . _l('permission_global') . ')',
+        'view_own'          => _l('permission_view_own'),
+        'create'            => _l('permission_create'),
+        'edit'              => _l('permission_edit'),
+        'delete'            => _l('permission_delete'),
+        'view_deal_details' => _l('sales_pipeline_permission_view_deal_details'),
     ];
 
     register_staff_capabilities('sales_pipeline', $capabilities, _l('sales_pipeline'));

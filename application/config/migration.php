@@ -70,7 +70,8 @@ $config['migration_auto_latest'] = FALSE;
 */
 // $config['migration_version'] = 244; // 2.4.4
 // $config['migration_version'] = 245; // 2.4.5
-$config['migration_version'] = 248;
+// $config['migration_version'] = 248;
+$config['migration_version'] = 249; // NEW: Cost price business model
 
 /*
 |--------------------------------------------------------------------------

@@ -75,7 +75,23 @@ $lang['sales_pipeline_import_success']  = 'Import thành công %s deal!';
 $lang['sales_pipeline_no_deals'] = 'Chưa có deal nào. Hãy thêm deal mới hoặc upload Excel.';
 
 // Notification / Reminder
-$lang['sales_pipeline_reminder'] = 'Nhắc nhở Pipeline';
+$lang['sales_pipeline_reminder'] = 'Nhắc nhở Deal của bạn';
 
 // Settings
 $lang['sales_pipeline_settings'] = 'Cài đặt';
+
+// Cost Price (NEW - for new business model)
+$lang['sales_pipeline_cost_price'] = 'Giá nhập';
+$lang['sales_pipeline_update_cost_price'] = 'Cập nhật Giá Nhập';
+$lang['sales_pipeline_fill_cost_price'] = 'Điền giá nhập';
+$lang['sales_pipeline_enter_cost_price'] = 'Nhập giá nhập (VNĐ)';
+$lang['sales_pipeline_cost_price_hint'] = 'Giá nhập là chi phí mua/sản xuất sản phẩm. Lợi nhuận = Giá bán - Giá nhập';
+$lang['sales_pipeline_missing_cost_price_hint'] = 'Deal này chưa có giá nhập. Vui lòng cập nhật để tính lợi nhuận chính xác.';
+$lang['sales_pipeline_not_filled'] = 'Chưa điền';
+$lang['sales_pipeline_profit_preview'] = 'Xem trước Lợi Nhuận';
+$lang['sales_pipeline_invalid_cost_price'] = 'Vui lòng nhập giá nhập hợp lệ (số dương)';
+$lang['sales_pipeline_missing_cost_prices'] = 'Danh Sách Deal Thiếu Giá Nhập';
+$lang['sales_pipeline_missing_cost_alert'] = 'Cảnh báo: Deal này thiếu giá nhập';
+
+// Permissions
+$lang['sales_pipeline_permission_view_deal_details'] = 'Xem chi tiết deal';

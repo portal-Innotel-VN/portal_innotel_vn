@@ -14,12 +14,14 @@ class Sales_pipeline_model extends App_Model
     // =========================================================================
 
     /**
-     * Lấy deal theo ID hoặc tất cả
+     * Lấy deal theo ID hoặc tất cả với Lợi nhuận tính runtime
      * @param string|int $id
      * @param array $where Điều kiện lọc bổ sung
+     * @param int $limit Số record mỗi trang (cho pagination)
+     * @param int $offset Vị trí bắt đầu (cho pagination)
      * @return mixed
      */
-    public function get($id = '', $where = [])
+    public function get($id = '', $where = [], $limit = null, $offset = null, $search = '')
     {
         $this->db->select(
             db_prefix() . 'sales_pipeline.*,' .
@@ -27,7 +29,17 @@ class Sales_pipeline_model extends App_Model
             db_prefix() . 'sales_pipeline_statuses.color as status_color,' .
             db_prefix() . 'sales_pipeline_statuses.is_won,' .
             db_prefix() . 'sales_pipeline_statuses.is_lost,' .
-            'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as staff_name'
+            'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as staff_name,' .
+            // Tính lợi nhuận runtime: deal_value - cost_price (NULL nếu cost_price NULL)
+            '(CASE WHEN ' . db_prefix() . 'sales_pipeline.cost_price IS NOT NULL 
+                THEN ' . db_prefix() . 'sales_pipeline.deal_value - ' . db_prefix() . 'sales_pipeline.cost_price 
+                ELSE NULL END) as actual_profit,' .
+            // Tính % lợi nhuận: (profit / deal_value) * 100
+            '(CASE WHEN ' . db_prefix() . 'sales_pipeline.cost_price IS NOT NULL AND ' . db_prefix() . 'sales_pipeline.deal_value > 0
+                THEN ((' . db_prefix() . 'sales_pipeline.deal_value - ' . db_prefix() . 'sales_pipeline.cost_price) / ' . db_prefix() . 'sales_pipeline.deal_value) * 100
+                ELSE NULL END) as profit_percentage,' .
+            // Cờ cảnh báo: cost_price còn NULL
+            '(CASE WHEN ' . db_prefix() . 'sales_pipeline.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_price'
         );
         $this->db->join(
             db_prefix() . 'sales_pipeline_statuses',
@@ -44,6 +56,14 @@ class Sales_pipeline_model extends App_Model
             $this->db->where($where);
         }
 
+        if (!empty($search)) {
+            $this->db->group_start();
+            $this->db->like(db_prefix() . 'sales_pipeline.customer_name', $search);
+            $this->db->or_like(db_prefix() . 'sales_pipeline.deal_name', $search);
+            $this->db->or_like(db_prefix() . 'sales_pipeline.contact_name', $search);
+            $this->db->group_end();
+        }
+
         if (is_numeric($id)) {
             $this->db->where(db_prefix() . 'sales_pipeline.id', $id);
             $deal = $this->db->get(db_prefix() . 'sales_pipeline')->row_array();
@@ -55,7 +75,35 @@ class Sales_pipeline_model extends App_Model
 
         $this->db->order_by(db_prefix() . 'sales_pipeline.deal_date', 'ASC');
 
+        // Apply pagination if limit is set
+        if ($limit !== null) {
+            $this->db->limit($limit, $offset);
+        }
+
         return $this->db->get(db_prefix() . 'sales_pipeline')->result_array();
+    }
+
+    /**
+     * Đếm tổng số deal theo điều kiện lọc (cho pagination)
+     * @param array $where Điều kiện lọc
+     * @param string $search Từ khóa tìm kiếm
+     * @return int
+     */
+    public function count_deals($where = [], $search = '')
+    {
+        if (!empty($where)) {
+            $this->db->where($where);
+        }
+
+        if (!empty($search)) {
+            $this->db->group_start();
+            $this->db->like(db_prefix() . 'sales_pipeline.customer_name', $search);
+            $this->db->or_like(db_prefix() . 'sales_pipeline.deal_name', $search);
+            $this->db->or_like(db_prefix() . 'sales_pipeline.contact_name', $search);
+            $this->db->group_end();
+        }
+
+        return $this->db->count_all_results(db_prefix() . 'sales_pipeline');
     }
 
     /**
@@ -65,13 +113,15 @@ class Sales_pipeline_model extends App_Model
      */
     public function add($data)
     {
-        // Tự tính lợi nhuận dự kiến
-        if (isset($data['deal_value']) && isset($data['profit_margin'])) {
-            $data['expected_profit'] = floatval($data['deal_value']) * floatval($data['profit_margin']);
-        }
+        // Không còn tính profit_margin/expected_profit (đã xóa khỏi DB)
+        // Lợi nhuận = deal_value - cost_price (tính khi query)
 
         $data['datecreated'] = date('Y-m-d H:i:s');
-        $data['addedfrom']   = get_staff_user_id();
+        
+        // Nếu addedfrom chưa có, set người hiện tại
+        if (!isset($data['addedfrom'])) {
+            $data['addedfrom'] = get_staff_user_id();
+        }
 
         // Xử lý checkbox
         $data['contract_signed']  = isset($data['contract_signed']) ? 1 : 0;
@@ -112,16 +162,20 @@ class Sales_pipeline_model extends App_Model
      */
     public function update($data, $id)
     {
-        // Lấy deal cũ để so sánh trạng thái
+        // Lấy deal cũ để so sánh trạng thái và cost_price
         $old_deal = $this->get($id);
         $old_status = $old_deal ? $old_deal['status'] : null;
+        $old_cost_price = $old_deal ? $old_deal['cost_price'] : null;
 
-        // Tự tính lợi nhuận
-        if (isset($data['deal_value']) && isset($data['profit_margin'])) {
-            $data['expected_profit'] = floatval($data['deal_value']) * floatval($data['profit_margin']);
-        }
-
+        // Không còn tính profit_margin/expected_profit
+        
         $data['datemodified'] = date('Y-m-d H:i:s');
+        
+        // Kiểm tra nếu cost_price được cập nhật từ NULL → có giá trị
+        $cost_price_updated = false;
+        if (isset($data['cost_price']) && $data['cost_price'] !== null && $old_cost_price === null) {
+            $cost_price_updated = true;
+        }
 
         // Xử lý checkbox
         $data['contract_signed']  = isset($data['contract_signed']) ? 1 : 0;
@@ -364,25 +418,41 @@ class Sales_pipeline_model extends App_Model
      * @param int|null $quarter Quý (1-4), null = tất cả
      * @param int|null $year Năm
      * @param int|null $staff_id Lọc theo nhân viên
+     * @param string $search Từ khóa tìm kiếm
      * @return array
      */
-    public function get_summary($quarter = null, $year = null, $staff_id = null)
+    public function get_summary($quarter = null, $year = null, $staff_id = null, $search = '')
     {
         if ($year === null) {
             $year = date('Y');
         }
 
-        $where = [];
-        if ($quarter) {
-            $where['QUARTER(deal_date)'] = $quarter;
-        }
-        $where['YEAR(deal_date)'] = $year;
+        $base_where = [];
+        if ($quarter) $base_where['QUARTER(deal_date)'] = $quarter;
+        $base_where['YEAR(deal_date)'] = $year;
+        if ($staff_id) $base_where['staff_id'] = $staff_id;
 
-        if ($staff_id) {
-            $where['staff_id'] = $staff_id;
+        // 1. Tổng số deal & Tổng giá trị
+        $this->db->select('COUNT(id) as total_deals, SUM(deal_value) as total_value');
+        $this->db->where($base_where);
+        if (!empty($search)) {
+            $this->db->group_start();
+            $this->db->like('customer_name', $search);
+            $this->db->or_like('deal_name', $search);
+            $this->db->or_like('contact_name', $search);
+            $this->db->group_end();
         }
+        $totals = $this->db->get(db_prefix() . 'sales_pipeline')->row_array();
 
-        $this->db->where($where);
+        // 2. Lấy dữ liệu chi tiết
+        $this->db->where($base_where);
+        if (!empty($search)) {
+            $this->db->group_start();
+            $this->db->like('customer_name', $search);
+            $this->db->or_like('deal_name', $search);
+            $this->db->or_like('contact_name', $search);
+            $this->db->group_end();
+        }
         $deals = $this->db->get(db_prefix() . 'sales_pipeline')->result_array();
 
         $summary = [
@@ -403,7 +473,9 @@ class Sales_pipeline_model extends App_Model
 
         foreach ($deals as $deal) {
             $summary['total_value']  += floatval($deal['deal_value']);
-            $summary['total_profit'] += floatval($deal['expected_profit']);
+            if ($deal['cost_price'] !== null) {
+                $summary['total_profit'] += (floatval($deal['deal_value']) - floatval($deal['cost_price']));
+            }
 
             if (in_array($deal['status'], $won_ids)) {
                 $summary['won_deals']++;
@@ -484,6 +556,220 @@ class Sales_pipeline_model extends App_Model
     }
 
     // =========================================================================
+    // COST PRICE MANAGEMENT
+    // =========================================================================
+
+    /**
+     * Lấy danh sách deals thiếu giá nhập (cost_price = NULL)
+     * @param array $filters ['quarter', 'year', 'staff_id']
+     * @return array
+     */
+    public function get_deals_missing_cost_price($filters = [])
+    {
+        $this->db->select(
+            db_prefix() . 'sales_pipeline.*,' .
+            db_prefix() . 'sales_pipeline_statuses.name as status_name,' .
+            'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as staff_name'
+        );
+        $this->db->join(
+            db_prefix() . 'sales_pipeline_statuses',
+            db_prefix() . 'sales_pipeline_statuses.id = ' . db_prefix() . 'sales_pipeline.status',
+            'left'
+        );
+        $this->db->join(
+            db_prefix() . 'staff',
+            db_prefix() . 'staff.staffid = ' . db_prefix() . 'sales_pipeline.staff_id',
+            'left'
+        );
+
+        // Chỉ lấy deal chưa có cost_price
+        $this->db->where(db_prefix() . 'sales_pipeline.cost_price IS NULL');
+
+        // Filters
+        if (!empty($filters['quarter'])) {
+            $this->db->where('QUARTER(' . db_prefix() . 'sales_pipeline.deal_date)', $filters['quarter']);
+        }
+        if (!empty($filters['year'])) {
+            $this->db->where('YEAR(' . db_prefix() . 'sales_pipeline.deal_date)', $filters['year']);
+        }
+        if (!empty($filters['staff_id'])) {
+            $this->db->where(db_prefix() . 'sales_pipeline.staff_id', $filters['staff_id']);
+        }
+
+        $this->db->order_by(db_prefix() . 'sales_pipeline.deal_date', 'DESC');
+        return $this->db->get(db_prefix() . 'sales_pipeline')->result_array();
+    }
+
+    /**
+     * Cập nhật cost_price cho deal (AJAX endpoint)
+     * @param int $deal_id
+     * @param float $cost_price
+     * @return bool
+     */
+    public function update_cost_price($deal_id, $cost_price)
+    {
+        $deal = $this->get($deal_id);
+        if (!$deal) {
+            return false;
+        }
+
+        $old_cost_price = $deal['cost_price'];
+
+        $this->db->where('id', $deal_id);
+        $this->db->update(db_prefix() . 'sales_pipeline', [
+            'cost_price'    => $cost_price,
+            'datemodified'  => date('Y-m-d H:i:s'),
+        ]);
+
+        if ($this->db->affected_rows() > 0) {
+            // Log activity
+            if ($old_cost_price === null) {
+                $this->add_activity($deal_id, 'Cập nhật Giá nhập: ' . number_format($cost_price) . ' VNĐ (từ NULL)');
+                
+                // Đánh dấu alert đã resolved
+                $this->resolve_cost_price_alert($deal_id);
+            } else {
+                $this->add_activity($deal_id, 'Cập nhật Giá nhập: ' . number_format($old_cost_price) . ' → ' . number_format($cost_price) . ' VNĐ');
+            }
+
+            log_activity('Sales Pipeline - Cập nhật giá nhập cho deal [ID: ' . $deal_id . ']');
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Tạo alert cho deal thiếu giá nhập
+     * @param int $pipeline_id
+     * @return bool
+     */
+    public function create_cost_price_alert($pipeline_id)
+    {
+        // Kiểm tra alert đã tồn tại chưa
+        $this->db->where('pipeline_id', $pipeline_id);
+        $this->db->where('resolved_at IS NULL');
+        $existing = $this->db->get(db_prefix() . 'sales_pipeline_cost_alerts')->row();
+
+        if ($existing) {
+            // Cập nhật alert count
+            $this->db->where('id', $existing->id);
+            $this->db->update(db_prefix() . 'sales_pipeline_cost_alerts', [
+                'alert_count'     => $existing->alert_count + 1,
+                'last_alert_sent' => date('Y-m-d H:i:s'),
+            ]);
+            return true;
+        }
+
+        // Tạo alert mới
+        $this->db->insert(db_prefix() . 'sales_pipeline_cost_alerts', [
+            'pipeline_id'     => $pipeline_id,
+            'alert_count'     => 1,
+            'last_alert_sent' => date('Y-m-d H:i:s'),
+            'datecreated'     => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->db->insert_id() > 0;
+    }
+
+    /**
+     * Đánh dấu alert đã resolved khi cost_price được cập nhật
+     * @param int $pipeline_id
+     */
+    private function resolve_cost_price_alert($pipeline_id)
+    {
+        $this->db->where('pipeline_id', $pipeline_id);
+        $this->db->where('resolved_at IS NULL');
+        $this->db->update(db_prefix() . 'sales_pipeline_cost_alerts', [
+            'resolved_at' => date('Y-m-d H:i:s'),
+            'resolved_by' => get_staff_user_id(),
+        ]);
+    }
+
+    /**
+     * Gửi alert cho các bên liên quan về deal thiếu giá nhập
+     * @param array $deal
+     */
+    public function send_cost_price_alert($deal)
+    {
+        $alert_recipients = [];
+
+        // 1. Nhân viên phụ trách deal
+        $alert_recipients[] = $deal['staff_id'];
+
+        // 2. Người import (nếu khác người phụ trách)
+        if (!empty($deal['imported_by']) && $deal['imported_by'] != $deal['staff_id']) {
+            $alert_recipients[] = $deal['imported_by'];
+        }
+
+        // 3. Admin/Quản lý (role = admin hoặc có permission)
+        $this->db->where('admin', 1);
+        $this->db->where('active', 1);
+        $admins = $this->db->get(db_prefix() . 'staff')->result_array();
+        foreach ($admins as $admin) {
+            if (!in_array($admin['staffid'], $alert_recipients)) {
+                $alert_recipients[] = $admin['staffid'];
+            }
+        }
+
+        // Gửi notification cho từng người
+        foreach ($alert_recipients as $staff_id) {
+            add_notification([
+                'description'     => 'sales_pipeline_missing_cost_price',
+                'touserid'        => $staff_id,
+                'fromuserid'      => null,
+                'link'            => 'sales_pipeline/deal/' . $deal['id'],
+                'additional_data' => serialize([
+                    $deal['customer_name'],
+                    $deal['deal_name'],
+                    number_format($deal['deal_value']),
+                ]),
+            ]);
+        }
+
+        // Lưu log alert
+        $this->create_cost_price_alert($deal['id']);
+
+        // Log vào alerted_staff_ids
+        $this->db->where('pipeline_id', $deal['id']);
+        $this->db->where('resolved_at IS NULL');
+        $alert = $this->db->get(db_prefix() . 'sales_pipeline_cost_alerts')->row();
+        
+        if ($alert) {
+            $alerted_ids = json_decode($alert->alerted_staff_ids, true) ?: [];
+            $alerted_ids = array_unique(array_merge($alerted_ids, $alert_recipients));
+            
+            $this->db->where('id', $alert->id);
+            $this->db->update(db_prefix() . 'sales_pipeline_cost_alerts', [
+                'alerted_staff_ids' => json_encode($alerted_ids),
+            ]);
+        }
+    }
+
+    /**
+     * Xử lý alert hàng ngày cho deals thiếu giá nhập
+     * Gọi từ CRON job
+     */
+    public function process_cost_price_alerts()
+    {
+        // Lấy deals thiếu cost_price (không phân biệt quý/năm)
+        $deals = $this->get_deals_missing_cost_price();
+
+        foreach ($deals as $deal) {
+            // Kiểm tra xem đã alert trong 24h chưa
+            $this->db->where('pipeline_id', $deal['id']);
+            $this->db->where('resolved_at IS NULL');
+            $this->db->where('last_alert_sent >=', date('Y-m-d H:i:s', strtotime('-24 hours')));
+            $recent_alert = $this->db->get(db_prefix() . 'sales_pipeline_cost_alerts')->row();
+
+            if (!$recent_alert) {
+                // Gửi alert
+                $this->send_cost_price_alert($deal);
+            }
+        }
+    }
+
+    // =========================================================================
     // CRON: Nhắc nhở tự động
     // =========================================================================
 
@@ -552,7 +838,7 @@ class Sales_pipeline_model extends App_Model
         if (!empty($staff->email)) {
             $this->load->model('emails_model');
 
-            $email_subject = '[Nhắc nhở Pipeline] ' . $deal['deal_name'] . ' - ' . $deal['customer_name'];
+            $email_subject = '[Nhắc nhở Deal của bạn] ' . $deal['deal_name'] . ' - ' . $deal['customer_name'];
             $email_body = '<p>Xin chào <b>' . $staff->firstname . ' ' . $staff->lastname . '</b>,</p>'
                         . '<p>Hệ thống CRM nhắc nhở bạn cập nhật tiến độ deal:</p>'
                         . '<ul>'
@@ -581,5 +867,110 @@ class Sales_pipeline_model extends App_Model
         $this->db->update(db_prefix() . 'sales_pipeline', [
             'last_reminder_sent' => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    // =========================================================================
+    // KANBAN VIEW QUERY
+    // =========================================================================
+
+    /**
+     * Query deals for Kanban view
+     * @param int $status_id Status ID
+     * @param string $search Search term
+     * @param int $page Page number
+     * @param array $sort Sort options
+     * @param bool $count Whether to return count only
+     * @return array|int
+     */
+    public function do_kanban_query($status_id, $search = '', $page = 1, $sort = [], $count = false)
+    {
+        $limit = 10; // Số deal hiển thị mỗi cột kanban
+        
+        $has_view_permission = has_permission('sales_pipeline', '', 'view');
+        $staff_id = get_staff_user_id();
+        
+        $this->db->select(
+            db_prefix() . 'sales_pipeline.*,' .
+            db_prefix() . 'sales_pipeline_statuses.name as status_name,' .
+            db_prefix() . 'sales_pipeline_statuses.color as status_color,' .
+            db_prefix() . 'sales_pipeline_statuses.is_won,' .
+            db_prefix() . 'sales_pipeline_statuses.is_lost,' .
+            'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as staff_name,' .
+            '(CASE WHEN ' . db_prefix() . 'sales_pipeline.cost_price IS NOT NULL 
+                THEN ' . db_prefix() . 'sales_pipeline.deal_value - ' . db_prefix() . 'sales_pipeline.cost_price 
+                ELSE NULL END) as actual_profit,' .
+            '(CASE WHEN ' . db_prefix() . 'sales_pipeline.cost_price IS NOT NULL AND ' . db_prefix() . 'sales_pipeline.deal_value > 0
+                THEN ((' . db_prefix() . 'sales_pipeline.deal_value - ' . db_prefix() . 'sales_pipeline.cost_price) / ' . db_prefix() . 'sales_pipeline.deal_value) * 100
+                ELSE NULL END) as profit_percentage,' .
+            '(CASE WHEN ' . db_prefix() . 'sales_pipeline.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_price'
+        );
+
+        $this->db->join(
+            db_prefix() . 'sales_pipeline_statuses',
+            db_prefix() . 'sales_pipeline_statuses.id = ' . db_prefix() . 'sales_pipeline.status',
+            'left'
+        );
+        $this->db->join(
+            db_prefix() . 'staff',
+            db_prefix() . 'staff.staffid = ' . db_prefix() . 'sales_pipeline.staff_id',
+            'left'
+        );
+
+        $this->db->where(db_prefix() . 'sales_pipeline.status', $status_id);
+
+        // Search functionality
+        if (!empty($search)) {
+            $this->db->group_start();
+            $this->db->like(db_prefix() . 'sales_pipeline.customer_name', $search);
+            $this->db->or_like(db_prefix() . 'sales_pipeline.deal_name', $search);
+            $this->db->or_like(db_prefix() . 'sales_pipeline.contact_name', $search);
+            $this->db->group_end();
+        }
+
+        // Filters from URL/AJAX
+        if (!empty($sort['quarter'])) {
+            $this->db->where('QUARTER(deal_date)', $sort['quarter']);
+        }
+        if (!empty($sort['year'])) {
+            $this->db->where('YEAR(deal_date)', $sort['year']);
+        }
+        if (!empty($sort['staff_id'])) {
+            $this->db->where(db_prefix() . 'sales_pipeline.staff_id', $sort['staff_id']);
+        }
+
+        // Permission check: chỉ xem deal của mình nếu không có quyền view global
+        if (!$has_view_permission) {
+            $this->db->where(db_prefix() . 'sales_pipeline.staff_id', $staff_id);
+        }
+
+        if ($count) {
+            return $this->db->count_all_results(db_prefix() . 'sales_pipeline');
+        }
+
+        // Sorting
+        if (!empty($sort['sort_by'])) {
+            $sort_order = isset($sort['sort']) ? $sort['sort'] : 'asc';
+            if ($sort['sort_by'] == 'datecreated') {
+                $this->db->order_by(db_prefix() . 'sales_pipeline.datecreated', $sort_order);
+            } elseif ($sort['sort_by'] == 'deal_date') {
+                $this->db->order_by(db_prefix() . 'sales_pipeline.deal_date', $sort_order);
+            } elseif ($sort['sort_by'] == 'deal_value') {
+                $this->db->order_by(db_prefix() . 'sales_pipeline.deal_value', $sort_order);
+            }
+        } else {
+            // Default sorting: by deal_date descending
+            $this->db->order_by(db_prefix() . 'sales_pipeline.deal_date', 'desc');
+        }
+
+        // Pagination
+        if ($page > 1) {
+            $page--;
+            $position = ($page * $limit);
+            $this->db->limit($limit, $position);
+        } else {
+            $this->db->limit($limit);
+        }
+
+        return $this->db->get(db_prefix() . 'sales_pipeline')->result_array();
     }
 }

@@ -12,13 +12,20 @@
                         </h4>
                         <hr class="hr-panel-heading" />
 
-                        <div class="alert alert-info">
-                            <i class="fa fa-info-circle"></i>
-                            <strong><?php echo _l('sales_pipeline_import_note'); ?></strong>
-                            <br>
-                            <?php echo _l('sales_pipeline_import_format'); ?>:
-                            <br>
-                            <code>STT | Ngày Tạo| Tên KH | Mô tả deal | Doanh số | % LN | Lợi nhuận | Ghi chú</code>
+                        <div class="alert alert-warning" style="border-left: 4px solid #f39c12;">
+                            <div class="flex" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                                <div>
+                                    <i class="fa fa-file-excel-o text-warning" style="font-size:18px; margin-right:8px;"></i>
+                                    <strong>Sử dụng file Template chuẩn để đảm bảo dữ liệu nhập đúng định dạng.</strong>
+                                    <br>
+                                    <small class="text-muted" style="margin-left:26px;">File đã có sẵn Data Validation và hướng dẫn điền đầy đủ.</small>
+                                </div>
+                                <a href="<?php echo admin_url('sales_pipeline/download_template'); ?>"
+                                   class="btn btn-success btn-sm"
+                                   style="white-space:nowrap; flex-shrink:0;">
+                                    <i class="fa fa-download"></i> &nbsp;Tải Template (.xlsx)
+                                </a>
+                            </div>
                         </div>
 
                         <?php echo form_open_multipart(admin_url('sales_pipeline/import')); ?>
