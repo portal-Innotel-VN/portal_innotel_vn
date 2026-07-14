@@ -569,6 +569,7 @@ class Sales_pipeline_model extends App_Model
         $this->db->select(
             db_prefix() . 'sales_pipeline.*,' .
             db_prefix() . 'sales_pipeline_statuses.name as status_name,' .
+            db_prefix() . 'sales_pipeline_statuses.color as status_color,' .
             'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as staff_name'
         );
         $this->db->join(
@@ -596,8 +597,34 @@ class Sales_pipeline_model extends App_Model
             $this->db->where(db_prefix() . 'sales_pipeline.staff_id', $filters['staff_id']);
         }
 
+        if (isset($filters['limit']) && isset($filters['offset'])) {
+            $this->db->limit($filters['limit'], $filters['offset']);
+        }
+
         $this->db->order_by(db_prefix() . 'sales_pipeline.deal_date', 'DESC');
         return $this->db->get(db_prefix() . 'sales_pipeline')->result_array();
+    }
+
+    /**
+     * Đếm tổng số lượng deals thiếu giá nhập theo bộ lọc
+     * @param array $filters
+     * @return int
+     */
+    public function count_deals_missing_cost_price($filters = [])
+    {
+        $this->db->where('cost_price IS NULL');
+
+        if (!empty($filters['quarter'])) {
+            $this->db->where('QUARTER(deal_date)', $filters['quarter']);
+        }
+        if (!empty($filters['year'])) {
+            $this->db->where('YEAR(deal_date)', $filters['year']);
+        }
+        if (!empty($filters['staff_id'])) {
+            $this->db->where('staff_id', $filters['staff_id']);
+        }
+
+        return $this->db->count_all_results(db_prefix() . 'sales_pipeline');
     }
 
     /**
@@ -936,6 +963,12 @@ class Sales_pipeline_model extends App_Model
         }
         if (!empty($sort['staff_id'])) {
             $this->db->where(db_prefix() . 'sales_pipeline.staff_id', $sort['staff_id']);
+        }
+        if (isset($sort['contract_signed']) && $sort['contract_signed'] !== '') {
+            $this->db->where(db_prefix() . 'sales_pipeline.contract_signed', (int)$sort['contract_signed']);
+        }
+        if (isset($sort['invoice_issued']) && $sort['invoice_issued'] !== '') {
+            $this->db->where(db_prefix() . 'sales_pipeline.invoice_issued', (int)$sort['invoice_issued']);
         }
 
         // Permission check: chỉ xem deal của mình nếu không có quyền view global

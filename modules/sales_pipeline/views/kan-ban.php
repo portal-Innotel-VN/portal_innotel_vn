@@ -6,7 +6,9 @@ foreach ($statuses as $status) {
     $total_pages = ceil($CI->sales_pipeline_model->do_kanban_query($status['id'], $search, 1, [
         'quarter' => isset($quarter) ? $quarter : '',
         'year' => isset($year) ? $year : '',
-        'staff_id' => isset($staff_id) ? $staff_id : ''
+        'staff_id' => isset($staff_id) ? $staff_id : '',
+        'contract_signed' => isset($contract_signed) ? $contract_signed : '',
+        'invoice_issued' => isset($invoice_issued) ? $invoice_issued : ''
     ], true) / 10);
     
     $status_color = '';
@@ -19,14 +21,16 @@ foreach ($statuses as $status) {
         'sort' => $sort_type,
         'quarter' => isset($quarter) ? $quarter : '',
         'year' => isset($year) ? $year : '',
-        'staff_id' => isset($staff_id) ? $staff_id : ''
+        'staff_id' => isset($staff_id) ? $staff_id : '',
+        'contract_signed' => isset($contract_signed) ? $contract_signed : '',
+        'invoice_issued' => isset($invoice_issued) ? $invoice_issued : ''
     ]);
     $total_deals = count($deals);
     ?>
     <div class="pipeline-kan-ban-col" data-status-id="<?php echo $status['id']; ?>" data-total-pages="<?php echo $total_pages; ?>">
         <div class="panel_s" <?php echo $status_color; ?>>
             <div class="panel-heading kanban-status-header">
-                <span class="kanban-status-name"><?php echo $status['name']; ?></span>
+                <span class="kanban-status-name"><?php echo html_escape($status['name']); ?></span>
                 <span class="kanban-status-count"><?php echo $total_deals; ?></span>
             </div>
             <div class="panel-body">

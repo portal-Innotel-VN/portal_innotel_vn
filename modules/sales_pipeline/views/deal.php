@@ -63,7 +63,7 @@
                                             <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="contact_phone" class="control-label"><?php echo _l('sales_pipeline_contact_phone'); ?></label>
-                                                    <input type="text" class="form-control" name="contact_phone" id="contact_phone"
+                                                    <input type="text" class="form-control" name="contact_phone" id="contact_phone" pattern="[0-9]{1,10}" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                                                            value="<?php echo isset($deal) ? html_escape($deal['contact_phone']) : ''; ?>"
                                                            placeholder="SĐT">
                                                 </div>
@@ -368,6 +368,17 @@ $(function() {
     // Enable tooltip
     $('[data-toggle="tooltip"]').tooltip();
 });
+
+appValidateForm($('#deal-form'), {
+    contact_phone: {
+        digits: true,
+        maxlength: 10
+    },
+    contact_email: {
+        email: true
+    }
+});
+
 </script>
 </body>
 </html>

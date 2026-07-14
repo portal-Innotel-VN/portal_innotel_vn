@@ -38,6 +38,17 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                 </div>
                             </div>
 
+                            <!-- Alert Banner deal thiếu giá nhập -->
+                            <?php if (isset($total_missing_cost_prices) && $total_missing_cost_prices > 0) { ?>
+                            <div class="alert alert-danger" style="margin-bottom: 15px; border-left: 4px solid #fc2d42;">
+                                <i class="fa fa-exclamation-triangle" style="font-size: 16px; margin-right: 8px;"></i>
+                                Có <strong><?php echo $total_missing_cost_prices; ?></strong> cơ hội bán hàng (deal) đang thiếu thông tin giá nhập.
+                                <a href="<?php echo admin_url('sales_pipeline/missing_cost_prices'); ?>" class="alert-link" style="text-decoration: underline; margin-left: 10px;">
+                                    [Xem và cập nhật ngay]
+                                </a>
+                            </div>
+                            <?php } ?>
+
                             <!-- Toggle buttons row -->
                             <div class="row">
                                 <div class="col-md-5">
@@ -46,7 +57,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                        onclick="slideToggle('.sales-pipeline-overview'); return false;">
                                         <i class="fa fa-bar-chart"></i>
                                     </a>
-                                    <a href="<?php echo admin_url('sales_pipeline/switch_kanban/' . $switch_kanban); ?>" 
+                                    <a href="<?php echo admin_url('sales_pipeline/switch_kanban/' . $switch_kanban . $query_string); ?>" 
                                        class="btn btn-default mleft10 hidden-xs">
                                         <?php if($switch_kanban == 1) { 
                                             echo '<i class="fa fa-th"></i> Chuyển sang Kanban';
@@ -73,7 +84,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
 
                         <!-- Bộ lọc -->
                         <div class="row mbot15">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select name="filter_quarter" id="filter_quarter" class="selectpicker" data-width="100%"
                                         data-none-selected-text="<?php echo _l('sales_pipeline_filter_quarter'); ?>"
                                         onchange="applyFilters()">
@@ -92,7 +103,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                     <?php } ?>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select name="filter_staff" id="filter_staff" class="selectpicker" data-width="100%"
                                         data-live-search="true"
                                         data-none-selected-text="<?php echo _l('sales_pipeline_filter_staff'); ?>"
@@ -104,6 +115,17 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                         <?php echo $member['firstname'] . ' ' . $member['lastname']; ?>
                                     </option>
                                     <?php } ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select name="filter_document" id="filter_document" class="selectpicker" data-width="100%"
+                                        data-none-selected-text="Lọc chứng từ"
+                                        onchange="applyFilters()">
+                                    <option value="">Tất cả chứng từ</option>
+                                    <option value="contract_yes" <?php echo (isset($current_contract_signed) && $current_contract_signed === '1') ? 'selected' : ''; ?>>Đã ký Hợp Đồng</option>
+                                    <option value="contract_no" <?php echo (isset($current_contract_signed) && $current_contract_signed === '0') ? 'selected' : ''; ?>>Chưa ký HĐ</option>
+                                    <option value="invoice_yes" <?php echo (isset($current_invoice_issued) && $current_invoice_issued === '1') ? 'selected' : ''; ?>>Đã xuất HĐN</option>
+                                    <option value="invoice_no" <?php echo (isset($current_invoice_issued) && $current_invoice_issued === '0') ? 'selected' : ''; ?>>Chưa xuất HĐN</option>
                                 </select>
                             </div>
                             <?php if ($switch_kanban == 1) { // Only show pagination dropdown in List view ?>
@@ -209,7 +231,8 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                         <th width="9%" class="text-right">Lợi nhuận (VNĐ)</th>
                                         <th width="8%">Nhân viên</th>
                                         <th width="9%">Trạng thái</th>
-                                        <th width="13%">Ghi chú</th>
+
+                                        <th width="10%">Ghi chú</th>
                                         <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) { ?>
                                         <th width="5%" class="text-center">Chi tiết</th>
                                         <?php } ?>
@@ -294,6 +317,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                             </span>
                                         </td>
                                         
+
                                         <!-- 10. Ghi chú -->
                                         <td>
                                             <?php 
@@ -318,7 +342,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                             ?>
                                         </td>
                                         
-                                        <!-- 11. Chi tiết (Admin hoặc có quyền view_deal_details) -->
+                                        <!-- 12. Chi tiết (Admin hoặc có quyền view_deal_details) -->
                                         <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) { ?>
                                         <td class="text-center">
                                             <a href="<?php echo admin_url('sales_pipeline/deal/' . $deal['id'] . $query_string); ?>"
@@ -673,11 +697,12 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
 
 <script>
 function applyFilters() {
-    var quarter = $('#filter_quarter').val();
-    var year    = $('#filter_year').val();
-    var staff   = $('#filter_staff').val();
-    var perPage = $('#per_page').val();
-    var search  = $('input[name="search"]').val();
+    var quarter  = $('#filter_quarter').val();
+    var year     = $('#filter_year').val();
+    var staff    = $('#filter_staff').val();
+    var perPage  = $('#per_page').val();
+    var search   = $('input[name="search"]').val();
+    var document = $('#filter_document').val();
 
     var url = admin_url + 'sales_pipeline?';
     if (quarter) url += 'quarter=' + quarter + '&';
@@ -686,20 +711,33 @@ function applyFilters() {
     if (perPage) url += 'per_page=' + perPage + '&';
     if (search)  url += 'search=' + encodeURIComponent(search) + '&';
 
+    // Lọc chứng từ
+    if (document === 'contract_yes') url += 'contract_signed=1&';
+    if (document === 'contract_no')  url += 'contract_signed=0&';
+    if (document === 'invoice_yes')  url += 'invoice_issued=1&';
+    if (document === 'invoice_no')   url += 'invoice_issued=0&';
+
     window.location.href = url;
 }
 
 function goToPage(page) {
-    var quarter = $('#filter_quarter').val();
-    var year    = $('#filter_year').val();
-    var staff   = $('#filter_staff').val();
-    var perPage = $('#per_page').val();
+    var quarter  = $('#filter_quarter').val();
+    var year     = $('#filter_year').val();
+    var staff    = $('#filter_staff').val();
+    var perPage  = $('#per_page').val();
+    var document = $('#filter_document').val();
 
     var url = admin_url + 'sales_pipeline?page=' + page;
     if (quarter) url += '&quarter=' + quarter;
     if (year)    url += '&year=' + year;
     if (staff)   url += '&staff_id=' + staff;
     if (perPage) url += '&per_page=' + perPage;
+
+    // Lọc chứng từ
+    if (document === 'contract_yes') url += '&contract_signed=1';
+    if (document === 'contract_no')  url += '&contract_signed=0';
+    if (document === 'invoice_yes')  url += '&invoice_issued=1';
+    if (document === 'invoice_no')   url += '&invoice_issued=0';
 
     window.location.href = url;
 }
@@ -720,6 +758,24 @@ var pipeline_kanban = (function() {
         kanbanServerParams['quarter'] = $('#filter_quarter').val() || '';
         kanbanServerParams['year'] = $('#filter_year').val() || '';
         kanbanServerParams['staff_id'] = $('#filter_staff').val() || '';
+
+        var document = $('#filter_document').val() || '';
+        if (document === 'contract_yes') {
+            kanbanServerParams['contract_signed'] = '1';
+            kanbanServerParams['invoice_issued'] = '';
+        } else if (document === 'contract_no') {
+            kanbanServerParams['contract_signed'] = '0';
+            kanbanServerParams['invoice_issued'] = '';
+        } else if (document === 'invoice_yes') {
+            kanbanServerParams['contract_signed'] = '';
+            kanbanServerParams['invoice_issued'] = '1';
+        } else if (document === 'invoice_no') {
+            kanbanServerParams['contract_signed'] = '';
+            kanbanServerParams['invoice_issued'] = '0';
+        } else {
+            kanbanServerParams['contract_signed'] = '';
+            kanbanServerParams['invoice_issued'] = '';
+        }
         
         var loadArea = $('#kan-ban');
         if (loadArea.length === 0) return;

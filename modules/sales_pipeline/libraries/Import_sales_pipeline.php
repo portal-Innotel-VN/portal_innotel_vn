@@ -41,12 +41,8 @@ class Import_sales_pipeline
         'Vượt ngân sách'      => 11,
     ];
 
-    /**
-     * Suy luận contract_signed và invoice_issued từ status_id.
-     * Thay thế cho việc đọc cột riêng trong file cũ.
-     */
-    private $contract_signed_statuses = [5, 6, 7]; // Đã ký HĐ, Đã xuất HĐ, Đã triển khai
-    private $invoice_issued_statuses  = [6, 7];     // Đã xuất HĐ, Đã triển khai
+    // contract_signed và invoice_issued mặc định = 0 khi import.
+    // Nhân viên kinh doanh sẽ tự cập nhật trên form deal.
 
     public function __construct()
     {
@@ -215,58 +211,122 @@ class Import_sales_pipeline
     }
 
     // =========================================================================
-    // ETL: EXTRACT — Đọc file Excel qua Python helper
+    // ETL: EXTRACT — Đọc file Excel qua PhpSpreadsheet
     // =========================================================================
 
     /**
-     * Đọc file Excel thành array of rows qua Python helper parse_excel.py
+     * Đọc file Excel thành array of rows qua PhpSpreadsheet
      *
      * @param  string $file_path Đường dẫn file tạm
-     * @param  string $ext       xls | xlsx
+     * @param  string $ext       xls | xlsx (không sử dụng, PhpSpreadsheet tự detect)
      * @return array  Mảng các dòng dữ liệu (mỗi dòng là array 8 phần tử)
      */
     private function read_excel($file_path, $ext)
     {
-        $python_script = __DIR__ . '/parse_excel.py';
+        try {
+            // Load spreadsheet using IOFactory (auto-detects format)
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file_path);
+            $sheet = $spreadsheet->getActiveSheet();
 
-        // Tìm Python có cài openpyxl/xlrd
-        $python_path   = 'python3';
-        $common_paths  = [
-            '/Users/dieterhoang/.pyenv/versions/3.12.9/bin/python3',
-            '/usr/local/bin/python3',
-            '/opt/homebrew/bin/python3',
-            '/Library/Frameworks/Python.framework/Versions/3.14/bin/python3',
-            '/Users/dieterhoang/.pyenv/shims/python3',
-            '/usr/bin/python3',
-        ];
-        foreach ($common_paths as $path) {
-            if (file_exists($path) && is_executable($path)) {
-                $python_path = $path;
-                break;
+            $rows = [];
+            $dataStartRow = 7;  // Dòng 7 trong Excel (index 1-based)
+            $dataEndRow   = 56; // Dòng 56 trong Excel
+            $numCols      = 8;  // Cột A đến H
+
+            // Đọc từng dòng từ 7-56
+            for ($rowIndex = $dataStartRow; $rowIndex <= $dataEndRow; $rowIndex++) {
+                $rowData = [];
+
+                // Đọc 8 cột (A-H)
+                for ($colIndex = 1; $colIndex <= $numCols; $colIndex++) {
+                    $cell = $sheet->getCellByColumnAndRow($colIndex, $rowIndex);
+                    $value = $cell->getValue();
+
+                    // Cột A (index 1): Ngày tạo - chuẩn hóa về YYYY-MM-DD
+                    if ($colIndex === 1) {
+                        $rowData[] = $this->normalize_date_php($cell);
+                    } else {
+                        // Các cột khác: lấy giá trị thô
+                        if ($value === null || $value === '') {
+                            $rowData[] = '';
+                        } else {
+                            $rowData[] = $value;
+                        }
+                    }
+                }
+
+                // Bỏ qua dòng rỗng (Cột A và Cột B đều trống)
+                $colA = isset($rowData[0]) ? trim((string)$rowData[0]) : '';
+                $colB = isset($rowData[1]) ? trim((string)$rowData[1]) : '';
+                if ($colA === '' && $colB === '') {
+                    continue;
+                }
+
+                $rows[] = $rowData;
+            }
+
+            return $rows;
+
+        } catch (\Exception $e) {
+            log_activity('Import_sales_pipeline: Lỗi đọc Excel — ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Chuẩn hóa giá trị ngày từ Excel cell sang chuỗi YYYY-MM-DD
+     *
+     * Xử lý 3 trường hợp:
+     * 1. Excel serial number (số float, VD: 45678.0 → 2025-02-15)
+     * 2. String DD/MM/YYYY (VD: "15/02/2025")
+     * 3. String YYYY-MM-DD (đã chuẩn)
+     *
+     * @param  \PhpOffice\PhpSpreadsheet\Cell\Cell $cell
+     * @return string YYYY-MM-DD hoặc chuỗi rỗng nếu không hợp lệ
+     */
+    private function normalize_date_php($cell)
+    {
+        $value = $cell->getValue();
+
+        // Trường hợp rỗng
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        // Trường hợp 1: Excel serial number (numeric)
+        if (is_numeric($value) && $value > 1) {
+            try {
+                // PhpSpreadsheet có helper để convert serial date sang PHP DateTime
+                $dateObj = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value);
+                return $dateObj->format('Y-m-d');
+            } catch (\Exception $e) {
+                log_activity('Import_sales_pipeline: Lỗi parse serial date — ' . $e->getMessage());
             }
         }
 
-        $cmd    = escapeshellcmd($python_path) . ' ' . escapeshellarg($python_script) . ' ' . escapeshellarg($file_path) . ' 2>&1';
-        $output = shell_exec($cmd);
+        // Trường hợp 2 & 3: String
+        $strValue = trim((string)$value);
 
-        if (empty($output)) {
-            log_activity('Import_sales_pipeline: Python output rỗng');
-            return [];
+        // Dạng DD/MM/YYYY
+        if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $strValue, $matches)) {
+            $day   = (int)$matches[1];
+            $month = (int)$matches[2];
+            $year  = (int)$matches[3];
+            return sprintf('%04d-%02d-%02d', $year, $month, $day);
         }
 
-        $data = json_decode($output, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            log_activity('Import_sales_pipeline: Output không phải JSON — ' . substr($output, 0, 500));
-            return [];
+        // Dạng YYYY-MM-DD (đã chuẩn)
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $strValue)) {
+            return $strValue;
         }
 
-        if (isset($data['error'])) {
-            log_activity('Import_sales_pipeline: Lỗi Python — ' . $data['error']);
-            return [];
+        // Fallback: thử strtotime
+        $ts = strtotime($strValue);
+        if ($ts && $ts > 0) {
+            return date('Y-m-d', $ts);
         }
 
-        return is_array($data) ? $data : [];
+        return '';
     }
 
     // =========================================================================
@@ -339,9 +399,9 @@ class Import_sales_pipeline
         $status_text = trim((string)$row[6]);
         $status_id   = $this->map_status_to_id($status_text);
 
-        // Suy luận contract_signed và invoice_issued từ status_id
-        $contract_signed = in_array($status_id, $this->contract_signed_statuses) ? 1 : 0;
-        $invoice_issued  = in_array($status_id, $this->invoice_issued_statuses)  ? 1 : 0;
+        // Mặc định = 0, nhân viên sẽ tự cập nhật trên form deal
+        $contract_signed = 0;
+        $invoice_issued  = 0;
 
         // --- Col H (7): Ghi chú ---
         $notes = trim((string)$row[7]);

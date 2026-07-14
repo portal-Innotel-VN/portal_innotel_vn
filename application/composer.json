@@ -1,6 +1,6 @@
 {
     "require": {
-        "php" : "^5.6",
+        "php": ">=5.6",
         "twilio/sdk": "^5.16",
         "cocur/slugify": "^3.0",
         "nuovo/spreadsheet-reader": "^0.5.11",
@@ -26,6 +26,7 @@
         "illuminate/events": "^5.4",
         "illuminate/pagination": "^5.4",
         "paypal/paypal-checkout-sdk": "1.0.1",
-        "xemlock/htmlpurifier-html5": "^0.1.11"
+        "xemlock/htmlpurifier-html5": "^0.1.11",
+        "phpoffice/phpspreadsheet": "^5.9"
     }
 }

@@ -8,17 +8,17 @@ $status_color = !empty($status['color']) ? $status['color'] : '#28B8DA';
             <div class="col-md-12">
                 <h4 class="bold mtop5 mbot10">
                     <span class="text-dark">
-                        <?php echo $deal['customer_name']; ?>
+                        <?php echo html_escape($deal['customer_name']); ?>
                     </span>
                 </h4>
                 
                 <p class="text-muted mbot10">
-                    <i class="fa fa-briefcase"></i> <?php echo $deal['deal_name']; ?>
+                    <i class="fa fa-briefcase"></i> <?php echo html_escape($deal['deal_name']); ?>
                 </p>
 
                 <div class="clearfix mbot10">
                     <span class="label" style="background-color:<?php echo $status_color; ?>;color:#fff;">
-                        <?php echo $deal['status_name']; ?>
+                        <?php echo html_escape($deal['status_name']); ?>
                     </span>
                 </div>
 
@@ -50,9 +50,10 @@ $status_color = !empty($status['color']) ? $status['color'] : '#28B8DA';
                     
                     <p class="mbot5">
                         <i class="fa fa-user"></i>
-                        <?php echo $deal['staff_name']; ?>
+                        <?php echo html_escape($deal['staff_name']); ?>
                     </p>
                 </div>
+
 
                 <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) { ?>
                 <div class="mtop10">

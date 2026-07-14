@@ -43,6 +43,10 @@ class Sales_pipeline extends AdminController
         $staff_id = $this->input->get('staff_id') ?: null;
         $search   = $this->input->get('search') ?: '';
 
+        // Lọc theo chứng từ (Hợp đồng / Hóa đơn)
+        $contract_signed = $this->input->get('contract_signed');
+        $invoice_issued  = $this->input->get('invoice_issued');
+
         // Chỉ cho xem deal của mình nếu không có quyền view global
         if (!has_permission('sales_pipeline', '', 'view')) {
             $staff_id = get_staff_user_id();
@@ -57,6 +61,13 @@ class Sales_pipeline extends AdminController
         }
         if ($staff_id) {
             $where[db_prefix() . 'sales_pipeline.staff_id'] = $staff_id;
+        }
+        // Filter chứng từ
+        if ($contract_signed !== null && $contract_signed !== '') {
+            $where[db_prefix() . 'sales_pipeline.contract_signed'] = (int) $contract_signed;
+        }
+        if ($invoice_issued !== null && $invoice_issued !== '') {
+            $where[db_prefix() . 'sales_pipeline.invoice_issued'] = (int) $invoice_issued;
         }
 
         // Pagination setup
@@ -89,6 +100,14 @@ class Sales_pipeline extends AdminController
         $data['current_year']     = $year;
         $data['current_staff_id'] = $staff_id;
         $data['current_search']   = $search;
+        $data['current_contract_signed'] = $contract_signed;
+        $data['current_invoice_issued']  = $invoice_issued;
+
+        // Đếm số lượng deal thiếu giá nhập cho Admin/Manager
+        $data['total_missing_cost_prices'] = 0;
+        if (is_admin() || has_permission('sales_pipeline', '', 'view')) {
+            $data['total_missing_cost_prices'] = count($this->sales_pipeline_model->get_deals_missing_cost_price());
+        }
 
         $data['title'] = _l('sales_pipeline');
         $this->load->view('sales_pipeline/manage', $data);
@@ -116,6 +135,9 @@ class Sales_pipeline extends AdminController
         $this->form_validation->set_rules('deal_value', _l('sales_pipeline_deal_value'), 'trim|required|numeric');
         $this->form_validation->set_rules('deal_date', _l('sales_pipeline_expected_date'), 'trim|required');
         $this->form_validation->set_rules('status', _l('sales_pipeline_status'), 'trim|required|numeric');
+        $this->form_validation->set_rules('contact_phone', _l('sales_pipeline_contact_phone'), 'trim|numeric|max_length[10]');
+        $this->form_validation->set_rules('contact_email', _l('sales_pipeline_contact_email'), 'trim|valid_email');
+
 
         if ($this->input->post()) {
             if ($this->form_validation->run() !== false) {
@@ -338,6 +360,13 @@ class Sales_pipeline extends AdminController
             access_denied('sales_pipeline');
         }
 
+        $page = $this->input->get('page') ?: 1;
+        if (!is_numeric($page) || $page < 1) {
+            $page = 1;
+        }
+        $per_page = 20;
+        $offset = ($page - 1) * $per_page;
+
         $filters = [];
         
         // Lọc theo staff nếu có
@@ -356,6 +385,13 @@ class Sales_pipeline extends AdminController
             $filters['year'] = $year;
         }
 
+        // Đếm tổng số lượng deal thiếu giá nhập theo bộ lọc
+        $total_deals = $this->sales_pipeline_model->count_deals_missing_cost_price($filters);
+
+        // Truyền limit, offset để lấy dữ liệu trang hiện tại
+        $filters['limit'] = $per_page;
+        $filters['offset'] = $offset;
+
         $data['deals'] = $this->sales_pipeline_model->get_deals_missing_cost_price($filters);
         $data['staff'] = $this->staff_model->get('', ['active' => 1]);
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
@@ -363,6 +399,12 @@ class Sales_pipeline extends AdminController
         $data['current_staff_id'] = $staff_id;
         $data['current_quarter'] = $quarter;
         $data['current_year'] = $year;
+
+        // Dữ liệu phân trang chuyển sang view
+        $data['total_deals'] = $total_deals;
+        $data['current_page'] = $page;
+        $data['per_page'] = $per_page;
+        $data['total_pages'] = ceil($total_deals / $per_page);
 
         $data['title'] = _l('sales_pipeline_missing_cost_prices');
         $this->load->view('sales_pipeline/missing_cost_prices', $data);
@@ -415,6 +457,8 @@ class Sales_pipeline extends AdminController
         $data['quarter'] = $this->input->post('quarter') ?: '';
         $data['year'] = $this->input->post('year') ?: '';
         $data['staff_id'] = $this->input->post('staff_id') ?: '';
+        $data['contract_signed'] = $this->input->post('contract_signed');
+        $data['invoice_issued'] = $this->input->post('invoice_issued');
         
         // Build query string to preserve filter states when clicking kanban cards
         $query_params = [];
@@ -422,6 +466,8 @@ class Sales_pipeline extends AdminController
         if ($data['year'])    $query_params['year'] = $data['year'];
         if ($data['staff_id']) $query_params['staff_id'] = $data['staff_id'];
         if ($data['search'])  $query_params['search'] = $data['search'];
+        if ($data['contract_signed'] !== null && $data['contract_signed'] !== '') $query_params['contract_signed'] = $data['contract_signed'];
+        if ($data['invoice_issued'] !== null && $data['invoice_issued'] !== '') $query_params['invoice_issued'] = $data['invoice_issued'];
         $data['query_string'] = !empty($query_params) ? '?' . http_build_query($query_params) : '';
 
         $html = $this->load->view('sales_pipeline/kan-ban', $data, true);
@@ -453,7 +499,9 @@ class Sales_pipeline extends AdminController
             'sort' => $this->input->post('sort_type'),
             'quarter' => $this->input->post('quarter'),
             'year' => $this->input->post('year'),
-            'staff_id' => $this->input->post('staff_id')
+            'staff_id' => $this->input->post('staff_id'),
+            'contract_signed' => $this->input->post('contract_signed'),
+            'invoice_issued' => $this->input->post('invoice_issued'),
         ]);
 
         foreach ($deals as $deal) {
@@ -471,11 +519,8 @@ class Sales_pipeline extends AdminController
             'sales_pipeline_kanban_view' => $set == 1 ? 'true' : 'false',
         ]);
         
-        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
-            redirect($_SERVER['HTTP_REFERER']);
-        } else {
-            redirect(admin_url('sales_pipeline'));
-        }
+        $query_string = !empty($_SERVER['QUERY_STRING']) ? '?' . $_SERVER['QUERY_STRING'] : '';
+        redirect(admin_url('sales_pipeline' . $query_string));
     }
 
     /**

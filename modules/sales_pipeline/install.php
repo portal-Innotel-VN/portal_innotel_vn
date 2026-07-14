@@ -53,10 +53,8 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         `source` varchar(100) DEFAULT NULL COMMENT 'Nguồn KH: SEO, Ads, Giới thiệu...',
 
         `deal_name` varchar(500) NOT NULL COMMENT 'Mô tả sản phẩm/dịch vụ',
-        `deal_value` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Doanh số VNĐ',
-        `purchase_price` decimal(15,2) DEFAULT NULL COMMENT 'Giá nhập VNĐ',
-        `profit_margin` decimal(5,4) DEFAULT 0.0000 COMMENT 'Tỷ lệ lợi nhuận (0.10 = 10%)',
-        `expected_profit` decimal(15,2) DEFAULT 0.00 COMMENT 'Tự tính = deal_value * profit_margin',
+        `deal_value` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Giá bán VNĐ (doanh số)',
+        `cost_price` decimal(15,2) DEFAULT NULL COMMENT 'Giá nhập VNĐ - Cho phép NULL nếu Sale chưa biết',
         `deal_date` date NOT NULL COMMENT 'Ngày tạo deal',
 
         `status` int(11) NOT NULL DEFAULT 1 COMMENT 'FK tblsales_pipeline_statuses',
@@ -73,15 +71,38 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         `datecreated` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
         `datemodified` datetime DEFAULT NULL,
         `addedfrom` int(11) NOT NULL COMMENT 'Staff tạo record',
+        `imported_by` int(11) DEFAULT NULL COMMENT 'FK tblstaff - Người thực hiện import',
         PRIMARY KEY (`id`),
         KEY `staff_id` (`staff_id`),
         KEY `status` (`status`),
-        KEY `deal_date` (`deal_date`)
+        KEY `deal_date` (`deal_date`),
+        KEY `idx_cost_price` (`cost_price`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 } else {
-    // Nếu bảng đã tồn tại, kiểm tra xem đã có cột purchase_price chưa để alter table
-    if (!$CI->db->field_exists('purchase_price', db_prefix() . 'sales_pipeline')) {
-        $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` ADD `purchase_price` decimal(15,2) DEFAULT NULL COMMENT "Giá nhập VNĐ" AFTER `deal_value`;');
+    // Nếu bảng đã tồn tại, kiểm tra xem đã có cột cost_price chưa để alter table
+    if (!$CI->db->field_exists('cost_price', db_prefix() . 'sales_pipeline')) {
+        // Kiểm tra xem có cột cũ purchase_price không, nếu có thì CHANGE, nếu không thì ADD
+        if ($CI->db->field_exists('purchase_price', db_prefix() . 'sales_pipeline')) {
+            $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` CHANGE `purchase_price` `cost_price` decimal(15,2) DEFAULT NULL COMMENT "Giá nhập VNĐ - Cho phép NULL nếu Sale chưa biết";');
+        } else {
+            $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` ADD `cost_price` decimal(15,2) DEFAULT NULL COMMENT "Giá nhập VNĐ - Cho phép NULL nếu Sale chưa biết" AFTER `deal_value`;');
+        }
+    }
+    // Xóa profit_margin và expected_profit nếu còn tồn tại
+    if ($CI->db->field_exists('profit_margin', db_prefix() . 'sales_pipeline')) {
+        $CI->dbforge->drop_column('sales_pipeline', 'profit_margin');
+    }
+    if ($CI->db->field_exists('expected_profit', db_prefix() . 'sales_pipeline')) {
+        $CI->dbforge->drop_column('sales_pipeline', 'expected_profit');
+    }
+    // Thêm imported_by nếu chưa có
+    if (!$CI->db->field_exists('imported_by', db_prefix() . 'sales_pipeline')) {
+        $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` ADD `imported_by` int(11) DEFAULT NULL COMMENT "FK tblstaff - Người thực hiện import" AFTER `addedfrom`;');
+    }
+    // Thêm index cho cost_price nếu chưa có
+    $indexes = $CI->db->query("SHOW INDEX FROM `" . db_prefix() . "sales_pipeline` WHERE Key_name = 'idx_cost_price'")->result_array();
+    if (empty($indexes)) {
+        $CI->db->query("ALTER TABLE `" . db_prefix() . "sales_pipeline` ADD INDEX `idx_cost_price` (`cost_price`);");
     }
 }
 
@@ -114,5 +135,23 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_reminders_log')) {
         PRIMARY KEY (`id`),
         KEY `pipeline_id` (`pipeline_id`),
         KEY `staff_id` (`staff_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
+}
+
+// Bảng theo dõi alerts cho deal thiếu giá nhập
+if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_cost_alerts')) {
+    $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_cost_alerts` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `pipeline_id` int(11) NOT NULL COMMENT 'FK tblsales_pipeline',
+        `alerted_staff_ids` text NULL COMMENT 'JSON array của staff IDs đã được nhắc',
+        `last_alert_sent` datetime NULL COMMENT 'Lần cuối gửi alert',
+        `alert_count` int(11) NOT NULL DEFAULT 0 COMMENT 'Số lần đã alert',
+        `resolved_at` datetime NULL COMMENT 'Thời điểm cost_price được cập nhật',
+        `resolved_by` int(11) NULL COMMENT 'Staff đã cập nhật cost_price',
+        `datecreated` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`),
+        KEY `pipeline_id` (`pipeline_id`),
+        KEY `last_alert_sent` (`last_alert_sent`),
+        KEY `resolved_at` (`resolved_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 }
