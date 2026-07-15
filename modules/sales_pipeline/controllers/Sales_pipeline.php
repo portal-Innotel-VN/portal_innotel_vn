@@ -38,14 +38,14 @@ class Sales_pipeline extends AdminController
         }
 
         // Lọc theo quý và nhân viên
-        $quarter  = $this->input->get('quarter') ?: null;
-        $year     = $this->input->get('year') ?: date('Y');
-        $staff_id = $this->input->get('staff_id') ?: null;
-        $search   = $this->input->get('search') ?: '';
+        $quarter  = $this->input->get('quarter') ? trim($this->input->get('quarter')) : null;
+        $year     = $this->input->get('year') ? trim($this->input->get('year')) : date('Y');
+        $staff_id = $this->input->get('staff_id') ? trim($this->input->get('staff_id')) : null;
+        $search   = $this->input->get('search') ? trim($this->input->get('search')) : '';
 
         // Lọc theo chứng từ (Hợp đồng / Hóa đơn)
-        $contract_signed = $this->input->get('contract_signed');
-        $invoice_issued  = $this->input->get('invoice_issued');
+        $contract_signed = $this->input->get('contract_signed') !== null ? trim($this->input->get('contract_signed')) : null;
+        $invoice_issued  = $this->input->get('invoice_issued') !== null ? trim($this->input->get('invoice_issued')) : null;
 
         // Chỉ cho xem deal của mình nếu không có quyền view global
         if (!has_permission('sales_pipeline', '', 'view')) {
@@ -141,8 +141,13 @@ class Sales_pipeline extends AdminController
 
         if ($this->input->post()) {
             if ($this->form_validation->run() !== false) {
+                // ---------- Bổ sung lọc XSS ----------
+                $post = $this->input->post();
+                $post = $this->security->xss_clean($post);
+                // ------------------------------------
+
                 // Handle cost_price: convert to float or NULL if empty
-                $cost_price_input = $this->input->post('cost_price');
+                $cost_price_input = $post['cost_price'] ?? null;
                 $cost_price = null;
                 if ($cost_price_input !== '' && $cost_price_input !== null) {
                     $cost_price = floatval($cost_price_input);
@@ -152,22 +157,22 @@ class Sales_pipeline extends AdminController
                 }
 
                 $post_data = [
-                    'customer_name'       => $this->input->post('customer_name'),
-                    'contact_name'        => $this->input->post('contact_name'),
-                    'contact_phone'       => $this->input->post('contact_phone'),
-                    'contact_email'       => $this->input->post('contact_email'),
-                    'source_id'           => $this->input->post('source_id'),
-                    'deal_name'           => $this->input->post('deal_name'),
-                    'deal_value'          => $this->input->post('deal_value'),
+                    'customer_name'       => $post['customer_name'],
+                    'contact_name'        => $post['contact_name'],
+                    'contact_phone'       => $post['contact_phone'],
+                    'contact_email'       => $post['contact_email'],
+                    'source_id'           => $post['source_id'],
+                    'deal_name'           => $post['deal_name'],
+                    'deal_value'          => $post['deal_value'],
                     'cost_price'          => $cost_price,  // NEW: cost price instead of profit_margin
-                    'deal_date'           => to_sql_date($this->input->post('deal_date')),
-                    'status'              => $this->input->post('status'),
-                    'staff_id'            => $this->input->post('staff_id') ?: get_staff_user_id(),
-                    'contract_signed'     => $this->input->post('contract_signed'),
-                    'invoice_issued'      => $this->input->post('invoice_issued'),
-                    'reminder_enabled'    => $this->input->post('reminder_enabled'),
-                    'reminder_frequency'  => $this->input->post('reminder_frequency') ?: 2,
-                    'activity_description' => $this->input->post('activity_description'),
+                    'deal_date'           => to_sql_date($post['deal_date']),
+                    'status'              => $post['status'],
+                    'staff_id'            => $post['staff_id'] ?: get_staff_user_id(),
+                    'contract_signed'     => $post['contract_signed'],
+                    'invoice_issued'      => $post['invoice_issued'],
+                    'reminder_enabled'    => $post['reminder_enabled'],
+                    'reminder_frequency'  => $post['reminder_frequency'] ?: 2,
+                    'activity_description' => $post['activity_description'],
                 ];
 
                 if ($id == '') {
@@ -198,7 +203,16 @@ class Sales_pipeline extends AdminController
 
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
         $data['sources']  = $this->sales_pipeline_model->get_sources();
-        $data['staff']    = $this->staff_model->get('', ['active' => 1]);
+        
+        // Chỉ lấy tất cả staff nếu là admin hoặc có quyền view global (Trưởng phòng)
+        if (is_admin() || has_permission('sales_pipeline', '', 'view')) {
+            $data['staff'] = $this->staff_model->get('', ['active' => 1]);
+            $data['can_assign_others'] = true;
+        } else {
+            // Ngược lại chỉ lấy chính nhân viên đó
+            $data['staff'] = [(array) $this->staff_model->get(get_staff_user_id())];
+            $data['can_assign_others'] = false;
+        }
 
         $data['title'] = ($id == '') ? _l('sales_pipeline_new_deal') : _l('sales_pipeline_edit_deal');
         $this->load->view('sales_pipeline/deal', $data);
@@ -253,6 +267,13 @@ class Sales_pipeline extends AdminController
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
+
+        // ---------- Bổ sung kiểm tra quyền ----------
+        if (!has_permission('sales_pipeline', '', 'edit')) {
+            ajax_access_denied();
+            return;
+        }
+        // -------------------------------------------
 
         $response = $this->input->post('response');
         if ($response) {
@@ -451,14 +472,14 @@ class Sales_pipeline extends AdminController
         }
 
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
-        $data['search'] = $this->input->post('search') ?: '';
-        $data['sort_by'] = $this->input->post('sort') ?: 'deal_date';
-        $data['sort_type'] = $this->input->post('sort_type') ?: 'desc';
-        $data['quarter'] = $this->input->post('quarter') ?: '';
-        $data['year'] = $this->input->post('year') ?: '';
-        $data['staff_id'] = $this->input->post('staff_id') ?: '';
-        $data['contract_signed'] = $this->input->post('contract_signed');
-        $data['invoice_issued'] = $this->input->post('invoice_issued');
+        $data['search'] = $this->input->post('search') ? trim($this->input->post('search')) : '';
+        $data['sort_by'] = $this->input->post('sort') ? trim($this->input->post('sort')) : 'deal_date';
+        $data['sort_type'] = $this->input->post('sort_type') ? trim($this->input->post('sort_type')) : 'desc';
+        $data['quarter'] = $this->input->post('quarter') ? trim($this->input->post('quarter')) : '';
+        $data['year'] = $this->input->post('year') ? trim($this->input->post('year')) : '';
+        $data['staff_id'] = $this->input->post('staff_id') ? trim($this->input->post('staff_id')) : '';
+        $data['contract_signed'] = $this->input->post('contract_signed') !== null ? trim($this->input->post('contract_signed')) : null;
+        $data['invoice_issued'] = $this->input->post('invoice_issued') !== null ? trim($this->input->post('invoice_issued')) : null;
         
         // Build query string to preserve filter states when clicking kanban cards
         $query_params = [];
@@ -559,11 +580,11 @@ class Sales_pipeline extends AdminController
             return;
         }
 
-        // Update status
+        // Update status only (decoupled from document checkboxes per user requirement)
         $this->db->where('id', $deal_id);
         $this->db->update(db_prefix() . 'sales_pipeline', [
-            'status_id' => $status_id,
-            'updated_at' => date('Y-m-d H:i:s')
+            'status'       => $status_id,
+            'datemodified' => date('Y-m-d H:i:s')
         ]);
 
         if ($this->db->affected_rows() > 0) {

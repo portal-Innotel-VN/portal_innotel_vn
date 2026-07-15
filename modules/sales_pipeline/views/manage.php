@@ -123,9 +123,9 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                         onchange="applyFilters()">
                                     <option value="">Tất cả chứng từ</option>
                                     <option value="contract_yes" <?php echo (isset($current_contract_signed) && $current_contract_signed === '1') ? 'selected' : ''; ?>>Đã ký Hợp Đồng</option>
-                                    <option value="contract_no" <?php echo (isset($current_contract_signed) && $current_contract_signed === '0') ? 'selected' : ''; ?>>Chưa ký HĐ</option>
-                                    <option value="invoice_yes" <?php echo (isset($current_invoice_issued) && $current_invoice_issued === '1') ? 'selected' : ''; ?>>Đã xuất HĐN</option>
-                                    <option value="invoice_no" <?php echo (isset($current_invoice_issued) && $current_invoice_issued === '0') ? 'selected' : ''; ?>>Chưa xuất HĐN</option>
+                                    <option value="contract_no" <?php echo (isset($current_contract_signed) && $current_contract_signed === '0') ? 'selected' : ''; ?>>Chưa ký Hợp Đồng</option>
+                                    <option value="invoice_yes" <?php echo (isset($current_invoice_issued) && $current_invoice_issued === '1') ? 'selected' : ''; ?>>Đã xuất Hóa Đơn</option>
+                                    <option value="invoice_no" <?php echo (isset($current_invoice_issued) && $current_invoice_issued === '0') ? 'selected' : ''; ?>>Chưa xuất Hóa Đơn</option>
                                 </select>
                             </div>
                             <?php if ($switch_kanban == 1) { // Only show pagination dropdown in List view ?>

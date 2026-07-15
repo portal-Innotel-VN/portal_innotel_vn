@@ -367,6 +367,57 @@ $(function() {
     
     // Enable tooltip
     $('[data-toggle="tooltip"]').tooltip();
+
+    // Đồng bộ Trạng thái & Checkbox HĐ/Hóa đơn
+    var $status = $('#status');
+    var $contract = $('#contract_signed');
+    var $invoice = $('#invoice_issued');
+
+    // Hành động A: Từ Checkbox tác động lên Trạng thái (Nguyên tắc "Chỉ tiến, Không lùi")
+    $contract.on('change', function() {
+        if ($(this).is(':checked')) {
+            var currentStatus = parseInt($status.val()) || 0;
+            if (currentStatus < 5) {
+                $status.val('5').selectpicker('refresh');
+            }
+        }
+    });
+
+    $invoice.on('change', function() {
+        if ($(this).is(':checked')) {
+            // Tự động tick luôn ô Đã ký hợp đồng
+            if (!$contract.is(':checked')) {
+                $contract.prop('checked', true);
+            }
+            var currentStatus = parseInt($status.val()) || 0;
+            if (currentStatus < 6) {
+                $status.val('6').selectpicker('refresh');
+            }
+        }
+    });
+
+    // Hành động B: Từ Trạng thái tác động lên Checkbox (Nguyên tắc "Hỏi xác nhận, Không ép buộc")
+    $status.on('change', function() {
+        var val = parseInt($(this).val()) || 0;
+        
+        if (val >= 5) {
+            if (!$contract.is(':checked')) {
+                if (confirm("Bạn đã cầm Hợp đồng bản cứng trên tay chưa?")) {
+                    $contract.prop('checked', true);
+                }
+            }
+        }
+        
+        if (val >= 6) {
+            if (!$invoice.is(':checked')) {
+                if (confirm("Bạn đã xác nhận việc Kế toán đã xuất VAT chưa?")) {
+                    $invoice.prop('checked', true);
+                    // Đảm bảo hợp đồng cũng được tick
+                    $contract.prop('checked', true);
+                }
+            }
+        }
+    });
 });
 
 appValidateForm($('#deal-form'), {
