@@ -157,22 +157,22 @@ class Sales_pipeline extends AdminController
                 }
 
                 $post_data = [
-                    'customer_name'       => $post['customer_name'],
-                    'contact_name'        => $post['contact_name'],
-                    'contact_phone'       => $post['contact_phone'],
-                    'contact_email'       => $post['contact_email'],
-                    'source_id'           => $post['source_id'],
-                    'deal_name'           => $post['deal_name'],
-                    'deal_value'          => $post['deal_value'],
+                    'customer_name'       => $post['customer_name'] ?? '',
+                    'contact_name'        => $post['contact_name'] ?? '',
+                    'contact_phone'       => $post['contact_phone'] ?? '',
+                    'contact_email'       => $post['contact_email'] ?? '',
+                    'source_id'           => $post['source_id'] ?? null,
+                    'deal_name'           => $post['deal_name'] ?? '',
+                    'deal_value'          => $post['deal_value'] ?? 0,
                     'cost_price'          => $cost_price,  // NEW: cost price instead of profit_margin
-                    'deal_date'           => to_sql_date($post['deal_date']),
-                    'status'              => $post['status'],
-                    'staff_id'            => $post['staff_id'] ?: get_staff_user_id(),
-                    'contract_signed'     => $post['contract_signed'],
-                    'invoice_issued'      => $post['invoice_issued'],
-                    'reminder_enabled'    => $post['reminder_enabled'],
-                    'reminder_frequency'  => $post['reminder_frequency'] ?: 2,
-                    'activity_description' => $post['activity_description'],
+                    'deal_date'           => to_sql_date($post['deal_date'] ?? null),
+                    'status'              => $post['status'] ?? 0,
+                    'staff_id'            => $post['staff_id'] ?? get_staff_user_id(),
+                    'contract_signed'     => $post['contract_signed'] ?? 0,
+                    'invoice_issued'      => $post['invoice_issued'] ?? 0,
+                    'reminder_enabled'    => $post['reminder_enabled'] ?? 0,
+                    'reminder_frequency'  => $post['reminder_frequency'] ?? 2,
+                    'activity_description' => $post['activity_description'] ?? '',
                 ];
 
                 if ($id == '') {
@@ -677,7 +677,7 @@ class Sales_pipeline extends AdminController
             unset($data['setting_type']);
             
             if ($type == 'status') {
-                $id = $data['id'];
+                $id = $data['id'] ?? '';
                 unset($data['id']);
                 // Default checkboxes
                 if (!isset($data['is_won'])) $data['is_won'] = 0;
@@ -695,7 +695,7 @@ class Sales_pipeline extends AdminController
                     }
                 }
             } elseif ($type == 'source') {
-                $id = $data['id'];
+                $id = $data['id'] ?? '';
                 unset($data['id']);
                 
                 if ($id == '') {

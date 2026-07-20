@@ -982,7 +982,7 @@ class Sales_pipeline_model extends App_Model
 
         // Sorting
         if (!empty($sort['sort_by'])) {
-            $sort_order = isset($sort['sort']) ? $sort['sort'] : 'asc';
+            $sort_order = $sort['sort'] ?? 'asc';
             if ($sort['sort_by'] == 'datecreated') {
                 $this->db->order_by(db_prefix() . 'sales_pipeline.datecreated', $sort_order);
             } elseif ($sort['sort_by'] == 'deal_date') {

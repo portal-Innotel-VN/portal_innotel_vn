@@ -16,7 +16,7 @@ class Migration_Version_247 extends App_module_migration
             ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 
             // Insert default sources
-            $sources = ['Giới thiệu', 'Cold Call', 'SEO', 'Quảng cáo', 'Đấu thầu', 'Đối tác', 'Khác'];
+            $sources = ['Giới thiệu', 'Cold Call', 'SEO', 'Quảng cáo', 'Khác'];
             foreach ($sources as $source) {
                 $CI->db->insert(db_prefix() . 'sales_pipeline_sources', [
                     'name' => $source

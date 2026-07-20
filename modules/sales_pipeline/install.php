@@ -50,7 +50,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
         `contact_name` varchar(255) DEFAULT NULL,
         `contact_phone` varchar(50) DEFAULT NULL,
         `contact_email` varchar(100) DEFAULT NULL,
-        `source` varchar(100) DEFAULT NULL COMMENT 'Nguồn KH: SEO, Ads, Giới thiệu...',
+        `source_id` int(11) DEFAULT NULL COMMENT 'FK tblsales_pipeline_sources - Nguồn KH',
 
         `deal_name` varchar(500) NOT NULL COMMENT 'Mô tả sản phẩm/dịch vụ',
         `deal_value` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Giá bán VNĐ (doanh số)',
@@ -104,6 +104,39 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
     if (empty($indexes)) {
         $CI->db->query("ALTER TABLE `" . db_prefix() . "sales_pipeline` ADD INDEX `idx_cost_price` (`cost_price`);");
     }
+
+    // Kiểm tra cột source_id nếu bảng đã tồn tại
+    if (!$CI->db->field_exists('source_id', db_prefix() . 'sales_pipeline')) {
+        if ($CI->db->field_exists('source', db_prefix() . 'sales_pipeline')) {
+            // Có cột source kiểu cũ, chuyển đổi sang source_id kiểu mới
+            $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` ADD `source_id` int(11) DEFAULT NULL COMMENT "FK tblsales_pipeline_sources - Nguồn KH" AFTER `contact_email`;');
+            
+            // Di chuyển dữ liệu cũ nếu có
+            $deals = $CI->db->get(db_prefix() . 'sales_pipeline')->result_array();
+            foreach ($deals as $deal) {
+                if (!empty($deal['source'])) {
+                    // Tìm nguồn tương ứng trong tblsales_pipeline_sources
+                    $CI->db->where('name', $deal['source']);
+                    $src = $CI->db->get(db_prefix() . 'sales_pipeline_sources')->row_array();
+                    if ($src) {
+                        $CI->db->where('id', $deal['id']);
+                        $CI->db->update(db_prefix() . 'sales_pipeline', ['source_id' => $src['id']]);
+                    } else {
+                        // Thêm mới vào tblsales_pipeline_sources để khớp
+                        $CI->db->insert(db_prefix() . 'sales_pipeline_sources', ['name' => $deal['source']]);
+                        $new_id = $CI->db->insert_id();
+                        $CI->db->where('id', $deal['id']);
+                        $CI->db->update(db_prefix() . 'sales_pipeline', ['source_id' => $new_id]);
+                    }
+                }
+            }
+            // Xóa cột source cũ
+            $CI->dbforge->drop_column('sales_pipeline', 'source');
+        } else {
+            // Chưa có cột nào, thêm mới cột source_id
+            $CI->db->query('ALTER TABLE `' . db_prefix() . 'sales_pipeline` ADD `source_id` int(11) DEFAULT NULL COMMENT "FK tblsales_pipeline_sources - Nguồn KH" AFTER `contact_email`;');
+        }
+    }
 }
 
 // Bảng activity log (timeline tiến độ thay cho cột ghi chú nối →)
@@ -153,5 +186,46 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_cost_alerts')) {
         KEY `pipeline_id` (`pipeline_id`),
         KEY `last_alert_sent` (`last_alert_sent`),
         KEY `resolved_at` (`resolved_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
+}
+
+// Bảng nguồn KH (sales_pipeline_sources)
+if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_sources')) {
+    $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_sources` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `name` varchar(100) NOT NULL,
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
+}
+
+// Seed nguồn khách hàng mặc định nếu bảng trống
+$total_sources = $CI->db->count_all(db_prefix() . 'sales_pipeline_sources');
+if ($total_sources == 0) {
+    $default_sources = [
+        ['name' => 'Email'],
+        ['name' => 'Facebook'],
+        ['name' => 'Google'],
+        ['name' => 'Giới thiệu'],
+        ['name' => 'Khác']
+    ];
+    foreach ($default_sources as $src) {
+        $CI->db->insert(db_prefix() . 'sales_pipeline_sources', $src);
+    }
+}
+
+// Bảng log import (sales_pipeline_import_log)
+if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_import_log')) {
+    $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_import_log` (
+        `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+        `file_name` varchar(255) NOT NULL,
+        `file_path` varchar(500) DEFAULT NULL,
+        `uploaded_by` int(11) NOT NULL,
+        `uploaded_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        `rows_imported` int(11) NOT NULL DEFAULT 0,
+        `rows_skipped` int(11) NOT NULL DEFAULT 0,
+        `import_status` varchar(50) NOT NULL DEFAULT 'processing',
+        `error_message` text,
+        PRIMARY KEY (`id`),
+        KEY `uploaded_by` (`uploaded_by`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 }
