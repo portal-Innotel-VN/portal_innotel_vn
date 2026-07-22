@@ -46,8 +46,8 @@
                                                     </label>
                                                     <input type="text" class="form-control" name="customer_name" id="customer_name"
                                                            value="<?php echo isset($deal) ? html_escape($deal['customer_name']) : ''; ?>"
-                                                           required autocomplete="off"
-                                                           placeholder="VD: CÔNG TY CỔ PHẦN COMERIC">
+                                                           required maxlength="255" autocomplete="off"
+                                                           placeholder="VD: Công Ty TNHH Viễn Thông Sáng Tạo Thuận Phong - INNOTEL">
                                                 </div>
                                             </div>
                                         </div>
@@ -57,7 +57,7 @@
                                                     <label for="contact_name" class="control-label"><?php echo _l('sales_pipeline_contact_name'); ?></label>
                                                     <input type="text" class="form-control" name="contact_name" id="contact_name"
                                                            value="<?php echo isset($deal) ? html_escape($deal['contact_name']) : ''; ?>"
-                                                           placeholder="Tên người liên hệ">
+                                                           maxlength="100" autocomplete="off" placeholder="Tên người liên hệ">
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
@@ -73,7 +73,7 @@
                                                     <label for="contact_email" class="control-label"><?php echo _l('sales_pipeline_contact_email'); ?></label>
                                                     <input type="email" class="form-control" name="contact_email" id="contact_email"
                                                            value="<?php echo isset($deal) ? html_escape($deal['contact_email']) : ''; ?>"
-                                                           placeholder="Email">
+                                                           maxlength="100" autocomplete="off" placeholder="Email liên hệ">
                                                 </div>
                                             </div>
                                         </div>
@@ -112,7 +112,8 @@
                                             </label>
                                             <input type="text" class="form-control" name="deal_name" id="deal_name"
                                                    value="<?php echo isset($deal) ? html_escape($deal['deal_name']) : ''; ?>"
-                                                   required placeholder="VD: Báo giá Sangfor NSF1200">
+                                                   required maxlength="500" autocomplete="off"
+                                                   placeholder="VD: Báo giá Sangfor NSF1200">
                                         </div>
                                         <div class="row">
                                             <div class="col-md-4">
@@ -120,7 +121,7 @@
                                                     <label for="deal_value" class="control-label">
                                                         <span class="text-danger">*</span> <?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)
                                                     </label>
-                                                    <input type="number" class="form-control" name="deal_value" id="deal_value"
+                                                    <input type="number" class="form-control positive-number-only" name="deal_value" id="deal_value"
                                                            value="<?php echo isset($deal) ? $deal['deal_value'] : ''; ?>"
                                                            required min="0" step="1000"
                                                            onchange="calculateProfit()" onkeyup="calculateProfit()">
@@ -133,7 +134,7 @@
                                                         <i class="fa fa-question-circle" data-toggle="tooltip" 
                                                            title="<?php echo _l('sales_pipeline_cost_price_hint'); ?>"></i>
                                                     </label>
-                                                    <input type="number" class="form-control" name="cost_price" id="cost_price"
+                                                    <input type="number" class="form-control positive-number-only" name="cost_price" id="cost_price"
                                                            value="<?php echo isset($deal) && isset($deal['cost_price']) ? $deal['cost_price'] : ''; ?>"
                                                            min="0" step="1000" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>"
                                                            onchange="calculateProfit()" onkeyup="calculateProfit()">
@@ -217,8 +218,8 @@
                                             <label for="activity_description" class="control-label">
                                                 <i class="fa fa-comment"></i> <?php echo _l('sales_pipeline_progress_note'); ?>
                                             </label>
-                                            <textarea class="form-control" name="activity_description" id="activity_description"
-                                                      rows="3" placeholder="VD: Đang view hợp đồng, đã gửi cho pháp lý..."></textarea>
+                                            <textarea name="activity_description" id="activity_description" class="form-control" rows="3" 
+                                                maxlength="2000" placeholder="Nhập nhật ký trao đổi với khách hàng..."><?php echo isset($deal) ? html_escape($deal['activity_description']) : ''; ?></textarea>
                                         </div>
 
                                         <!-- Timeline activity (khi sửa) -->
@@ -418,16 +419,48 @@ $(function() {
             }
         }
     });
+
 });
 
 appValidateForm($('#deal-form'), {
+    customer_name: {
+        required: true,
+        maxlength: 255
+    },
+    contact_name: {
+        maxlength: 100
+    },
     contact_phone: {
         digits: true,
         maxlength: 10
     },
     contact_email: {
-        email: true
+        email: true,
+        maxlength: 100
+    },
+    deal_name: {
+        required: true,
+        maxlength: 500
+    },
+    activity_description: {
+        maxlength: 2000
     }
+});
+
+// Chặn phím -, +, e, E và lọc ký tự không phải số dùng chung cho mọi ô có class positive-number-only
+$(function() {
+    $(document).on('keydown', '.positive-number-only', function(e) {
+        if (['-', '+', 'e', 'E'].includes(e.key)) {
+            e.preventDefault();
+        }
+    });
+
+    $(document).on('input', '.positive-number-only', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+        if (typeof calculateProfit === 'function') {
+            calculateProfit();
+        }
+    });
 });
 
 </script>

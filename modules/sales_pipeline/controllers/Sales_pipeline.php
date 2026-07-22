@@ -130,13 +130,15 @@ class Sales_pipeline extends AdminController
         }
 
         // Validation
-        $this->form_validation->set_rules('customer_name', _l('sales_pipeline_customer_name'), 'trim|required');
-        $this->form_validation->set_rules('deal_name', _l('sales_pipeline_deal_name'), 'trim|required');
+        $this->form_validation->set_rules('customer_name', _l('sales_pipeline_customer_name'), 'trim|required|max_length[255]');
+        $this->form_validation->set_rules('contact_name', _l('sales_pipeline_contact_name'), 'trim|max_length[100]');
+        $this->form_validation->set_rules('contact_phone', _l('sales_pipeline_contact_phone'), 'trim|numeric|max_length[10]');
+        $this->form_validation->set_rules('contact_email', _l('sales_pipeline_contact_email'), 'trim|valid_email|max_length[100]');
+        $this->form_validation->set_rules('deal_name', _l('sales_pipeline_deal_name'), 'trim|required|max_length[500]');
         $this->form_validation->set_rules('deal_value', _l('sales_pipeline_deal_value'), 'trim|required|numeric');
         $this->form_validation->set_rules('deal_date', _l('sales_pipeline_expected_date'), 'trim|required');
         $this->form_validation->set_rules('status', _l('sales_pipeline_status'), 'trim|required|numeric');
-        $this->form_validation->set_rules('contact_phone', _l('sales_pipeline_contact_phone'), 'trim|numeric|max_length[10]');
-        $this->form_validation->set_rules('contact_email', _l('sales_pipeline_contact_email'), 'trim|valid_email');
+        $this->form_validation->set_rules('activity_description', _l('sales_pipeline_activity_description'), 'trim|max_length[2000]');
 
 
         if ($this->input->post()) {
@@ -222,8 +224,13 @@ class Sales_pipeline extends AdminController
      * Xóa deal
      * URL: admin/sales_pipeline/delete/{id}
      */
-    public function delete($id)
+    public function delete($id = '')
     {
+        if (empty($id) || !is_numeric($id)) {
+            set_alert('warning', 'Hợp đồng không hợp lệ hoặc không tồn tại.');
+            redirect(admin_url('sales_pipeline'));
+        }
+
         if (!has_permission('sales_pipeline', '', 'delete')) {
             access_denied('sales_pipeline');
         }

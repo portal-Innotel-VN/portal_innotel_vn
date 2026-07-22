@@ -230,7 +230,7 @@ class Import_sales_pipeline
 
             $rows = [];
             $dataStartRow = 7;  // Dòng 7 trong Excel (index 1-based)
-            $dataEndRow   = 56; // Dòng 56 trong Excel
+            $dataEndRow   = 106; // Dòng 56 trong Excel
             $numCols      = 8;  // Cột A đến H
 
             // Đọc từng dòng từ 7-56
@@ -239,7 +239,7 @@ class Import_sales_pipeline
 
                 // Đọc 8 cột (A-H)
                 for ($colIndex = 1; $colIndex <= $numCols; $colIndex++) {
-                    $cell = $sheet->getCellByColumnAndRow($colIndex, $rowIndex);
+                    $cell = $sheet->getCell(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex) . $rowIndex);
                     $value = $cell->getValue();
 
                     // Cột A (index 1): Ngày tạo - chuẩn hóa về YYYY-MM-DD

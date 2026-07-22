@@ -233,8 +233,8 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                         <th width="9%">Trạng thái</th>
 
                                         <th width="10%">Ghi chú</th>
-                                        <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) { ?>
-                                        <th width="5%" class="text-center">Chi tiết</th>
+                                        <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete')) { ?>
+                                        <th width="8%" class="text-center">Hành động</th>
                                         <?php } ?>
                                     </tr>
                                 </thead>
@@ -342,22 +342,32 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                             ?>
                                         </td>
                                         
-                                        <!-- 12. Chi tiết (Admin hoặc có quyền view_deal_details) -->
-                                        <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) { ?>
+                                        <!-- 12. Hành động (Chi tiết / Xóa) -->
+                                        <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete')) { ?>
                                         <td class="text-center">
+                                            <?php if (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) { ?>
                                             <a href="<?php echo admin_url('sales_pipeline/deal/' . $deal['id'] . $query_string); ?>"
                                                class="btn btn-xs btn-info" 
                                                title="Xem chi tiết đầy đủ và lịch sử cập nhật"
                                                data-toggle="tooltip">
                                                 <i class="fa fa-eye"></i>
                                             </a>
+                                            <?php } ?>
+                                            <?php if (is_admin() || has_permission('sales_pipeline', '', 'delete')) { ?>
+                                            <a href="<?php echo admin_url('sales_pipeline/delete/' . $deal['id']); ?>"
+                                               class="btn btn-xs btn-danger _delete" 
+                                               title="Xóa deal"
+                                               data-toggle="tooltip">
+                                                <i class="fa fa-remove"></i>
+                                            </a>
+                                            <?php } ?>
                                         </td>
                                         <?php } ?>
                                     </tr>
                                     <?php }
                                     } else { ?>
                                     <tr>
-                                        <td colspan="<?php echo (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details')) ? '11' : '10'; ?>" class="text-center text-muted">
+                                        <td colspan="<?php echo (is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete')) ? '11' : '10'; ?>" class="text-center text-muted">
                                             <i class="fa fa-inbox fa-2x mbot10"></i><br>
                                             <?php echo _l('sales_pipeline_no_deals'); ?>
                                         </td>

@@ -224,6 +224,10 @@ class Sales_pipeline_model extends App_Model
      */
     public function delete($id)
     {
+        if (empty($id)) {
+            return false;
+        }
+
         $deal = $this->get($id);
 
         $this->db->where('id', $id);
