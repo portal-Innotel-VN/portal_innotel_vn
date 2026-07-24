@@ -51,7 +51,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
 
                             <!-- Toggle buttons row -->
                             <div class="row">
-                                <div class="col-md-5">
+                                <div class="col-md-9">
                                     <a href="#" class="btn btn-default btn-with-tooltip" data-toggle="tooltip" 
                                        data-title="Tổng quan Kinh Doanh" data-placement="bottom" 
                                        onclick="slideToggle('.sales-pipeline-overview'); return false;">
@@ -66,12 +66,22 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                         } ?>
                                     </a>
                                 </div>
-                                <div class="col-md-4 col-xs-12 pull-right pipeline-search">
-                                    <div data-toggle="tooltip" data-placement="bottom" data-title="Tìm kiếm theo tên công ty hoặc sản phẩm (nhấn Enter)">
-                                        <?php echo render_input('search', '', isset($current_search) ? $current_search : '', 'search', array(
-                                            'data-name' => 'search',
-                                            'placeholder' => 'Tìm kiếm deal... (Nhấn Enter)'
-                                        ), array(), 'no-margin'); ?>
+                                <div class="col-md-3 pull-right pipeline-search">
+                                    <div class="form-group no-margin">
+                                        <div class="input-group" style="width: 100%;">
+                                            <input type="search" name="search" id="pipeline_search" class="form-control"
+                                                   value="<?php echo isset($current_search) ? html_escape($current_search) : ''; ?>"
+                                                   placeholder="Tìm kiếm deal... (Nhấn Enter)"
+                                                   autocomplete="off">
+                                            <span class="input-group-btn">
+                                                <button type="button" id="btn_clear_search" class="btn btn-default"
+                                                        data-toggle="tooltip" data-placement="bottom"
+                                                        title="Xóa tìm kiếm"
+                                                        style="<?php echo !empty($current_search) ? '' : 'display:none;'; ?>">
+                                                    <i class="fa fa-times"></i>
+                                                </button>
+                                            </span>
+                                        </div>
                                     </div>
                                     <?php echo form_hidden('sort_type'); ?>
                                     <?php echo form_hidden('sort', ''); ?>
@@ -147,7 +157,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                     <div class="col-md-3 col-sm-6">
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
-                                <h3 class="no-margin text-info font-bold"><?php echo number_format($summary['total_deals']); ?></h3>
+                                <h3 class="no-margin text-info font-bold" id="summary_total_deals"><?php echo number_format($summary['total_deals']); ?></h3>
                                 <p class="text-muted no-margin"><?php echo _l('sales_pipeline_total_deals'); ?></p>
                             </div>
                         </div>
@@ -155,7 +165,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                     <div class="col-md-3 col-sm-6">
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
-                                <h3 class="no-margin text-primary font-bold"><?php echo number_format($summary['total_value']); ?></h3>
+                                <h3 class="no-margin text-primary font-bold" id="summary_total_value"><?php echo number_format($summary['total_value']); ?></h3>
                                 <p class="text-muted no-margin"><?php echo _l('sales_pipeline_total_value'); ?> (VNĐ)</p>
                             </div>
                         </div>
@@ -163,7 +173,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                     <div class="col-md-2 col-sm-4">
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
-                                <h3 class="no-margin text-success font-bold"><?php echo $summary['won_deals']; ?></h3>
+                                <h3 class="no-margin text-success font-bold" id="summary_won_deals"><?php echo $summary['won_deals']; ?></h3>
                                 <p class="text-muted no-margin"><?php echo _l('sales_pipeline_won'); ?></p>
                             </div>
                         </div>
@@ -171,7 +181,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                     <div class="col-md-2 col-sm-4">
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
-                                <h3 class="no-margin text-warning font-bold"><?php echo $summary['active_deals']; ?></h3>
+                                <h3 class="no-margin text-warning font-bold" id="summary_active_deals"><?php echo $summary['active_deals']; ?></h3>
                                 <p class="text-muted no-margin"><?php echo _l('sales_pipeline_active'); ?></p>
                             </div>
                         </div>
@@ -179,7 +189,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                     <div class="col-md-2 col-sm-4">
                         <div class="panel_s">
                             <div class="panel-body padding-10 text-center">
-                                <h3 class="no-margin text-danger font-bold"><?php echo $summary['lost_deals']; ?></h3>
+                                <h3 class="no-margin text-danger font-bold" id="summary_lost_deals"><?php echo $summary['lost_deals']; ?></h3>
                                 <p class="text-muted no-margin"><?php echo _l('sales_pipeline_lost'); ?></p>
                             </div>
                         </div>
@@ -238,7 +248,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                         <?php } ?>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="sales_pipeline_table_body">
                                     <?php if (!empty($deals)) {
                                         $stt = 0;
                                         foreach ($deals as $deal) {
@@ -377,9 +387,10 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                             </table>
                         </div>
 
-                        <!-- Pagination Controls -->
+                        <!-- Pagination Controls Container -->
+                        <div id="sales_pipeline_pagination">
                         <?php if ($total_pages > 1) { ?>
-                        <div class="row">
+                        <div class="row mtop15">
                             <div class="col-md-6">
                                 <p class="text-muted">
                                     Hiển thị <?php echo (($current_page - 1) * $per_page) + 1; ?> 
@@ -447,6 +458,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                             </div>
                         </div>
                         <?php } ?>
+                        </div>
 
                             </div>
                             <!-- End List View -->
@@ -476,7 +488,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                 </div>
                 <div class="form-group">
                     <label for="modal_cost_price"><span class="text-danger">*</span> <?php echo _l('sales_pipeline_cost_price'); ?> (VNĐ)</label>
-                    <input type="number" class="form-control" id="modal_cost_price" min="0" step="1000" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>">
+                    <input type="number" class="form-control" id="modal_cost_price" min="0" step="any" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>">
                     <small class="text-muted"><?php echo _l('sales_pipeline_cost_price_hint'); ?></small>
                 </div>
                 <div class="form-group" id="profit_preview" style="display:none;">
@@ -502,6 +514,12 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
 <?php init_tail(); ?>
 
 <style>
+.pipeline-search .input-group {
+    width: 100% !important;
+}
+.pipeline-search #pipeline_search {
+    width: 100% !important;
+}
 .warning-row {
     background-color: #fff3cd !important;
 }
@@ -598,6 +616,15 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
     border: 2px dashed #2196f3;
     border-radius: 4px;
     margin-bottom: 10px;
+}
+
+.pipeline-kan-ban-col-placeholder {
+    min-width: 300px;
+    max-width: 300px;
+    background: #e3f2fd;
+    border: 2px dashed #2196f3;
+    border-radius: 4px;
+    min-height: 200px;
 }
 
 .dragging {
@@ -706,50 +733,246 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
 </style>
 
 <script>
-function applyFilters() {
+function fetchDealsAjax(page) {
+    page = page || 1;
     var quarter  = $('#filter_quarter').val();
     var year     = $('#filter_year').val();
     var staff    = $('#filter_staff').val();
     var perPage  = $('#per_page').val();
     var search   = $('input[name="search"]').val();
-    var document = $('#filter_document').val();
+    var doc      = $('#filter_document').val();
 
-    var url = admin_url + 'sales_pipeline?';
-    if (quarter) url += 'quarter=' + quarter + '&';
-    if (year)    url += 'year=' + year + '&';
-    if (staff)   url += 'staff_id=' + staff + '&';
-    if (perPage) url += 'per_page=' + perPage + '&';
-    if (search)  url += 'search=' + encodeURIComponent(search) + '&';
+    var params = {
+        search: search,
+        quarter: quarter,
+        year: year,
+        staff_id: staff,
+        per_page: perPage,
+        page: page
+    };
 
-    // Lọc chứng từ
-    if (document === 'contract_yes') url += 'contract_signed=1&';
-    if (document === 'contract_no')  url += 'contract_signed=0&';
-    if (document === 'invoice_yes')  url += 'invoice_issued=1&';
-    if (document === 'invoice_no')   url += 'invoice_issued=0&';
+    if (doc === 'contract_yes') params.contract_signed = 1;
+    if (doc === 'contract_no')  params.contract_signed = 0;
+    if (doc === 'invoice_yes')  params.invoice_issued  = 1;
+    if (doc === 'invoice_no')   params.invoice_issued  = 0;
 
-    window.location.href = url;
+    // Cập nhật URL trình duyệt không reload trang
+    var urlParams = new URLSearchParams(window.location.search);
+    $.each(params, function(k, v) {
+        if (v !== null && v !== '' && v !== undefined) {
+            urlParams.set(k, v);
+        } else {
+            urlParams.delete(k);
+        }
+    });
+    var newQuery = urlParams.toString();
+    var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
+    window.history.replaceState({}, '', newUrl);
+
+    // Hiển thị hiệu ứng loading
+    $('#sales_pipeline_table_body').html('<tr><td colspan="11" class="text-center p20 text-muted"><i class="fa fa-spinner fa-spin fa-2x mbot10"></i><br>Đang tải dữ liệu...</td></tr>');
+
+    $.ajax({
+        url: admin_url + 'sales_pipeline/ajax_search',
+        type: 'GET',
+        data: params,
+        dataType: 'json',
+        success: function(response) {
+            if (response && response.status && response.data) {
+                var offset = (response.data.pagination.current_page - 1) * response.data.pagination.per_page;
+                renderDealTable(response.data.deals, response.data.is_admin, response.data.current_user_id, offset);
+                renderPagination(response.data.pagination);
+                updateSummary(response.data.summary);
+            }
+        },
+        error: function() {
+            sp_alert('danger', 'Lỗi kết nối máy chủ!');
+        }
+    });
+}
+
+function applyFilters() {
+    if ($('#kan-ban').length) {
+        var search = $('input[name="search"]').val();
+        pipeline_kanban(search);
+    } else {
+        fetchDealsAjax(1);
+    }
 }
 
 function goToPage(page) {
-    var quarter  = $('#filter_quarter').val();
-    var year     = $('#filter_year').val();
-    var staff    = $('#filter_staff').val();
-    var perPage  = $('#per_page').val();
-    var document = $('#filter_document').val();
+    if ($('#kan-ban').length) {
+        return;
+    }
+    fetchDealsAjax(page);
+}
 
-    var url = admin_url + 'sales_pipeline?page=' + page;
-    if (quarter) url += '&quarter=' + quarter;
-    if (year)    url += '&year=' + year;
-    if (staff)   url += '&staff_id=' + staff;
-    if (perPage) url += '&per_page=' + perPage;
+function updateSummary(summary) {
+    if (!summary) return;
+    if ($('#summary_total_deals').length) $('#summary_total_deals').text(number_format(summary.total_deals));
+    if ($('#summary_total_value').length) $('#summary_total_value').text(number_format(summary.total_value));
+    if ($('#summary_won_deals').length) $('#summary_won_deals').text(summary.won_deals);
+    if ($('#summary_active_deals').length) $('#summary_active_deals').text(summary.active_deals);
+    if ($('#summary_lost_deals').length) $('#summary_lost_deals').text(summary.lost_deals);
+}
 
-    // Lọc chứng từ
-    if (document === 'contract_yes') url += '&contract_signed=1';
-    if (document === 'contract_no')  url += '&contract_signed=0';
-    if (document === 'invoice_yes')  url += '&invoice_issued=1';
-    if (document === 'invoice_no')   url += '&invoice_issued=0';
+function renderDealTable(deals, isAdmin, currentUserId, offset) {
+    var $tbody = $('#sales_pipeline_table_body');
+    $tbody.empty();
 
-    window.location.href = url;
+    if (!deals || deals.length === 0) {
+        var colSpan = isAdmin ? 11 : 10;
+        $tbody.html('<tr><td colspan="' + colSpan + '" class="text-center text-muted p20"><i class="fa fa-inbox fa-2x mbot10"></i><br>Không tìm thấy cơ hội kinh doanh nào phù hợp.</td></tr>');
+        return;
+    }
+
+    var html = '';
+    $.each(deals, function(index, deal) {
+        var stt = offset + index + 1;
+        var missingCost = (deal.missing_cost_price == 1 || deal.cost_price === null || deal.cost_price === '');
+        var rowClass = missingCost ? 'warning-row' : '';
+        var canEditCost = isAdmin || deal.staff_id == currentUserId || (deal.imported_by && deal.imported_by == currentUserId);
+
+        html += '<tr class="' + rowClass + '" data-deal-id="' + deal.id + '">';
+        // 1. STT
+        html += '<td>' + stt + '</td>';
+        // 2. Ngày tạo
+        html += '<td>' + (deal.deal_date ? formatDateVN(deal.deal_date) : '') + '</td>';
+        // 3. Tên công ty
+        html += '<td><strong>' + escapeHtml(deal.customer_name) + '</strong>';
+        if (deal.contact_name) {
+            html += '<br><small class="text-muted">' + escapeHtml(deal.contact_name) + '</small>';
+        }
+        html += '</td>';
+        // 4. Mô tả SP/DV
+        html += '<td>' + escapeHtml(deal.deal_name) + '</td>';
+        // 5. Giá nhập (VNĐ)
+        html += '<td class="text-right cost-price-cell">';
+        if (missingCost) {
+            html += '<span class="missing-cost-badge" title="Thiếu thông tin giá nhập"><i class="fa fa-exclamation-triangle text-warning"></i> <span class="text-muted">Chưa nhập</span></span>';
+            if (canEditCost) {
+                html += '<br><a href="#" class="btn btn-xs btn-info edit-cost-price" data-deal-id="' + deal.id + '" data-deal-value="' + deal.deal_value + '"><i class="fa fa-edit"></i> Nhập giá nhập</a>';
+            }
+        } else {
+            html += '<span class="cost-price-value">' + number_format(deal.cost_price) + '</span>';
+            if (canEditCost) {
+                html += '<br><a href="#" class="btn btn-xs btn-default edit-cost-price" data-deal-id="' + deal.id + '" data-deal-value="' + deal.deal_value + '" data-current-cost="' + deal.cost_price + '"><i class="fa fa-edit"></i></a>';
+            }
+        }
+        html += '</td>';
+        // 6. Giá bán (VNĐ)
+        html += '<td class="text-right font-bold">' + number_format(deal.deal_value) + '</td>';
+        // 7. Lợi nhuận (VNĐ)
+        html += '<td class="text-right profit-cell">';
+        if (missingCost) {
+            html += '<span class="text-muted">--</span>';
+        } else {
+            var profit = deal.actual_profit !== null ? deal.actual_profit : (deal.deal_value - deal.cost_price);
+            var profitPct = deal.profit_percentage !== null ? parseFloat(deal.profit_percentage).toFixed(1) : ((profit / deal.deal_value) * 100).toFixed(1);
+            html += '<span class="profit-value">' + number_format(profit) + '</span><br><small class="text-muted profit-percent">(' + profitPct + '%)</small>';
+        }
+        html += '</td>';
+        // 8. Nhân viên
+        html += '<td><a href="' + admin_url + 'staff/profile/' + deal.staff_id + '">' + escapeHtml(deal.staff_name) + '</a></td>';
+        // 9. Trạng thái
+        html += '<td><span class="label" style="background:' + deal.status_color + '; color:#fff;">' + escapeHtml(deal.status_name) + '</span></td>';
+        // 10. Ghi chú
+        var notesDisplay = deal.notes ? escapeHtml(deal.notes) : '';
+        if (notesDisplay.length > 100) {
+            notesDisplay = notesDisplay.substring(0, 100) + '...';
+        }
+        html += '<td>' + (notesDisplay ? '<span class="notes-content">' + notesDisplay + '</span>' : '<span class="text-muted">--</span>') + '</td>';
+        // 11. Hành động
+        if (isAdmin) {
+            html += '<td class="text-center">';
+            html += '<a href="' + admin_url + 'sales_pipeline/deal/' + deal.id + '" class="btn btn-xs btn-info mright5" title="Xem chi tiết" data-toggle="tooltip"><i class="fa fa-eye"></i></a>';
+            html += '<a href="' + admin_url + 'sales_pipeline/delete/' + deal.id + '" class="btn btn-xs btn-danger _delete" title="Xóa deal" data-toggle="tooltip"><i class="fa fa-remove"></i></a>';
+            html += '</td>';
+        }
+        html += '</tr>';
+    });
+
+    $tbody.html(html);
+    $('[data-toggle="tooltip"]').tooltip();
+}
+
+function renderPagination(p) {
+    var $container = $('#sales_pipeline_pagination');
+    if (!p || p.total_pages <= 1) {
+        $container.html('');
+        return;
+    }
+
+    var startRecord = ((p.current_page - 1) * p.per_page) + 1;
+    var endRecord = Math.min(p.current_page * p.per_page, p.total_records);
+
+    var html = '<div class="row mtop15">';
+    html += '<div class="col-md-6">';
+    html += '<p class="text-muted">Hiển thị ' + startRecord + ' đến ' + endRecord + ' trong tổng số ' + number_format(p.total_records) + ' deal</p>';
+    html += '</div>';
+    html += '<div class="col-md-6 text-right">';
+    html += '<nav><ul class="pagination pagination-sm" style="margin:0;">';
+
+    if (p.current_page > 1) {
+        html += '<li><a href="#" onclick="goToPage(' + (p.current_page - 1) + '); return false;"><i class="fa fa-chevron-left"></i> Trước</a></li>';
+    } else {
+        html += '<li class="disabled"><span><i class="fa fa-chevron-left"></i> Trước</span></li>';
+    }
+
+    var startPage = Math.max(1, p.current_page - 2);
+    var endPage = Math.min(p.total_pages, p.current_page + 2);
+
+    if (startPage > 1) {
+        html += '<li><a href="#" onclick="goToPage(1); return false;">1</a></li>';
+        if (startPage > 2) {
+            html += '<li class="disabled"><span>...</span></li>';
+        }
+    }
+
+    for (var i = startPage; i <= endPage; i++) {
+        if (i === p.current_page) {
+            html += '<li class="active"><span>' + i + '</span></li>';
+        } else {
+            html += '<li><a href="#" onclick="goToPage(' + i + '); return false;">' + i + '</a></li>';
+        }
+    }
+
+    if (endPage < p.total_pages) {
+        if (endPage < p.total_pages - 1) {
+            html += '<li class="disabled"><span>...</span></li>';
+        }
+        html += '<li><a href="#" onclick="goToPage(' + p.total_pages + '); return false;">' + p.total_pages + '</a></li>';
+    }
+
+    if (p.current_page < p.total_pages) {
+        html += '<li><a href="#" onclick="goToPage(' + (p.current_page + 1) + '); return false;">Sau <i class="fa fa-chevron-right"></i></a></li>';
+    } else {
+        html += '<li class="disabled"><span>Sau <i class="fa fa-chevron-right"></i></span></li>';
+    }
+
+    html += '</ul></nav>';
+    html += '</div></div>';
+
+    $container.html(html);
+}
+
+function number_format(val) {
+    if (val === null || val === undefined || isNaN(val)) return '0';
+    return parseInt(val).toLocaleString('vi-VN');
+}
+
+function formatDateVN(dateStr) {
+    if (!dateStr) return '';
+    var parts = dateStr.split('-');
+    if (parts.length === 3) {
+        return parts[2] + '/' + parts[1] + '/' + parts[0];
+    }
+    return dateStr;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return $('<div>').text(text).html();
 }
 
 // Kanban functionality
@@ -798,10 +1021,7 @@ var pipeline_kanban = (function() {
             success: function(response) {
                 loadArea.html(response.kanban);
                 
-                // Initialize sortable for each status column
-                $('.pipeline-kan-ban-col').each(function() {
-                    init_kanban_sortable($(this));
-                });
+                init_pipeline_status_sortable();
             }
         });
     }
@@ -833,62 +1053,23 @@ function pipeline_kanban_sort(by) {
     pipeline_kanban();
 }
 
-// Initialize sortable for kanban columns
-function init_kanban_sortable(col) {
-    var placeholder = $('<div class="kanban-placeholder"></div>');
-    
-    col.find('ul').sortable({
-        placeholder: placeholder,
-        connectWith: '.pipeline-kan-ban-col ul',
+function init_pipeline_status_sortable() {
+    $('#kan-ban').sortable({
+        helper: 'clone',
+        items: '.pipeline-kan-ban-col',
         handle: '.panel-heading',
         tolerance: 'pointer',
-        helper: 'clone',
+        placeholder: 'pipeline-kan-ban-col-placeholder',
         forcePlaceholderSize: true,
-        opacity: 0.95,
-        scroll: true,
-        scrollSensitivity: 100,
-        scrollSpeed: 15,
-        
-        start: function(event, ui) {
-            placeholder.height(ui.helper.outerHeight());
-            ui.helper.addClass('dragging');
-        },
-        
-        stop: function(event, ui) {
-            ui.item.removeClass('dragging');
-        },
-        
         update: function(event, ui) {
-            if (this === ui.item.parent()[0]) {
-                var deal_id = ui.item.attr('data-deal-id');
-                var new_status_id = ui.item.closest('.pipeline-kan-ban-col').attr('data-status-id');
-                
-                // Update deal status via AJAX
-                $.post(admin_url + 'sales_pipeline/update_deal_status', {
-                    deal_id: deal_id,
-                    status_id: new_status_id
-                }).done(function(response) {
-                    if (response.success) {
-                        alert_float('success', 'Đã cập nhật trạng thái deal thành công');
-                        
-                        // Update status badge color
-                        ui.item.find('.label-deal-status').css('background', response.status_color);
-                        
-                        // Update count badges
-                        $('.pipeline-kan-ban-col').each(function() {
-                            var status_id = $(this).attr('data-status-id');
-                            var count = $(this).find('li[data-deal-id]').length;
-                            $(this).find('.kanban-status-count').text(count);
-                        });
-                    } else {
-                        alert_float('danger', response.message || 'Có lỗi xảy ra');
-                        pipeline_kanban(); // Reload to revert
-                    }
-                }).fail(function() {
-                    alert_float('danger', 'Có lỗi xảy ra khi cập nhật trạng thái');
-                    pipeline_kanban(); // Reload to revert
-                });
-            }
+            var order = [];
+            var cols = $('.pipeline-kan-ban-col');
+            var i = 0;
+            $.each(cols, function() {
+                order.push([$(this).data('status-id'), i]);
+                i++;
+            });
+            $.post(admin_url + 'sales_pipeline/update_status_order', { order: order });
         }
     });
 }
@@ -932,7 +1113,7 @@ function pipeline_load_more(status_id, page, button) {
             }
         },
         error: function() {
-            alert_float('danger', 'Có lỗi xảy ra khi tải thêm deal');
+            sp_alert('danger', '<?php echo _l('sales_pipeline_load_more_failed'); ?>');
             btn.prop('disabled', false).html('<i class="fa fa-angle-down"></i> Tải thêm');
         }
     });
@@ -946,36 +1127,68 @@ $(function() {
     
     // Search logic (debounced for Kanban, Enter for List View)
     var searchTimer;
-    $('input[name="search"]').on('input', function(e) {
-        var val = $(this).val();
-        
-        if ($('#kan-ban').length) {
-            // Sync URL parameters in real-time in Kanban view to preserve search state when switching views
-            var urlParams = new URLSearchParams(window.location.search);
-            if (val) {
-                urlParams.set('search', val);
-            } else {
-                urlParams.delete('search');
-            }
-            var newQuery = urlParams.toString();
-            var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
-            window.history.replaceState({}, '', newUrl);
+    var $searchInput = $('input[name="search"]');
+    var $clearBtn = $('#btn_clear_search');
 
-            clearTimeout(searchTimer);
-            searchTimer = setTimeout(function() {
-                pipeline_kanban(val);
-            }, 300);
+    // Toggle hiển thị nút Clear (×) khi ô tìm kiếm có nội dung
+    function toggleClearBtn() {
+        if ($searchInput.val().trim().length > 0) {
+            $clearBtn.show();
+        } else {
+            $clearBtn.hide();
         }
+    }
+
+    $searchInput.on('input', function(e) {
+        var val = $(this).val();
+        toggleClearBtn();
+        
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() {
+            if ($('#kan-ban').length) {
+                // Sync URL parameters in real-time in Kanban view to preserve search state when switching views
+                var urlParams = new URLSearchParams(window.location.search);
+                if (val) {
+                    urlParams.set('search', val);
+                } else {
+                    urlParams.delete('search');
+                }
+                var newQuery = urlParams.toString();
+                var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
+                window.history.replaceState({}, '', newUrl);
+
+                pipeline_kanban(val);
+            } else {
+                fetchDealsAjax(1);
+            }
+        }, 300);
     });
 
-    $('input[name="search"]').on('keypress', function(e) {
+    $searchInput.on('keypress', function(e) {
         if (e.which == 13) { // Enter key
             e.preventDefault();
             if ($('#kan-ban').length) {
                 pipeline_kanban($(this).val());
             } else {
-                applyFilters();
+                fetchDealsAjax(1);
             }
+        }
+    });
+
+    // Nút Clear (×): Xóa nội dung tìm kiếm và nạp lại danh sách qua AJAX
+    $clearBtn.on('click', function() {
+        $searchInput.val('').focus();
+        $(this).hide();
+
+        if ($('#kan-ban').length) {
+            var urlParams = new URLSearchParams(window.location.search);
+            urlParams.delete('search');
+            var newQuery = urlParams.toString();
+            var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
+            window.history.replaceState({}, '', newUrl);
+            pipeline_kanban('');
+        } else {
+            fetchDealsAjax(1);
         }
     });
     
@@ -1016,8 +1229,8 @@ $(function() {
         var dealId = $('#modal_deal_id').val();
         var costPrice = $('#modal_cost_price').val();
 
-        if (!costPrice || parseFloat(costPrice) < 0) {
-            alert('<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
+        if (costPrice === '' || isNaN(costPrice) || parseFloat(costPrice) < 0) {
+            sp_alert('danger', '<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
             return;
         }
 
@@ -1034,7 +1247,7 @@ $(function() {
             },
             success: function(response) {
                 if (response.success) {
-                    alert_float('success', response.message);
+                    sp_alert('success', response.message);
                     $('#costPriceModal').modal('hide');
                     
                     // Update table row
@@ -1058,7 +1271,7 @@ $(function() {
                         );
                     }
                 } else {
-                    alert_float('danger', response.message);
+                    sp_alert('danger', response.message);
                 }
             },
             error: function() {

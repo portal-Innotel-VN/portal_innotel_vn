@@ -17,6 +17,7 @@ hooks()->add_action('admin_init', 'sales_pipeline_init_menu_items');
 hooks()->add_action('admin_init', 'sales_pipeline_permissions');
 hooks()->add_action('after_cron_run', 'sales_pipeline_cron_reminder');
 hooks()->add_filter('get_dashboard_widgets', 'sales_pipeline_add_dashboard_widget');
+hooks()->add_action('app_admin_footer_js', 'sales_pipeline_load_js');
 
 /**
  * Đăng ký quyền truy cập module
@@ -100,3 +101,14 @@ function sales_pipeline_activation_hook()
  * Đăng ký file ngôn ngữ
  */
 register_language_files(SALES_PIPELINE_MODULE_NAME, [SALES_PIPELINE_MODULE_NAME]);
+
+/**
+ * Load custom JS module trong Admin Footer
+ */
+function sales_pipeline_load_js()
+{
+    $CI = &get_instance();
+    if ($CI->router->fetch_module() == 'sales_pipeline') {
+        echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/sales_pipeline.js') . '?v=' . time() . '"></script>';
+    }
+}

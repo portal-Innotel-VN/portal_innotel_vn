@@ -71,7 +71,7 @@ class Import_sales_pipeline
         // --- Validate định dạng file ---
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, ['xls', 'xlsx'])) {
-            $result['message'] = 'Chỉ hỗ trợ file .xls hoặc .xlsx';
+            $result['message'] = _l('sales_pipeline_import_only_excel_supported');
             return $result;
         }
 
@@ -87,7 +87,7 @@ class Import_sales_pipeline
             : copy($file['tmp_name'], $temp_file);
 
         if (!$moved) {
-            $result['message'] = 'Không thể upload file. Vui lòng thử lại.';
+            $result['message'] = _l('sales_pipeline_import_upload_failed');
             return $result;
         }
 
@@ -103,7 +103,7 @@ class Import_sales_pipeline
             $rows = $this->read_excel($temp_file, $ext);
 
             if (empty($rows)) {
-                $result['message'] = 'File Excel không có dữ liệu hợp lệ (vùng dòng 7-56 trống).';
+                $result['message'] = _l('sales_pipeline_import_no_valid_data');
                 $this->CI->sales_pipeline_model->update_import_log($log_id, [
                     'import_status' => 'failed',
                     'error_message' => $result['message'],
@@ -191,13 +191,11 @@ class Import_sales_pipeline
             $result['updated']  = $updated_count;
             $result['skipped']  = $skipped;
             $result['log_id']   = $log_id;
-            $result['message']  = sprintf(
-                'Import thành công: Thêm mới %d, Cập nhật %d, Bỏ qua %d dòng.',
-                $imported, $updated_count, $skipped
-            );
+            $result['message']  = sprintf(_l('sales_pipeline_import_result_summary'), $imported, $updated_count, $skipped);
+            $result['success']  = true;
 
         } catch (Exception $e) {
-            $result['message'] = 'Lỗi đọc file: ' . $e->getMessage();
+            $result['message'] = _l('sales_pipeline_import_read_error') . ': ' . $e->getMessage();
             $this->CI->sales_pipeline_model->update_import_log($log_id, [
                 'import_status' => 'failed',
                 'error_message' => $e->getMessage(),

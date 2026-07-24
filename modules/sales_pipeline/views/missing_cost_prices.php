@@ -211,7 +211,7 @@
                 </div>
                 <div class="form-group">
                     <label for="modal_cost_price"><span class="text-danger">*</span> <?php echo _l('sales_pipeline_cost_price'); ?> (VNĐ)</label>
-                    <input type="number" class="form-control" id="modal_cost_price" min="0" step="1000" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>">
+                    <input type="number" class="form-control" id="modal_cost_price" min="0" step="any" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>">
                     <small class="text-muted"><?php echo _l('sales_pipeline_cost_price_hint'); ?></small>
                 </div>
                 <div class="form-group" id="profit_preview" style="display:none;">
@@ -284,8 +284,8 @@ $(function() {
         var dealId = $('#modal_deal_id').val();
         var costPrice = $('#modal_cost_price').val();
 
-        if (!costPrice || parseFloat(costPrice) < 0) {
-            alert('<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
+        if (costPrice === '' || isNaN(costPrice) || parseFloat(costPrice) < 0) {
+            sp_alert('danger', '<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
             return;
         }
 
@@ -305,21 +305,14 @@ $(function() {
                     alert_float('success', response.message);
                     $('#costPriceModal').modal('hide');
                     
-                    // Hiệu ứng biến mất dòng sau khi cập nhật thành công (UX tốt)
-                    var $row = $('tr[data-deal-id="' + dealId + '"]');
-                    $row.fadeOut(500, function() {
-                        $(this).remove();
-                        // Nếu không còn dòng nào, hiển thị thông báo trống
-                        if ($('tbody tr').length === 0) {
-                            $('tbody').html('<tr><td colspan="8" class="text-center text-muted">Không còn cơ hội bán hàng nào thiếu giá nhập.</td></tr>');
-                        }
-                    });
+                    // Reload page to update list
+                    location.reload();
                 } else {
-                    alert_float('danger', response.message);
+                    sp_alert('danger', response.message);
                 }
             },
             error: function() {
-                alert_float('danger', '<?php echo _l('something_went_wrong'); ?>');
+                sp_alert('danger', '<?php echo _l('something_went_wrong'); ?>');
             },
             complete: function() {
                 btn.prop('disabled', false).html('<i class="fa fa-save"></i> <?php echo _l('save'); ?>');

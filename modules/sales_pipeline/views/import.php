@@ -28,7 +28,7 @@
                             </div>
                         </div>
 
-                        <?php echo form_open_multipart(admin_url('sales_pipeline/import')); ?>
+                        <?php echo form_open_multipart(admin_url('sales_pipeline/import'), ['id' => 'import_form', 'class' => 'disable-on-submit']); ?>
 
                         <?php if (!empty($can_assign_others)) { ?>
                         <div class="form-group">
@@ -130,16 +130,23 @@ $(function() {
     zone.on('drop', function(e) {
         e.preventDefault();
         zone.css('border-color', '#27ae60').css('background', '');
-        input[0].files = e.originalEvent.dataTransfer.files;
-        $('#file_name').text(e.originalEvent.dataTransfer.files[0].name);
+        if(e.originalEvent.dataTransfer.files.length > 0){
+            selectedFile = e.originalEvent.dataTransfer.files[0];
+            input[0].files = e.originalEvent.dataTransfer.files;
+            $('#file_name').text(selectedFile.name);
+        }
     });
 
     // Validate form on submit
-    $('form').on('submit', function(e) {
-        if (!input.val()) {
+    $('#import_form').on('submit', function(e) {
+        if (!selectedFile) {
             e.preventDefault();
-            alert('Vui lòng kéo thả hoặc click chọn tệp tin Excel (.xls, .xlsx) trước khi nhấn Import.');
+            sp_alert('warning', '<?php echo _l('sales_pipeline_please_select_excel_file'); ?>');
             return false;
+        }
+        var $btn = $(this).find('button[type="submit"]');
+        if (typeof SalesPipeline !== 'undefined' && SalesPipeline.btnLoading) {
+            SalesPipeline.btnLoading($btn, '<?php echo _l('please_wait'); ?>');
         }
     });
 });

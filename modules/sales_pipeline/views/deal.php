@@ -23,7 +23,7 @@
                         if (!empty($_SERVER['QUERY_STRING'])) {
                             $action_url .= '?' . $_SERVER['QUERY_STRING'];
                         }
-                        echo form_open($action_url);
+                        echo form_open($action_url, ['id' => 'deal-form', 'class' => 'disable-on-submit', 'novalidate' => 'novalidate']);
                         ?>
 
                         <!-- === THÔNG TIN KHÁCH HÀNG === -->
@@ -42,7 +42,7 @@
                                             <div class="col-md-12">
                                                 <div class="form-group">
                                                     <label for="customer_name" class="control-label">
-                                                        <span class="text-danger">*</span> <?php echo _l('sales_pipeline_customer_name'); ?>
+                                                        <?php echo _l('sales_pipeline_customer_name'); ?>
                                                     </label>
                                                     <input type="text" class="form-control" name="customer_name" id="customer_name"
                                                            value="<?php echo isset($deal) ? html_escape($deal['customer_name']) : ''; ?>"
@@ -108,7 +108,7 @@
                                     <div class="panel-body">
                                         <div class="form-group">
                                             <label for="deal_name" class="control-label">
-                                                <span class="text-danger">*</span> <?php echo _l('sales_pipeline_deal_name'); ?>
+                                                <?php echo _l('sales_pipeline_deal_name'); ?>
                                             </label>
                                             <input type="text" class="form-control" name="deal_name" id="deal_name"
                                                    value="<?php echo isset($deal) ? html_escape($deal['deal_name']) : ''; ?>"
@@ -119,11 +119,11 @@
                                             <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="deal_value" class="control-label">
-                                                        <span class="text-danger">*</span> <?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)
+                                                        <?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)
                                                     </label>
                                                     <input type="number" class="form-control positive-number-only" name="deal_value" id="deal_value"
-                                                           value="<?php echo isset($deal) ? $deal['deal_value'] : ''; ?>"
-                                                           required min="0" step="1000"
+                                                           value="<?php echo isset($deal) && is_numeric($deal['deal_value']) ? (float)$deal['deal_value'] : ''; ?>"
+                                                           required min="0" step="any"
                                                            onchange="calculateProfit()" onkeyup="calculateProfit()">
                                                 </div>
                                             </div>
@@ -135,8 +135,8 @@
                                                            title="<?php echo _l('sales_pipeline_cost_price_hint'); ?>"></i>
                                                     </label>
                                                     <input type="number" class="form-control positive-number-only" name="cost_price" id="cost_price"
-                                                           value="<?php echo isset($deal) && isset($deal['cost_price']) ? $deal['cost_price'] : ''; ?>"
-                                                           min="0" step="1000" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>"
+                                                           value="<?php echo isset($deal) && isset($deal['cost_price']) && is_numeric($deal['cost_price']) ? (float)$deal['cost_price'] : ''; ?>"
+                                                           min="0" step="any" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>"
                                                            onchange="calculateProfit()" onkeyup="calculateProfit()">
                                                     <small class="text-muted">
                                                         <?php echo _l('sales_pipeline_cost_price_hint'); ?>
@@ -159,7 +159,7 @@
                                         </div>
                                         <div class="form-group">
                                             <label for="deal_date" class="control-label">
-                                                <span class="text-danger">*</span> <?php echo _l('sales_pipeline_expected_date'); ?>
+                                                <?php echo _l('sales_pipeline_expected_date'); ?>
                                             </label>
                                             <div class="input-group date">
                                                 <input type="text" class="form-control datepicker" name="deal_date"
@@ -186,7 +186,7 @@
                                     <div class="panel-body">
                                         <div class="form-group">
                                             <label for="status" class="control-label">
-                                                <span class="text-danger">*</span> <?php echo _l('sales_pipeline_status'); ?>
+                                                <?php echo _l('sales_pipeline_status'); ?>
                                             </label>
                                             <select name="status" id="status" class="selectpicker" data-width="100%" required>
                                                 <?php foreach ($statuses as $s) { ?>
@@ -275,7 +275,7 @@
                                         </div>
                                         <div class="form-group">
                                             <label for="staff_id" class="control-label">
-                                                <span class="text-danger">*</span> <?php echo _l('sales_pipeline_assigned_staff'); ?>
+                                                <?php echo _l('sales_pipeline_assigned_staff'); ?>
                                             </label>
                                             <select name="staff_id" id="staff_id" class="selectpicker" data-width="100%"
                                                     data-live-search="true" required>
@@ -403,7 +403,7 @@ $(function() {
         
         if (val >= 5) {
             if (!$contract.is(':checked')) {
-                if (confirm("Bạn đã cầm Hợp đồng bản cứng trên tay chưa?")) {
+                if (confirm("<?php echo _l('sales_pipeline_confirm_contract_received'); ?>")) {
                     $contract.prop('checked', true);
                 }
             }
@@ -411,7 +411,7 @@ $(function() {
         
         if (val >= 6) {
             if (!$invoice.is(':checked')) {
-                if (confirm("Bạn đã xác nhận việc Kế toán đã xuất VAT chưa?")) {
+                if (confirm("<?php echo _l('sales_pipeline_confirm_invoice_issued'); ?>")) {
                     $invoice.prop('checked', true);
                     // Đảm bảo hợp đồng cũng được tick
                     $contract.prop('checked', true);
@@ -442,13 +442,72 @@ appValidateForm($('#deal-form'), {
         required: true,
         maxlength: 500
     },
+    deal_value: {
+        required: true,
+        number: true
+    },
+    deal_date: {
+        required: true
+    },
+    status: {
+        required: true
+    },
     activity_description: {
         maxlength: 2000
     }
+}, false, {
+    customer_name: {
+        required: "<?php echo _l('sales_pipeline_validation_customer_name_required'); ?>",
+        maxlength: "<?php echo _l('sales_pipeline_validation_customer_name_maxlength'); ?>"
+    },
+    contact_name: {
+        maxlength: "<?php echo _l('sales_pipeline_validation_contact_name_maxlength'); ?>"
+    },
+    contact_phone: {
+        digits: "<?php echo _l('sales_pipeline_validation_contact_phone_digits'); ?>",
+        maxlength: "<?php echo _l('sales_pipeline_validation_contact_phone_maxlength'); ?>"
+    },
+    contact_email: {
+        email: "<?php echo _l('sales_pipeline_validation_contact_email_email'); ?>",
+        maxlength: "<?php echo _l('sales_pipeline_validation_contact_email_maxlength'); ?>"
+    },
+    deal_name: {
+        required: "<?php echo _l('sales_pipeline_validation_deal_name_required'); ?>",
+        maxlength: "<?php echo _l('sales_pipeline_validation_deal_name_maxlength'); ?>"
+    },
+    deal_value: {
+        required: "<?php echo _l('sales_pipeline_validation_deal_value_required'); ?>",
+        number: "<?php echo _l('sales_pipeline_validation_deal_value_numeric'); ?>"
+    },
+    deal_date: {
+        required: "<?php echo _l('sales_pipeline_validation_deal_date_required'); ?>"
+    },
+    status: {
+        required: "<?php echo _l('sales_pipeline_validation_status_required'); ?>"
+    },
+    activity_description: {
+        maxlength: "<?php echo _l('sales_pipeline_validation_activity_description_maxlength'); ?>"
+    }
 });
 
-// Chặn phím -, +, e, E và lọc ký tự không phải số dùng chung cho mọi ô có class positive-number-only
+// Chạy lắng nghe sự kiện blur/change và chặn phím -, +, e, E cho ô positive-number-only
 $(function() {
+    // 1. Lắng nghe sự kiện rời khỏi ô nhập liệu (blur) và thay đổi (change) để báo lỗi ngay lập tức
+    $('#deal-form input[required], #deal-form textarea[required]').on('blur', function() {
+        var validator = $('#deal-form').validate();
+        if (validator) {
+            validator.element(this);
+        }
+    });
+
+    $('#deal-form select[required]').on('change', function() {
+        var validator = $('#deal-form').validate();
+        if (validator) {
+            validator.element(this);
+        }
+    });
+
+    // 2. Chặn phím -, +, e, E và lọc ký tự không phải số cho mọi ô có class positive-number-only
     $(document).on('keydown', '.positive-number-only', function(e) {
         if (['-', '+', 'e', 'E'].includes(e.key)) {
             e.preventDefault();

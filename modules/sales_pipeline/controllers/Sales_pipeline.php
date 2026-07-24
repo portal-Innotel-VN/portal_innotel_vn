@@ -227,7 +227,7 @@ class Sales_pipeline extends AdminController
     public function delete($id = '')
     {
         if (empty($id) || !is_numeric($id)) {
-            set_alert('warning', 'Hợp đồng không hợp lệ hoặc không tồn tại.');
+            set_alert('warning', _l('sales_pipeline_invalid_deal'));
             redirect(admin_url('sales_pipeline'));
         }
 
@@ -299,82 +299,77 @@ class Sales_pipeline extends AdminController
      * Cập nhật giá nhập (cost price) qua AJAX
      * URL: admin/sales_pipeline/update_cost_price
      * POST: pipeline_id, cost_price
+     * URL: admin/sales_pipeline/update_cost_price/{id}
      */
-    public function update_cost_price()
+    public function update_cost_price($id = '')
     {
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
 
-        $pipeline_id = $this->input->post('pipeline_id');
-        $cost_price  = $this->input->post('cost_price');
-
-        if (!$pipeline_id) {
+        if (empty($id) || !is_numeric($id)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'ID deal không hợp lệ'
+                'message' => _l('sales_pipeline_invalid_deal_id'),
             ]);
             return;
         }
 
-        // Kiểm tra quyền: Admin hoặc staff sở hữu deal hoặc người import
-        $deal = $this->sales_pipeline_model->get($pipeline_id);
+        $deal = $this->sales_pipeline_model->get($id);
         if (!$deal) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Deal không tồn tại'
+                'message' => _l('sales_pipeline_deal_not_found'),
             ]);
             return;
         }
 
-        $current_user_id = get_staff_user_id();
-        $is_owner = ($deal['staff_id'] == $current_user_id);
-        $is_importer = (isset($deal['imported_by']) && $deal['imported_by'] == $current_user_id);
+        // Quyền sửa: Admin, người sở hữu deal, người có view_deal_details
+        $can_edit = is_admin()
+            || $deal['staff_id'] == get_staff_user_id()
+            || (isset($deal['imported_by']) && $deal['imported_by'] == get_staff_user_id())
+            || has_permission('sales_pipeline', '', 'view_deal_details');
 
-        if (!is_admin() && !$is_owner && !$is_importer) {
+        if (!$can_edit) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Bạn không có quyền cập nhật giá nhập cho deal này'
+                'message' => _l('sales_pipeline_no_permission_update_cost_price'),
             ]);
             return;
         }
 
-        // Validate cost_price: phải là số dương hoặc NULL
-        if ($cost_price !== '' && $cost_price !== null) {
-            $cost_price = floatval(str_replace([',', ' '], '', $cost_price));
-            if ($cost_price < 0) {
+        if ($this->input->post()) {
+            $cost_price_input = $this->input->post('cost_price');
+            $cost_price = ($cost_price_input !== '' && $cost_price_input !== null) ? floatval($cost_price_input) : null;
+
+            if ($cost_price !== null && $cost_price < 0) {
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Giá nhập phải là số dương'
+                    'message' => _l('sales_pipeline_invalid_cost_price'),
                 ]);
                 return;
             }
-        } else {
-            $cost_price = null;
-        }
 
-        // Gọi model để update
-        $success = $this->sales_pipeline_model->update_cost_price($pipeline_id, $cost_price);
-
-        if ($success) {
-            // Tính lại profit sau khi update
-            $updated_deal = $this->sales_pipeline_model->get($pipeline_id);
-            
-            echo json_encode([
-                'success' => true,
-                'message' => 'Cập nhật giá nhập thành công',
-                'data' => [
-                    'cost_price' => $cost_price,
-                    'actual_profit' => $updated_deal['actual_profit'],
-                    'profit_percentage' => $updated_deal['profit_percentage'],
-                    'missing_cost_price' => $updated_deal['missing_cost_price']
-                ]
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Cập nhật thất bại. Vui lòng thử lại.'
-            ]);
+            $success = $this->sales_pipeline_model->update_cost_price($id, $cost_price);
+            if ($success) {
+                // Lấy thông tin deal mới sau update để trả về cho UI
+                $updated_deal = $this->sales_pipeline_model->get($id);
+                echo json_encode([
+                    'success'           => true,
+                    'message'           => _l('sales_pipeline_cost_price_updated'),
+                    'cost_price'        => $updated_deal['cost_price'],
+                    'cost_price_formatted' => number_format($updated_deal['cost_price']),
+                    'actual_profit'     => $updated_deal['actual_profit'],
+                    'actual_profit_formatted' => number_format($updated_deal['actual_profit']),
+                    'profit_percentage' => $updated_deal['profit_percentage'] !== null ? round($updated_deal['profit_percentage'], 1) : null,
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => _l('sales_pipeline_update_failed'),
+                ]);
+            }
+            return;
         }
     }
 
@@ -452,8 +447,8 @@ class Sales_pipeline extends AdminController
         $file_name = 'INNOTEL_BaoCaoKinhDoanh_Template.xlsx';
 
         if (!file_exists($file_path)) {
-            set_alert('danger', 'File template không tồn tại. Vui lòng liên hệ bộ phận IT.');
-            redirect(admin_url('sales_pipeline/import'));
+            set_alert('danger', _l('sales_pipeline_template_file_not_found'));
+            redirect(admin_url('sales_pipeline'));
         }
 
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -555,63 +550,64 @@ class Sales_pipeline extends AdminController
      * Update deal status (drag-and-drop in Kanban)
      * URL: admin/sales_pipeline/update_deal_status (POST via AJAX)
      */
-    public function update_deal_status()
+    public function update_deal_status($id = '', $status_id = '')
     {
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
 
-        $deal_id = $this->input->post('deal_id');
-        $status_id = $this->input->post('status_id');
+        $id        = !empty($id) ? $id : $this->input->post('deal_id');
+        $status_id = !empty($status_id) ? $status_id : $this->input->post('status_id');
 
-        if (!$deal_id || !$status_id) {
-            echo json_encode(['success' => false, 'message' => 'Thiếu thông tin deal hoặc trạng thái']);
+        if (empty($id) || empty($status_id)) {
+            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_missing_deal_or_status')]);
             return;
         }
 
-        // Get current deal to check permissions
-        $deal = $this->sales_pipeline_model->get($deal_id);
-        
+        $deal = $this->sales_pipeline_model->get($id);
         if (!$deal) {
-            echo json_encode(['success' => false, 'message' => 'Không tìm thấy deal']);
+            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_deal_not_found')]);
             return;
         }
 
-        // Check permissions
-        $can_edit = is_admin() || 
-                    has_permission('sales_pipeline', '', 'edit') ||
-                    ($deal->staff_id == get_staff_user_id() && has_permission('sales_pipeline', '', 'edit_own'));
+        // Quyền sửa
+        $can_edit = is_admin()
+            || $deal['staff_id'] == get_staff_user_id()
+            || (isset($deal['imported_by']) && $deal['imported_by'] == get_staff_user_id())
+            || has_permission('sales_pipeline', '', 'edit');
 
         if (!$can_edit) {
-            echo json_encode(['success' => false, 'message' => 'Bạn không có quyền cập nhật deal này']);
+            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_no_permission_update_deal')]);
             return;
         }
 
-        // Update status only (decoupled from document checkboxes per user requirement)
-        $this->db->where('id', $deal_id);
-        $this->db->update(db_prefix() . 'sales_pipeline', [
-            'status'       => $status_id,
-            'datemodified' => date('Y-m-d H:i:s')
-        ]);
-
-        if ($this->db->affected_rows() > 0) {
-            // Get new status info
-            $status = $this->sales_pipeline_model->get_status($status_id);
-            
-            // Log activity
-            $this->sales_pipeline_model->log_activity($deal_id, 
-                'Cập nhật trạng thái', 
-                'Chuyển sang trạng thái: ' . $status->name
-            );
-
+        $success = $this->sales_pipeline_model->update_status($id, $status_id);
+        if ($success) {
+            // Lấy thông tin status mới
+            $status_info = $this->db->where('id', $status_id)->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
             echo json_encode([
-                'success' => true,
-                'message' => 'Đã cập nhật trạng thái deal',
-                'status_color' => $status->color,
-                'status_name' => $status->name
+                'success'      => true,
+                'message'      => _l('sales_pipeline_status_updated'),
+                'status_name'  => $status_info['name'] ?? '',
+                'status_color' => $status_info['color'] ?? '#777',
             ]);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Không thể cập nhật trạng thái']);
+            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_status_update_failed')]);
+        }
+    }
+
+    public function update_status_order()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        $order = $this->input->post('order');
+        if (!empty($order) && is_array($order)) {
+            foreach ($order as $item) {
+                $this->db->where('id', $item[0]);
+                $this->db->update(db_prefix() . 'sales_pipeline_statuses', ['order' => $item[1]]);
+            }
         }
     }
 
@@ -642,7 +638,7 @@ class Sales_pipeline extends AdminController
                 // Validate staff_id tồn tại và active
                 $target_staff = $this->staff_model->get($staff_id);
                 if (!$target_staff || (is_array($target_staff) ? $target_staff['active'] : $target_staff->active) != 1) {
-                    set_alert('danger', 'Nhân viên được chọn không hợp lệ hoặc đã ngừng hoạt động.');
+                    set_alert('danger', _l('sales_pipeline_invalid_staff'));
                     redirect(admin_url('sales_pipeline/import'));
                 }
 
@@ -738,25 +734,109 @@ class Sales_pipeline extends AdminController
         }
 
         if ($type == 'status') {
-            $response = $this->sales_pipeline_model->delete_status($id);
-            if (isset($response['referenced'])) {
-                set_alert('warning', 'Không thể xóa Trạng thái này vì đang có Deal sử dụng.');
-            } elseif ($response['success']) {
-                set_alert('success', _l('deleted', _l('sales_pipeline_status')));
+            if ($this->sales_pipeline_model->is_status_used($id)) {
+                set_alert('warning', _l('sales_pipeline_cannot_delete_status_in_use'));
             } else {
-                set_alert('warning', _l('problem_deleting', _l('sales_pipeline_status')));
+                $success = $this->sales_pipeline_model->delete_status($id);
+                if ($success) {
+                    set_alert('success', _l('deleted', _l('sales_pipeline_status')));
+                } else {
+                    set_alert('warning', _l('problem_deleting', _l('sales_pipeline_status')));
+                }
             }
         } elseif ($type == 'source') {
-            $response = $this->sales_pipeline_model->delete_source($id);
-            if (isset($response['referenced'])) {
-                set_alert('warning', 'Không thể xóa Nguồn này vì đang có Deal sử dụng.');
-            } elseif ($response['success']) {
-                set_alert('success', _l('deleted', _l('sales_pipeline_source')));
+            if ($this->sales_pipeline_model->is_source_used($id)) {
+                set_alert('warning', _l('sales_pipeline_cannot_delete_source_in_use'));
             } else {
-                set_alert('warning', _l('problem_deleting', _l('sales_pipeline_source')));
+                $success = $this->sales_pipeline_model->delete_source($id);
+                if ($success) {
+                    set_alert('success', _l('deleted', _l('sales_pipeline_source')));
+                } else {
+                    set_alert('warning', _l('problem_deleting', _l('sales_pipeline_source')));
+                }
             }
         }
 
         redirect(admin_url('sales_pipeline/settings'));
+    }
+
+    /**
+     * Endpoint AJAX - Lọc, Tìm kiếm & Phân trang danh sách Deal
+     * Trả về JSON chuẩn (JSON Response Standardization)
+     */
+    public function ajax_search()
+    {
+        if (!$this->input->is_ajax_request()) {
+            ajax_access_denied();
+        }
+
+        $search          = trim($this->input->get('search') ?? '');
+        $quarter         = $this->input->get('quarter') ? trim($this->input->get('quarter')) : null;
+        $year            = $this->input->get('year') ? trim($this->input->get('year')) : date('Y');
+        $staff_id        = $this->input->get('staff_id') ? trim($this->input->get('staff_id')) : null;
+        $contract_signed = $this->input->get('contract_signed') !== null ? trim($this->input->get('contract_signed')) : null;
+        $invoice_issued  = $this->input->get('invoice_issued') !== null ? trim($this->input->get('invoice_issued')) : null;
+
+        // Phân quyền: Nếu không có quyền view global thì chỉ xem deal của chính mình
+        if (!has_permission('sales_pipeline', '', 'view')) {
+            $staff_id = get_staff_user_id();
+        }
+
+        $where = [];
+        if ($quarter) {
+            $where['QUARTER(deal_date)'] = $quarter;
+        }
+        if ($year) {
+            $where['YEAR(deal_date)'] = $year;
+        }
+        if ($staff_id) {
+            $where[db_prefix() . 'sales_pipeline.staff_id'] = $staff_id;
+        }
+        if ($contract_signed !== null && $contract_signed !== '') {
+            $where[db_prefix() . 'sales_pipeline.contract_signed'] = (int) $contract_signed;
+        }
+        if ($invoice_issued !== null && $invoice_issued !== '') {
+            $where[db_prefix() . 'sales_pipeline.invoice_issued'] = (int) $invoice_issued;
+        }
+
+        // Pagination setup
+        $per_page = $this->input->get('per_page') ? (int)$this->input->get('per_page') : 25;
+        $page     = $this->input->get('page') ? (int)$this->input->get('page') : 1;
+
+        $allowed_per_page = [10, 25, 50, 100];
+        if (!in_array($per_page, $allowed_per_page)) {
+            $per_page = 25;
+        }
+        if ($page < 1) {
+            $page = 1;
+        }
+        $offset = ($page - 1) * $per_page;
+
+        // Truy vấn dữ liệu & đếm tổng
+        $total_deals = $this->sales_pipeline_model->count_deals($where, $search);
+        $deals       = $this->sales_pipeline_model->get('', $where, $per_page, $offset, $search);
+        $summary     = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search);
+
+        // Chuẩn hóa định dạng JSON Response
+        $response = [
+            'status'  => true,
+            'message' => 'Success',
+            'data'    => [
+                'deals'      => $deals,
+                'summary'    => $summary,
+                'pagination' => [
+                    'total_records' => (int) $total_deals,
+                    'per_page'      => (int) $per_page,
+                    'current_page'  => (int) $page,
+                    'total_pages'   => (int) ceil($total_deals / $per_page),
+                ],
+                'is_admin'         => is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete'),
+                'current_user_id'  => get_staff_user_id(),
+            ],
+        ];
+
+        $this->output
+             ->set_content_type('application/json')
+             ->set_output(json_encode($response));
     }
 }
