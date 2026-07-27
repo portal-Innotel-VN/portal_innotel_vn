@@ -21,12 +21,12 @@
                                 <ul class="nav nav-tabs nav-tabs-horizontal" role="tablist">
                                     <li role="presentation" class="active">
                                         <a href="#statuses" aria-controls="statuses" role="tab" data-toggle="tab">
-                                            Trạng Thái
+                                            <?php echo _l('sales_pipeline_settings_statuses'); ?>
                                         </a>
                                     </li>
                                     <li role="presentation">
                                         <a href="#sources" aria-controls="sources" role="tab" data-toggle="tab">
-                                            Nguồn Khách Hàng
+                                            <?php echo _l('sales_pipeline_settings_sources'); ?>
                                         </a>
                                     </li>
                                 </ul>
@@ -37,18 +37,18 @@
                             <!-- TAB TRẠNG THÁI -->
                             <div role="tabpanel" class="tab-pane active" id="statuses">
                                 <a href="#" class="btn btn-info mbot15" data-toggle="modal" data-target="#status_modal" onclick="reset_status_modal(); return false;">
-                                    <i class="fa fa-plus"></i> Thêm Trạng Thái
+                                    <i class="fa fa-plus"></i> <?php echo _l('sales_pipeline_add_status'); ?>
                                 </a>
                                 <table class="table table-bordered dt-table">
                                     <thead>
                                         <tr>
                                             <th>ID</th>
-                                            <th>Tên Trạng Thái</th>
-                                            <th>Màu Sắc</th>
-                                            <th>Thứ Tự</th>
-                                            <th>Trạng Thái Thắng (Won)</th>
-                                            <th>Trạng Thái Thua (Lost)</th>
-                                            <th>Tùy Chọn</th>
+                                            <th><?php echo _l('sales_pipeline_status_name'); ?></th>
+                                            <th><?php echo _l('sales_pipeline_status_color'); ?></th>
+                                            <th><?php echo _l('sales_pipeline_status_order'); ?></th>
+                                            <th><?php echo _l('sales_pipeline_status_is_won'); ?></th>
+                                            <th><?php echo _l('sales_pipeline_status_is_lost'); ?></th>
+                                            <th><?php echo _l('sales_pipeline_options'); ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -73,14 +73,14 @@
                             <!-- TAB NGUỒN KHÁCH HÀNG -->
                             <div role="tabpanel" class="tab-pane" id="sources">
                                 <a href="#" class="btn btn-info mbot15" data-toggle="modal" data-target="#source_modal" onclick="reset_source_modal(); return false;">
-                                    <i class="fa fa-plus"></i> Thêm Nguồn
+                                    <i class="fa fa-plus"></i> <?php echo _l('sales_pipeline_add_source'); ?>
                                 </a>
                                 <table class="table table-bordered dt-table">
                                     <thead>
                                         <tr>
                                             <th>ID</th>
-                                            <th>Tên Nguồn</th>
-                                            <th>Tùy Chọn</th>
+                                            <th><?php echo _l('sales_pipeline_source_name'); ?></th>
+                                            <th><?php echo _l('sales_pipeline_options'); ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -115,11 +115,11 @@
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="status_modal_title">Thêm Trạng Thái</h4>
+                <h4 class="modal-title" id="status_modal_title"><?php echo _l('sales_pipeline_add_status'); ?></h4>
             </div>
             <div class="modal-body">
-                <?php echo render_input('name', 'Tên Trạng Thái', '', 'text', ['required' => 'true']); ?>
-                <?php echo render_color_picker('color', 'Màu Sắc'); ?>
+                <?php echo render_input('name', _l('sales_pipeline_status_name'), '', 'text', ['required' => 'true']); ?>
+                <?php echo render_color_picker('color', _l('sales_pipeline_status_color')); ?>
                 <?php echo render_input('order', 'Thứ tự hiển thị', '0', 'number'); ?>
                 <div class="checkbox checkbox-primary">
                     <input type="checkbox" name="is_won" id="is_won" value="1">
@@ -148,10 +148,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="source_modal_title">Thêm Nguồn Khách Hàng</h4>
+                <h4 class="modal-title" id="source_modal_title"><?php echo _l('sales_pipeline_add_source_title'); ?></h4>
             </div>
             <div class="modal-body">
-                <?php echo render_input('name', 'Tên Nguồn', '', 'text', ['required' => 'true']); ?>
+                <?php echo render_input('name', _l('sales_pipeline_source_name'), '', 'text', ['required' => 'true']); ?>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal"><?php echo _l('close'); ?></button>
@@ -169,7 +169,7 @@
     });
 
     function reset_status_modal() {
-        $('#status_modal_title').text('Thêm Trạng Thái');
+        $('#status_modal_title').text('<?php echo _l('sales_pipeline_add_status'); ?>');
         $('#status_modal input[name="id"]').val('');
         $('#status_modal input[name="name"]').val('');
         $('#status_modal input[name="color"]').val('#333333');
@@ -186,7 +186,7 @@
         var is_won = $(invoker).data('is-won');
         var is_lost = $(invoker).data('is-lost');
 
-        $('#status_modal_title').text('Sửa Trạng Thái');
+        $('#status_modal_title').text('<?php echo _l('sales_pipeline_edit_status'); ?>');
         $('#status_modal input[name="id"]').val(id);
         $('#status_modal input[name="name"]').val(name);
         $('#status_modal input[name="color"]').val(color);
@@ -198,14 +198,14 @@
     }
 
     function reset_source_modal() {
-        $('#source_modal_title').text('Thêm Nguồn Khách Hàng');
+        $('#source_modal_title').text('<?php echo _l('sales_pipeline_add_source_title'); ?>');
         $('#source_modal input[name="id"]').val('');
         $('#source_modal input[name="name"]').val('');
     }
 
     function edit_source(invoker, id) {
         var name = $(invoker).data('name');
-        $('#source_modal_title').text('Sửa Nguồn Khách Hàng');
+        $('#source_modal_title').text('<?php echo _l('sales_pipeline_edit_source_title'); ?>');
         $('#source_modal input[name="id"]').val(id);
         $('#source_modal input[name="name"]').val(name);
         $('#source_modal').modal('show');

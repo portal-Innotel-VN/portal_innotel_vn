@@ -16,14 +16,14 @@
                             <div class="flex" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
                                 <div>
                                     <i class="fa fa-file-excel-o text-warning" style="font-size:18px; margin-right:8px;"></i>
-                                    <strong>Sử dụng file Template chuẩn để đảm bảo dữ liệu nhập đúng định dạng.</strong>
+                                    <strong><?php echo _l('sales_pipeline_import_template_instruction_1'); ?></strong>
                                     <br>
-                                    <small class="text-muted" style="margin-left:26px;">File đã có sẵn Data Validation và hướng dẫn điền đầy đủ.</small>
+                                    <small class="text-muted" style="margin-left:26px;"><?php echo _l('sales_pipeline_import_template_instruction_2'); ?></small>
                                 </div>
                                 <a href="<?php echo admin_url('sales_pipeline/download_template'); ?>"
                                    class="btn btn-success btn-sm"
                                    style="white-space:nowrap; flex-shrink:0;">
-                                    <i class="fa fa-download"></i> &nbsp;Tải Template (.xlsx)
+                                    <i class="fa fa-download"></i> &nbsp;<?php echo _l('sales_pipeline_download_template'); ?>
                                 </a>
                             </div>
                         </div>

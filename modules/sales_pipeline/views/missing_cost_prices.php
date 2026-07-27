@@ -29,10 +29,10 @@
                                         data-none-selected-text="<?php echo _l('sales_pipeline_filter_quarter'); ?>"
                                         onchange="applyFilters()">
                                     <option value=""><?php echo _l('sales_pipeline_all_quarters'); ?></option>
-                                    <option value="1" <?php echo ($current_quarter == 1) ? 'selected' : ''; ?>>Quý 1 (T1-3)</option>
-                                    <option value="2" <?php echo ($current_quarter == 2) ? 'selected' : ''; ?>>Quý 2 (T4-6)</option>
-                                    <option value="3" <?php echo ($current_quarter == 3) ? 'selected' : ''; ?>>Quý 3 (T7-9)</option>
-                                    <option value="4" <?php echo ($current_quarter == 4) ? 'selected' : ''; ?>>Quý 4 (T10-12)</option>
+                                    <option value="1" <?php echo ($current_quarter == 1) ? 'selected' : ''; ?>><?php echo _l('sales_pipeline_q1'); ?></option>
+                                    <option value="2" <?php echo ($current_quarter == 2) ? 'selected' : ''; ?>><?php echo _l('sales_pipeline_q2'); ?></option>
+                                    <option value="3" <?php echo ($current_quarter == 3) ? 'selected' : ''; ?>><?php echo _l('sales_pipeline_q3'); ?></option>
+                                    <option value="4" <?php echo ($current_quarter == 4) ? 'selected' : ''; ?>><?php echo _l('sales_pipeline_q4'); ?></option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -71,14 +71,14 @@
                                         <th style="width: 15%;" class="text-right"><?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)</th>
                                         <th style="width: 13%;"><?php echo _l('sales_pipeline_assigned_staff'); ?></th>
                                         <th style="width: 12%;"><?php echo _l('sales_pipeline_status'); ?></th>
-                                        <th style="width: 8%;" class="text-center">Thao tác</th>
+                                        <th style="width: 8%;" class="text-center"><?php echo _l('sales_pipeline_actions'); ?></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($deals)) { ?>
                                     <tr>
                                         <td colspan="8" class="text-center text-muted">
-                                            Không có cơ hội bán hàng nào thiếu giá nhập trong bộ lọc này.
+                                            <?php echo _l('sales_pipeline_no_missing_cost_prices'); ?>
                                         </td>
                                     </tr>
                                     <?php } else { 
@@ -111,7 +111,7 @@
                                             <a href="#" class="btn btn-xs btn-info edit-cost-price" 
                                                data-deal-id="<?php echo $deal['id']; ?>" 
                                                data-deal-value="<?php echo $deal['deal_value']; ?>">
-                                                <i class="fa fa-edit"></i> Điền giá
+                                                <i class="fa fa-edit"></i> <?php echo _l('sales_pipeline_enter_price'); ?>
                                             </a>
                                         </td>
                                     </tr>
@@ -125,9 +125,9 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <p class="text-muted" style="margin-top: 5px;">
-                                    Hiển thị <?php echo (($current_page - 1) * $per_page) + 1; ?> 
-                                    đến <?php echo min($current_page * $per_page, $total_deals); ?> 
-                                    trong tổng số <?php echo number_format($total_deals); ?> cơ hội bán hàng
+                                    <?php echo _l('sales_pipeline_pagination_showing'); ?> <?php echo (($current_page - 1) * $per_page) + 1; ?> 
+                                    <?php echo _l('sales_pipeline_pagination_to'); ?> <?php echo min($current_page * $per_page, $total_deals); ?> 
+                                    <?php echo _l('sales_pipeline_pagination_of_total'); ?> <?php echo number_format($total_deals); ?> <?php echo _l('sales_pipeline_pagination_deals'); ?>
                                 </p>
                             </div>
                             <div class="col-md-6 text-right">
@@ -137,11 +137,11 @@
                                         <?php if ($current_page > 1) { ?>
                                         <li>
                                             <a href="#" onclick="goToPage(<?php echo $current_page - 1; ?>); return false;">
-                                                <i class="fa fa-chevron-left"></i> Trước
+                                                <i class="fa fa-chevron-left"></i> <?php echo _l('sales_pipeline_pagination_prev'); ?>
                                             </a>
                                         </li>
                                         <?php } else { ?>
-                                        <li class="disabled"><span><i class="fa fa-chevron-left"></i> Trước</span></li>
+                                        <li class="disabled"><span><i class="fa fa-chevron-left"></i> <?php echo _l('sales_pipeline_pagination_prev'); ?></span></li>
                                         <?php } ?>
 
                                         <!-- Số trang -->
@@ -176,11 +176,11 @@
                                         <?php if ($current_page < $total_pages) { ?>
                                         <li>
                                             <a href="#" onclick="goToPage(<?php echo $current_page + 1; ?>); return false;">
-                                                Sau <i class="fa fa-chevron-right"></i>
+                                                <?php echo _l('sales_pipeline_pagination_next'); ?> <i class="fa fa-chevron-right"></i>
                                             </a>
                                         </li>
                                         <?php } else { ?>
-                                        <li class="disabled"><span>Sau <i class="fa fa-chevron-right"></i></span></li>
+                                        <li class="disabled"><span><?php echo _l('sales_pipeline_pagination_next'); ?> <i class="fa fa-chevron-right"></i></span></li>
                                         <?php } ?>
                                     </ul>
                                 </nav>

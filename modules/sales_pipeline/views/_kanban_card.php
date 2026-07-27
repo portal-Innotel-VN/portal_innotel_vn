@@ -25,21 +25,21 @@ $status_color = !empty($status['color']) ? $status['color'] : '#28B8DA';
                 <div class="pipeline-card-info">
                     <p class="mbot5">
                         <i class="fa fa-money text-success"></i> 
-                        <strong><?php echo number_format($deal['deal_value']); ?> VNĐ</strong>
+                        <strong><?php echo number_format($deal['deal_value']); ?> <?php echo _l('sales_pipeline_vnd'); ?></strong>
                     </p>
                     
                     <?php if ($deal['actual_profit'] !== null) { ?>
                     <p class="mbot5">
                         <i class="fa fa-line-chart text-info"></i>
                         <span class="text-success">
-                            +<?php echo number_format($deal['actual_profit']); ?> VNĐ 
+                            +<?php echo number_format($deal['actual_profit']); ?> <?php echo _l('sales_pipeline_vnd'); ?> 
                             (<?php echo number_format($deal['profit_percentage'], 1); ?>%)
                         </span>
                     </p>
                     <?php } else { ?>
                     <p class="mbot5">
                         <i class="fa fa-exclamation-triangle text-warning"></i>
-                        <span class="text-muted">Chưa có giá nhập</span>
+                        <span class="text-muted"><?php echo _l('sales_pipeline_no_cost_price_yet'); ?></span>
                     </p>
                     <?php } ?>
                     
@@ -59,7 +59,7 @@ $status_color = !empty($status['color']) ? $status['color'] : '#28B8DA';
                 <div class="mtop10">
                     <a href="<?php echo admin_url('sales_pipeline/deal/' . $deal['id'] . (isset($query_string) ? $query_string : '')); ?>" 
                        class="btn btn-info btn-xs">
-                        <i class="fa fa-eye"></i> Chi tiết
+                        <i class="fa fa-eye"></i> <?php echo _l('sales_pipeline_details'); ?>
                     </a>
                 </div>
                 <?php } ?>

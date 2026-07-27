@@ -74,7 +74,7 @@
     SalesPipeline.btnLoading = function (btn, text) {
         var $btn = $(btn);
         if ($btn.length === 0) return;
-        text = text || (typeof app !== 'undefined' && app.lang ? app.lang.please_wait : 'Đang xử lý...');
+        text = text || (typeof app !== 'undefined' && app.lang ? app.lang.please_wait : 'Processing...');
 
         if (!$btn.data('sp-original-html')) {
             $btn.data('sp-original-html', $btn.html());

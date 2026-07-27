@@ -11,7 +11,7 @@ $summary = $CI->sales_pipeline_model->get_summary($current_quarter, date('Y'));
     <div class="panel-body padding-10">
         <p class="no-margin font-bold">
             <i class="fa fa-line-chart text-info"></i>
-            <?php echo _l('sales_pipeline'); ?> — Quý <?php echo $current_quarter; ?>/<?php echo date('Y'); ?>
+            <?php echo _l('sales_pipeline'); ?> — <?php echo _l('sales_pipeline_quarter'); ?> <?php echo $current_quarter; ?>/<?php echo date('Y'); ?>
             <a href="<?php echo admin_url('sales_pipeline'); ?>" class="pull-right" style="font-weight: normal; font-size: 12px;">
                 <?php echo _l('sales_pipeline_view_all'); ?> →
             </a>
@@ -33,7 +33,7 @@ $summary = $CI->sales_pipeline_model->get_summary($current_quarter, date('Y'));
         </div>
         <div class="mtop10 text-center">
             <span class="font-bold" style="font-size: 18px; color: #2c3e50;">
-                <?php echo number_format($summary['total_value']); ?> VNĐ
+                <?php echo number_format($summary['total_value']); ?> <?php echo _l('sales_pipeline_vnd'); ?>
             </span>
             <br><small class="text-muted"><?php echo _l('sales_pipeline_total_value'); ?></small>
         </div>

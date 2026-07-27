@@ -117,9 +117,16 @@ class Sales_pipeline extends AdminController
      * Form thêm/sửa deal
      * URL: admin/sales_pipeline/deal hoặc admin/sales_pipeline/deal/{id}
      */
-    public function deal($id = '')
+    public function deal($id = null)
     {
-        if ($id == '') {
+        // Kiểm tra tính hợp lệ của ID nếu được truyền vào
+        if ($id !== null && !is_numeric($id)) {
+            show_404();
+        }
+
+        $is_id = ($id !== null);
+
+        if (!$is_id) {
             if (!has_permission('sales_pipeline', '', 'create')) {
                 access_denied('sales_pipeline');
             }
@@ -177,7 +184,7 @@ class Sales_pipeline extends AdminController
                     'activity_description' => $post['activity_description'] ?? '',
                 ];
 
-                if ($id == '') {
+                if (!$is_id) {
                     $insert_id = $this->sales_pipeline_model->add($post_data);
                     if ($insert_id) {
                         set_alert('success', _l('sales_pipeline_deal_added'));
@@ -196,7 +203,7 @@ class Sales_pipeline extends AdminController
             }
         }
 
-        if ($id != '') {
+        if ($is_id) {
             $data['deal'] = $this->sales_pipeline_model->get($id);
             if (!$data['deal']) {
                 show_404();
@@ -216,7 +223,7 @@ class Sales_pipeline extends AdminController
             $data['can_assign_others'] = false;
         }
 
-        $data['title'] = ($id == '') ? _l('sales_pipeline_new_deal') : _l('sales_pipeline_edit_deal');
+        $data['title'] = (!$is_id) ? _l('sales_pipeline_new_deal') : _l('sales_pipeline_edit_deal');
         $this->load->view('sales_pipeline/deal', $data);
     }
 
@@ -224,7 +231,7 @@ class Sales_pipeline extends AdminController
      * Xóa deal
      * URL: admin/sales_pipeline/delete/{id}
      */
-    public function delete($id = '')
+    public function delete($id = null)
     {
         if (empty($id) || !is_numeric($id)) {
             set_alert('warning', _l('sales_pipeline_invalid_deal'));
@@ -246,53 +253,57 @@ class Sales_pipeline extends AdminController
      * Cập nhật trạng thái nhanh (AJAX)
      * URL: admin/sales_pipeline/update_status/{id}
      */
-    public function update_status($id)
+    public function update_status($id = null)
     {
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
 
         if (!has_permission('sales_pipeline', '', 'edit')) {
-            ajax_access_denied();
+            $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        if ($id === null) {
+            $id = $this->input->post('pipeline_id');
+        }
+        if (!is_numeric($id)) {
+            $this->json_response(false, _l('sales_pipeline_invalid_deal_id'), [], 400);
         }
 
         $status = $this->input->post('status');
-        if ($status) {
-            $this->sales_pipeline_model->update(['status' => $status], $id);
-            echo json_encode(['success' => true]);
-        } else {
-            echo json_encode(['success' => false]);
+        if (!$status) {
+            $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
         }
+
+        $this->sales_pipeline_model->update(['status' => $status], $id);
+        $this->json_response(true, _l('sales_pipeline_status_updated'));
     }
 
     /**
      * Nhân viên phản hồi nhắc nhở (AJAX)
      * URL: admin/sales_pipeline/respond_reminder/{reminder_id}
      */
-    public function respond_reminder($reminder_id)
+    public function respond_reminder($reminder_id = null)
     {
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
 
-        // ---------- Bổ sung kiểm tra quyền ----------
         if (!has_permission('sales_pipeline', '', 'edit')) {
-            ajax_access_denied();
-            return;
+            $this->json_response(false, _l('access_denied'), [], 403);
         }
-        // -------------------------------------------
+
+        if (!is_numeric($reminder_id)) {
+            $this->json_response(false, _l('sales_pipeline_invalid_deal_id'), [], 400);
+        }
 
         $response = $this->input->post('response');
-        if ($response) {
-            $this->db->where('id', $reminder_id);
-            $this->db->update(db_prefix() . 'sales_pipeline_reminders_log', [
-                'staff_response' => $response,
-                'responded_at'   => date('Y-m-d H:i:s'),
-            ]);
-            echo json_encode(['success' => true]);
-        } else {
-            echo json_encode(['success' => false]);
+        if (!$response) {
+            $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
         }
+
+        $this->sales_pipeline_model->update_reminder_response($reminder_id, $response);
+        $this->json_response(true, _l('sales_pipeline_reminder_responded'));
     }
 
     /**
@@ -301,76 +312,57 @@ class Sales_pipeline extends AdminController
      * POST: pipeline_id, cost_price
      * URL: admin/sales_pipeline/update_cost_price/{id}
      */
-    public function update_cost_price($id = '')
+    public function update_cost_price($id = null)
     {
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
 
-        if (empty($id) || !is_numeric($id)) {
-            echo json_encode([
-                'success' => false,
-                'message' => _l('sales_pipeline_invalid_deal_id'),
-            ]);
-            return;
+        // Lấy ID từ POST nếu không được truyền trực tiếp qua URL
+        if ($id === null) {
+            $id = $this->input->post('pipeline_id');
+        }
+
+        if (!is_numeric($id)) {
+            $this->json_response(false, _l('sales_pipeline_invalid_deal_id'), [], 400);
         }
 
         $deal = $this->sales_pipeline_model->get($id);
         if (!$deal) {
-            echo json_encode([
-                'success' => false,
-                'message' => _l('sales_pipeline_deal_not_found'),
-            ]);
-            return;
+            $this->json_response(false, _l('sales_pipeline_deal_not_found'), [], 404);
         }
 
-        // Quyền sửa: Admin, người sở hữu deal, người có view_deal_details
+        // Quyền sửa: Admin, người sở hữu deal, người có quyền edit
         $can_edit = is_admin()
             || $deal['staff_id'] == get_staff_user_id()
             || (isset($deal['imported_by']) && $deal['imported_by'] == get_staff_user_id())
-            || has_permission('sales_pipeline', '', 'view_deal_details');
+            || has_permission('sales_pipeline', '', 'edit');
 
         if (!$can_edit) {
-            echo json_encode([
-                'success' => false,
-                'message' => _l('sales_pipeline_no_permission_update_cost_price'),
-            ]);
-            return;
+            $this->json_response(false, _l('sales_pipeline_no_permission_update_cost_price'), [], 403);
         }
 
-        if ($this->input->post()) {
-            $cost_price_input = $this->input->post('cost_price');
-            $cost_price = ($cost_price_input !== '' && $cost_price_input !== null) ? floatval($cost_price_input) : null;
+        $cost_price_input = $this->input->post('cost_price');
+        $cost_price = ($cost_price_input !== '' && $cost_price_input !== null) ? floatval($cost_price_input) : null;
 
-            if ($cost_price !== null && $cost_price < 0) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => _l('sales_pipeline_invalid_cost_price'),
-                ]);
-                return;
-            }
-
-            $success = $this->sales_pipeline_model->update_cost_price($id, $cost_price);
-            if ($success) {
-                // Lấy thông tin deal mới sau update để trả về cho UI
-                $updated_deal = $this->sales_pipeline_model->get($id);
-                echo json_encode([
-                    'success'           => true,
-                    'message'           => _l('sales_pipeline_cost_price_updated'),
-                    'cost_price'        => $updated_deal['cost_price'],
-                    'cost_price_formatted' => number_format($updated_deal['cost_price']),
-                    'actual_profit'     => $updated_deal['actual_profit'],
-                    'actual_profit_formatted' => number_format($updated_deal['actual_profit']),
-                    'profit_percentage' => $updated_deal['profit_percentage'] !== null ? round($updated_deal['profit_percentage'], 1) : null,
-                ]);
-            } else {
-                echo json_encode([
-                    'success' => false,
-                    'message' => _l('sales_pipeline_update_failed'),
-                ]);
-            }
-            return;
+        if ($cost_price !== null && $cost_price < 0) {
+            $this->json_response(false, _l('sales_pipeline_invalid_cost_price'), [], 400);
         }
+
+        $success = $this->sales_pipeline_model->update_cost_price($id, $cost_price);
+        if (!$success) {
+            $this->json_response(false, _l('sales_pipeline_update_failed'));
+        }
+
+        // Lấy thông tin deal mới sau update để trả về cho UI
+        $updated_deal = $this->sales_pipeline_model->get($id);
+        $this->json_response(true, _l('sales_pipeline_cost_price_updated'), [
+            'cost_price'             => $updated_deal['cost_price'],
+            'cost_price_formatted'   => number_format($updated_deal['cost_price']),
+            'actual_profit'          => $updated_deal['actual_profit'],
+            'actual_profit_formatted' => number_format($updated_deal['actual_profit']),
+            'profit_percentage'      => $updated_deal['profit_percentage'] !== null ? round($updated_deal['profit_percentage'], 1) : null,
+        ]);
     }
 
     /**
@@ -470,7 +462,7 @@ class Sales_pipeline extends AdminController
         }
 
         if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
-            ajax_access_denied();
+            $this->json_response(false, _l('access_denied'), [], 403);
         }
 
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
@@ -494,9 +486,8 @@ class Sales_pipeline extends AdminController
         $data['query_string'] = !empty($query_params) ? '?' . http_build_query($query_params) : '';
 
         $html = $this->load->view('sales_pipeline/kan-ban', $data, true);
-        
-        header('Content-Type: application/json');
         echo json_encode(['kanban' => $html]);
+        die();
     }
 
     /**
@@ -510,26 +501,30 @@ class Sales_pipeline extends AdminController
         }
 
         if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
-            ajax_access_denied();
+            $this->json_response(false, _l('access_denied'), [], 403);
         }
 
         $status = $this->input->post('status_id');
-        $page = $this->input->post('page');
+        $page   = $this->input->post('page');
         $search = $this->input->post('search');
 
         $deals = $this->sales_pipeline_model->do_kanban_query($status, $search, $page, [
-            'sort_by' => $this->input->post('sort'),
-            'sort' => $this->input->post('sort_type'),
-            'quarter' => $this->input->post('quarter'),
-            'year' => $this->input->post('year'),
-            'staff_id' => $this->input->post('staff_id'),
+            'sort_by'         => $this->input->post('sort'),
+            'sort'            => $this->input->post('sort_type'),
+            'quarter'         => $this->input->post('quarter'),
+            'year'            => $this->input->post('year'),
+            'staff_id'        => $this->input->post('staff_id'),
             'contract_signed' => $this->input->post('contract_signed'),
-            'invoice_issued' => $this->input->post('invoice_issued'),
+            'invoice_issued'  => $this->input->post('invoice_issued'),
         ]);
 
+        // Render tất cả card thành HTML rồi trả về JSON chuẩn
+        $html = '';
         foreach ($deals as $deal) {
-            $this->load->view('sales_pipeline/_kanban_card', ['deal' => $deal, 'status' => $status]);
+            $html .= $this->load->view('sales_pipeline/_kanban_card', ['deal' => $deal, 'status' => $status], true);
         }
+        echo json_encode(['html' => $html]);
+        die();
     }
 
     /**
@@ -550,24 +545,27 @@ class Sales_pipeline extends AdminController
      * Update deal status (drag-and-drop in Kanban)
      * URL: admin/sales_pipeline/update_deal_status (POST via AJAX)
      */
-    public function update_deal_status($id = '', $status_id = '')
+    public function update_deal_status($id = null, $status_id = null)
     {
         if (!$this->input->is_ajax_request()) {
             show_404();
         }
 
-        $id        = !empty($id) ? $id : $this->input->post('deal_id');
-        $status_id = !empty($status_id) ? $status_id : $this->input->post('status_id');
+        // Fallback lấy từ POST nếu không truyền qua URL
+        if ($id === null) {
+            $id = $this->input->post('deal_id');
+        }
+        if ($status_id === null) {
+            $status_id = $this->input->post('status_id');
+        }
 
-        if (empty($id) || empty($status_id)) {
-            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_missing_deal_or_status')]);
-            return;
+        if (!is_numeric($id) || !is_numeric($status_id)) {
+            $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
         }
 
         $deal = $this->sales_pipeline_model->get($id);
         if (!$deal) {
-            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_deal_not_found')]);
-            return;
+            $this->json_response(false, _l('sales_pipeline_deal_not_found'), [], 404);
         }
 
         // Quyền sửa
@@ -577,23 +575,20 @@ class Sales_pipeline extends AdminController
             || has_permission('sales_pipeline', '', 'edit');
 
         if (!$can_edit) {
-            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_no_permission_update_deal')]);
-            return;
+            $this->json_response(false, _l('sales_pipeline_no_permission_update_deal'), [], 403);
         }
 
         $success = $this->sales_pipeline_model->update_status($id, $status_id);
-        if ($success) {
-            // Lấy thông tin status mới
-            $status_info = $this->db->where('id', $status_id)->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
-            echo json_encode([
-                'success'      => true,
-                'message'      => _l('sales_pipeline_status_updated'),
-                'status_name'  => $status_info['name'] ?? '',
-                'status_color' => $status_info['color'] ?? '#777',
-            ]);
-        } else {
-            echo json_encode(['success' => false, 'message' => _l('sales_pipeline_status_update_failed')]);
+        if (!$success) {
+            $this->json_response(false, _l('sales_pipeline_status_update_failed'));
         }
+
+        // Lấy thông tin status mới
+        $status_info = $this->sales_pipeline_model->get_status_by_id($status_id);
+        $this->json_response(true, _l('sales_pipeline_status_updated'), [
+            'status_name'  => $status_info['name'] ?? '',
+            'status_color' => $status_info['color'] ?? '#777',
+        ]);
     }
 
     public function update_status_order()
@@ -602,13 +597,17 @@ class Sales_pipeline extends AdminController
             show_404();
         }
 
-        $order = $this->input->post('order');
-        if (!empty($order) && is_array($order)) {
-            foreach ($order as $item) {
-                $this->db->where('id', $item[0]);
-                $this->db->update(db_prefix() . 'sales_pipeline_statuses', ['order' => $item[1]]);
-            }
+        if (!is_admin()) {
+            $this->json_response(false, _l('access_denied'), [], 403);
         }
+
+        $order = $this->input->post('order');
+        if (empty($order) || !is_array($order)) {
+            $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
+        }
+
+        $this->sales_pipeline_model->update_statuses_order($order);
+        $this->json_response(true, _l('sales_pipeline_status_updated'));
     }
 
     /**
@@ -818,25 +817,43 @@ class Sales_pipeline extends AdminController
         $summary     = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search);
 
         // Chuẩn hóa định dạng JSON Response
-        $response = [
-            'status'  => true,
-            'message' => 'Success',
-            'data'    => [
-                'deals'      => $deals,
-                'summary'    => $summary,
-                'pagination' => [
-                    'total_records' => (int) $total_deals,
-                    'per_page'      => (int) $per_page,
-                    'current_page'  => (int) $page,
-                    'total_pages'   => (int) ceil($total_deals / $per_page),
-                ],
-                'is_admin'         => is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete'),
-                'current_user_id'  => get_staff_user_id(),
+        $this->json_response(true, '', [
+            'deals'      => $deals,
+            'summary'    => $summary,
+            'pagination' => [
+                'total_records' => (int) $total_deals,
+                'per_page'      => (int) $per_page,
+                'current_page'  => (int) $page,
+                'total_pages'   => (int) ceil($total_deals / $per_page),
             ],
-        ];
+            'is_admin'         => is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete'),
+            'current_user_id'  => get_staff_user_id(),
+        ]);
+    }
 
+    // =========================================================================
+    // HELPER: Chuẩn hóa JSON Response cho tất cả AJAX endpoints
+    // =========================================================================
+
+    /**
+     * Trả về JSON response chuẩn hóa và kết thúc request.
+     *
+     * @param bool   $status    Trạng thái thành công / thất bại
+     * @param string $message   Thông báo cho Frontend
+     * @param array  $data      Dữ liệu bổ sung (gom vào key 'data')
+     * @param int    $http_code HTTP Status Code (200, 400, 403, 404...)
+     */
+    protected function json_response($status = true, $message = '', $data = [], $http_code = 200)
+    {
+        $response = [
+            'status'  => (bool) $status,
+            'message' => $message,
+            'data'    => $data,
+        ];
         $this->output
-             ->set_content_type('application/json')
+             ->set_status_header($http_code)
+             ->set_content_type('application/json', 'utf-8')
              ->set_output(json_encode($response));
+        exit;
     }
 }
