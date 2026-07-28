@@ -141,14 +141,14 @@ class Sales_pipeline_model extends App_Model
         if ($insert_id) {
             // Log activity: tạo mới
             $deal_name = $data['deal_name'] ?? ($data['customer_name'] ?? _l('sales_pipeline_activity_new_deal'));
-            $this->add_activity($insert_id, sprintf(_l('sales_pipeline_activity_deal_created'), $deal_name), null, $data['status']);
+            $this->add_activity($insert_id, _l('sales_pipeline_activity_deal_created', [$deal_name]), null, $data['status']);
 
             // Log activity bổ sung nếu có ghi chú
             if (!empty($activity_description)) {
                 $this->add_activity($insert_id, $activity_description);
             }
 
-            log_activity(sprintf(_l('sales_pipeline_log_new_deal'), $insert_id, $deal_name));
+            log_activity(_l('sales_pipeline_log_new_deal', [$insert_id, $deal_name]));
         }
 
         return $insert_id;
@@ -200,7 +200,7 @@ class Sales_pipeline_model extends App_Model
                 $old_status_name = $this->get_status_name($old_status);
                 $this->add_activity(
                     $id,
-                    sprintf(_l('sales_pipeline_activity_status_changed'), $old_status_name, $new_status_name),
+                    _l('sales_pipeline_activity_status_changed', [$old_status_name, $new_status_name]),
                     $old_status,
                     $data['status']
                 );
@@ -211,7 +211,7 @@ class Sales_pipeline_model extends App_Model
                 $this->add_activity($id, $activity_description);
             }
 
-            log_activity(sprintf(_l('sales_pipeline_log_update_deal'), $id));
+            log_activity(_l('sales_pipeline_log_update_deal', [$id]));
         }
 
         return $updated;
@@ -243,7 +243,7 @@ class Sales_pipeline_model extends App_Model
             $this->db->delete(db_prefix() . 'sales_pipeline_reminders_log');
 
             if ($deal) {
-                log_activity(sprintf(_l('sales_pipeline_log_delete_deal'), $id, $deal['deal_name']));
+                log_activity(_l('sales_pipeline_log_delete_deal', [$id, $deal['deal_name']]));
             }
 
             return true;
@@ -697,15 +697,15 @@ class Sales_pipeline_model extends App_Model
         if ($this->db->affected_rows() > 0) {
             // Log activity
             if ($old_cost_price === null) {
-                $this->add_activity($deal_id, sprintf(_l('sales_pipeline_activity_cost_price_updated_from_null'), number_format($cost_price)));
+                $this->add_activity($deal_id, _l('sales_pipeline_activity_cost_price_updated_from_null', [number_format($cost_price)]));
                 
                 // Đánh dấu alert đã resolved
                 $this->resolve_cost_price_alert($deal_id);
             } else {
-                $this->add_activity($deal_id, sprintf(_l('sales_pipeline_activity_cost_price_updated'), number_format($old_cost_price), number_format($cost_price)));
+                $this->add_activity($deal_id, _l('sales_pipeline_activity_cost_price_updated', [number_format($old_cost_price), number_format($cost_price)]));
             }
 
-            log_activity(sprintf(_l('sales_pipeline_log_update_cost_price'), $deal_id));
+            log_activity(_l('sales_pipeline_log_update_cost_price', [$deal_id]));
             return true;
         }
 

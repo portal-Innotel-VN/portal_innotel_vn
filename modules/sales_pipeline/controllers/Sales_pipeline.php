@@ -233,7 +233,7 @@ class Sales_pipeline extends AdminController
      */
     public function delete($id = null)
     {
-        if (empty($id) || !is_numeric($id)) {
+        if (!$id || !is_numeric($id)) {
             set_alert('warning', _l('sales_pipeline_invalid_deal'));
             redirect(admin_url('sales_pipeline'));
         }
@@ -259,15 +259,16 @@ class Sales_pipeline extends AdminController
             show_404();
         }
 
-        if (!has_permission('sales_pipeline', '', 'edit')) {
-            $this->json_response(false, _l('access_denied'), [], 403);
-        }
-
         if ($id === null) {
             $id = $this->input->post('pipeline_id');
         }
-        if (!is_numeric($id)) {
-            $this->json_response(false, _l('sales_pipeline_invalid_deal_id'), [], 400);
+
+        if (!$id) {
+            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
+        }
+
+        if (!has_permission('sales_pipeline', '', 'edit')) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
         }
 
         $status = $this->input->post('status');
@@ -289,12 +290,12 @@ class Sales_pipeline extends AdminController
             show_404();
         }
 
-        if (!has_permission('sales_pipeline', '', 'edit')) {
-            $this->json_response(false, _l('access_denied'), [], 403);
+        if (!$reminder_id) {
+            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
         }
 
-        if (!is_numeric($reminder_id)) {
-            $this->json_response(false, _l('sales_pipeline_invalid_deal_id'), [], 400);
+        if (!has_permission('sales_pipeline', '', 'edit')) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
         }
 
         $response = $this->input->post('response');
@@ -318,13 +319,12 @@ class Sales_pipeline extends AdminController
             show_404();
         }
 
-        // Lấy ID từ POST nếu không được truyền trực tiếp qua URL
         if ($id === null) {
             $id = $this->input->post('pipeline_id');
         }
 
-        if (!is_numeric($id)) {
-            $this->json_response(false, _l('sales_pipeline_invalid_deal_id'), [], 400);
+        if (!$id) {
+            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
         }
 
         $deal = $this->sales_pipeline_model->get($id);
@@ -551,16 +551,19 @@ class Sales_pipeline extends AdminController
             show_404();
         }
 
-        // Fallback lấy từ POST nếu không truyền qua URL
         if ($id === null) {
             $id = $this->input->post('deal_id');
         }
+        
+        if (!$id) {
+            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
+        }
+
         if ($status_id === null) {
             $status_id = $this->input->post('status_id');
         }
-
-        if (!is_numeric($id) || !is_numeric($status_id)) {
-            $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
+        if (!$status_id) {
+            return $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
         }
 
         $deal = $this->sales_pipeline_model->get($id);
@@ -766,7 +769,7 @@ class Sales_pipeline extends AdminController
     public function ajax_search()
     {
         if (!$this->input->is_ajax_request()) {
-            ajax_access_denied();
+            show_404();
         }
 
         $search          = trim($this->input->get('search') ?? '');

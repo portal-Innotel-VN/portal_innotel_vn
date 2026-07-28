@@ -191,7 +191,7 @@ class Import_sales_pipeline
             $result['updated']  = $updated_count;
             $result['skipped']  = $skipped;
             $result['log_id']   = $log_id;
-            $result['message']  = sprintf(_l('sales_pipeline_import_result_summary'), $imported, $updated_count, $skipped);
+            $result['message']  = _l('sales_pipeline_import_result_summary', [$imported, $updated_count, $skipped]);
             $result['success']  = true;
 
         } catch (Exception $e) {

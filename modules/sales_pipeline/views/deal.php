@@ -219,7 +219,7 @@
                                                 <i class="fa fa-comment"></i> <?php echo _l('sales_pipeline_progress_note'); ?>
                                             </label>
                                             <textarea name="activity_description" id="activity_description" class="form-control" rows="3" 
-                                                maxlength="2000" placeholder="Nhập nhật ký trao đổi với khách hàng..."><?php echo isset($deal) ? html_escape($deal['activity_description']) : ''; ?></textarea>
+                                                maxlength="2000" placeholder="Nhập nhật ký trao đổi với khách hàng..."><?php echo isset($deal['activity_description']) ? html_escape($deal['activity_description']) : ''; ?></textarea>
                                         </div>
 
                                         <!-- Timeline activity (khi sửa) -->
