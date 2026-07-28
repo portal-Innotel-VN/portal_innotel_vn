@@ -45,9 +45,9 @@ foreach ($statuses as $status) {
                     }
                     ?>
                 </ul>
-                <?php if ($total_deals > 0) { ?>
+                <?php if ($total_pages > 1) { ?>
                 <div class="kanban-load-more">
-                    <button class="btn btn-default btn-sm<?php if ($total_pages <= 1) { echo ' disabled'; } ?>" 
+                    <button class="btn btn-default btn-sm" 
                        onclick="pipeline_load_more(<?php echo $status['id']; ?>, 2, this); return false;">
                         <i class="fa fa-angle-down"></i> <?php echo _l('load_more'); ?>
                     </button>

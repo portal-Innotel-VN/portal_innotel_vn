@@ -191,3 +191,5 @@ $lang['sales_pipeline_edit_source'] = 'Edit Source';
 $lang['sales_pipeline_add_source_title'] = 'Add Lead Source';
 $lang['sales_pipeline_edit_source_title'] = 'Edit Lead Source';
 $lang['sales_pipeline_reminder_responded'] = 'Reminder responded successfully.';
+$lang['please_wait'] = 'Please wait...';
+$lang['something_went_wrong'] = 'Something went wrong, please try again!';

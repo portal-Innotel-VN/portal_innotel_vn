@@ -364,7 +364,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                             </a>
                                             <?php } ?>
                                             <?php if (is_admin() || has_permission('sales_pipeline', '', 'delete')) { ?>
-                                            <a href="<?php echo admin_url('sales_pipeline/delete/' . $deal['id']); ?>"
+                                            <a href="<?php echo admin_url('sales_pipeline/delete/' . $deal['id'] . $query_string); ?>"
                                                class="btn btn-xs btn-danger _delete" 
                                                title="Xóa deal"
                                                data-toggle="tooltip">
@@ -514,6 +514,24 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
 <?php init_tail(); ?>
 
 <style>
+/* Sticky Footer Flexbox Layout */
+html, body {
+    height: 100%;
+}
+#wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+#wrapper > .content {
+    flex-grow: 1;
+    flex: 1 0 auto;
+}
+#wrapper > footer,
+#wrapper > .footer {
+    flex-shrink: 0;
+}
+
 .pipeline-search .input-group {
     width: 100% !important;
 }
@@ -777,16 +795,27 @@ function fetchDealsAjax(page) {
         type: 'GET',
         data: params,
         dataType: 'json',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
         success: function(response) {
-            if (response && response.status && response.data) {
-                var offset = (response.data.pagination.current_page - 1) * response.data.pagination.per_page;
-                renderDealTable(response.data.deals, response.data.is_admin, response.data.current_user_id, offset);
-                renderPagination(response.data.pagination);
-                updateSummary(response.data.summary);
+            var isSuccess = response && (response.status === true || response.success === true);
+            var resData = response ? (response.data || response) : null;
+
+            if (isSuccess && resData && resData.pagination) {
+                var offset = (resData.pagination.current_page - 1) * resData.pagination.per_page;
+                renderDealTable(resData.deals, resData.is_admin, resData.current_user_id, offset);
+                renderPagination(resData.pagination);
+                updateSummary(resData.summary);
+            } else {
+                $('#sales_pipeline_table_body').html('<tr><td colspan="11" class="text-center p20 text-danger"><i class="fa fa-exclamation-triangle fa-2x mbot10"></i><br>' + (response && response.message ? response.message : 'Không thể tải dữ liệu phân trang.') + '</td></tr>');
             }
         },
-        error: function() {
-            sp_alert('danger', 'Lỗi kết nối máy chủ!');
+        error: function(xhr, status, error) {
+            $('#sales_pipeline_table_body').html('<tr><td colspan="11" class="text-center p20 text-danger"><i class="fa fa-exclamation-triangle fa-2x mbot10"></i><br>Lỗi kết nối máy chủ (' + (xhr.status || '500') + ')! Vui lòng thử lại.</td></tr>');
+            if (typeof sp_alert === 'function') {
+                sp_alert('danger', 'Lỗi tải dữ liệu trang ' + page);
+            }
         }
     });
 }
@@ -884,9 +913,11 @@ function renderDealTable(deals, isAdmin, currentUserId, offset) {
         html += '<td>' + (notesDisplay ? '<span class="notes-content">' + notesDisplay + '</span>' : '<span class="text-muted">--</span>') + '</td>';
         // 11. Hành động
         if (isAdmin) {
+            // Lấy query string hiện tại (đã được cập nhật bởi fetchDealsAjax qua history.replaceState)
+            var currentQs = window.location.search;
             html += '<td class="text-center">';
-            html += '<a href="' + admin_url + 'sales_pipeline/deal/' + deal.id + '" class="btn btn-xs btn-info mright5" title="Xem chi tiết" data-toggle="tooltip"><i class="fa fa-eye"></i></a>';
-            html += '<a href="' + admin_url + 'sales_pipeline/delete/' + deal.id + '" class="btn btn-xs btn-danger _delete" title="Xóa deal" data-toggle="tooltip"><i class="fa fa-remove"></i></a>';
+            html += '<a href="' + admin_url + 'sales_pipeline/deal/' + deal.id + currentQs + '" class="btn btn-xs btn-info mright5" title="Xem chi tiết" data-toggle="tooltip"><i class="fa fa-eye"></i></a>';
+            html += '<a href="' + admin_url + 'sales_pipeline/delete/' + deal.id + currentQs + '" class="btn btn-xs btn-danger _delete" title="Xóa deal" data-toggle="tooltip"><i class="fa fa-remove"></i></a>';
             html += '</td>';
         }
         html += '</tr>';
@@ -1077,7 +1108,7 @@ function init_pipeline_status_sortable() {
 // Load more deals for a specific status column
 function pipeline_load_more(status_id, page, button) {
     var btn = $(button);
-    btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Đang tải...');
+    btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> <?php echo _l('please_wait'); ?>');
     
     $.ajax({
         url: admin_url + 'sales_pipeline/kanban_load_more',
@@ -1094,27 +1125,42 @@ function pipeline_load_more(status_id, page, button) {
             staff_id: $('#filter_staff').val() || ''
         },
         success: function(response) {
-            if (response.html) {
+            var resData = (response && response.data) ? response.data : response;
+            if (resData && resData.html) {
                 var col = $('.pipeline-kan-ban-col[data-status-id="' + status_id + '"]');
                 var list = col.find('ul');
-                
-                // Remove load more button
-                btn.parent().remove();
+                var loadMoreContainer = btn.parent();
                 
                 // Append new deals
-                list.append(response.html);
+                list.append(resData.html);
                 
                 // Update count
                 var count = list.find('li[data-deal-id]').length;
                 col.find('.kanban-status-count').text(count);
                 
+                // Check if there are still more pages
+                var currentPage = resData.page || page;
+                var totalPages  = resData.total_pages || 0;
+
+                if (currentPage < totalPages && resData.html.trim() !== '') {
+                    // Còn dữ liệu -> Cập nhật nút cho trang tiếp theo (currentPage + 1)
+                    btn.prop('disabled', false)
+                       .html('<i class="fa fa-angle-down"></i> <?php echo _l('load_more'); ?>')
+                       .attr('onclick', 'pipeline_load_more(' + status_id + ', ' + (currentPage + 1) + ', this); return false;');
+                } else {
+                    // Đã hết dữ liệu -> Xóa hoàn toàn nút Tải thêm khỏi DOM
+                    loadMoreContainer.remove();
+                }
+                
                 // Re-initialize sortable
                 init_kanban_sortable(col);
+            } else {
+                btn.parent().remove();
             }
         },
         error: function() {
             sp_alert('danger', '<?php echo _l('sales_pipeline_load_more_failed'); ?>');
-            btn.prop('disabled', false).html('<i class="fa fa-angle-down"></i> Tải thêm');
+            btn.prop('disabled', false).html('<i class="fa fa-angle-down"></i> <?php echo _l('load_more'); ?>');
         }
     });
 }

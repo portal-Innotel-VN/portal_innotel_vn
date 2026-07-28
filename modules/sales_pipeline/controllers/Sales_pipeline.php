@@ -246,7 +246,13 @@ class Sales_pipeline extends AdminController
         if ($success) {
             set_alert('success', _l('sales_pipeline_deal_deleted'));
         }
-        redirect(admin_url('sales_pipeline'));
+
+        // Bảo toàn trạng thái bộ lọc: đọc lại query string từ URL xóa và redirect về đúng trang filter
+        $redirect_url = admin_url('sales_pipeline');
+        if (!empty($_SERVER['QUERY_STRING'])) {
+            $redirect_url .= '?' . $_SERVER['QUERY_STRING'];
+        }
+        redirect($redirect_url);
     }
 
     /**
@@ -504,11 +510,13 @@ class Sales_pipeline extends AdminController
             $this->json_response(false, _l('access_denied'), [], 403);
         }
 
-        $status = $this->input->post('status_id');
-        $page   = $this->input->post('page');
-        $search = $this->input->post('search');
+        $status_id = $this->input->post('status_id');
+        $page      = $this->input->post('page') ? (int) $this->input->post('page') : 1;
+        $search    = $this->input->post('search');
 
-        $deals = $this->sales_pipeline_model->do_kanban_query($status, $search, $page, [
+        $status = $this->sales_pipeline_model->get_status_by_id($status_id);
+
+        $sort = [
             'sort_by'         => $this->input->post('sort'),
             'sort'            => $this->input->post('sort_type'),
             'quarter'         => $this->input->post('quarter'),
@@ -516,15 +524,24 @@ class Sales_pipeline extends AdminController
             'staff_id'        => $this->input->post('staff_id'),
             'contract_signed' => $this->input->post('contract_signed'),
             'invoice_issued'  => $this->input->post('invoice_issued'),
-        ]);
+        ];
+
+        $deals       = $this->sales_pipeline_model->do_kanban_query($status_id, $search, $page, $sort);
+        $total_deals = $this->sales_pipeline_model->do_kanban_query($status_id, $search, 1, $sort, true);
+        $total_pages = (int) ceil($total_deals / 10);
 
         // Render tất cả card thành HTML rồi trả về JSON chuẩn
         $html = '';
         foreach ($deals as $deal) {
             $html .= $this->load->view('sales_pipeline/_kanban_card', ['deal' => $deal, 'status' => $status], true);
         }
-        echo json_encode(['html' => $html]);
-        die();
+
+        $this->json_response(true, '', [
+            'html'        => $html,
+            'total_pages' => $total_pages,
+            'page'        => $page,
+            'total_deals' => (int) $total_deals,
+        ]);
     }
 
     /**
@@ -850,13 +867,15 @@ class Sales_pipeline extends AdminController
     {
         $response = [
             'status'  => (bool) $status,
+            'success' => (bool) $status,
             'message' => $message,
             'data'    => $data,
         ];
         $this->output
              ->set_status_header($http_code)
              ->set_content_type('application/json', 'utf-8')
-             ->set_output(json_encode($response));
+             ->set_output(json_encode($response))
+             ->_display();
         exit;
     }
 }

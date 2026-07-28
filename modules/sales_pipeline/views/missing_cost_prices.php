@@ -285,7 +285,7 @@ $(function() {
         var costPrice = $('#modal_cost_price').val();
 
         if (costPrice === '' || isNaN(costPrice) || parseFloat(costPrice) < 0) {
-            sp_alert('danger', '<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
+            alert_float('danger', '<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
             return;
         }
 
@@ -301,18 +301,19 @@ $(function() {
                 cost_price: costPrice
             },
             success: function(response) {
-                if (response.success) {
+                var isSuccess = response && (response.status === true || response.success === true);
+                if (isSuccess) {
                     alert_float('success', response.message);
                     $('#costPriceModal').modal('hide');
                     
                     // Reload page to update list
                     location.reload();
                 } else {
-                    sp_alert('danger', response.message);
+                    alert_float('danger', response.message || '<?php echo _l('something_went_wrong'); ?>');
                 }
             },
             error: function() {
-                sp_alert('danger', '<?php echo _l('something_went_wrong'); ?>');
+                alert_float('danger', '<?php echo _l('something_went_wrong'); ?>');
             },
             complete: function() {
                 btn.prop('disabled', false).html('<i class="fa fa-save"></i> <?php echo _l('save'); ?>');

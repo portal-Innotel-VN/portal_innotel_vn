@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); 
 
-$status_color = !empty($status['color']) ? $status['color'] : '#28B8DA';
+$status_color = !empty($deal['status_color']) ? $deal['status_color'] : (!empty($status['color']) ? $status['color'] : '#777');
 ?>
 <li data-deal-id="<?php echo $deal['id']; ?>" class="pipeline-deal-card">
     <div class="panel-body">

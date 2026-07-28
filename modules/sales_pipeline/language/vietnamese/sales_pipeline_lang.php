@@ -191,3 +191,5 @@ $lang['sales_pipeline_edit_source'] = 'Sửa Nguồn';
 $lang['sales_pipeline_add_source_title'] = 'Thêm Nguồn Khách Hàng';
 $lang['sales_pipeline_edit_source_title'] = 'Sửa Nguồn Khách Hàng';
 $lang['sales_pipeline_reminder_responded'] = 'Đã phản hồi nhắc nhở thành công.';
+$lang['please_wait'] = 'Vui lòng chờ...';
+$lang['something_went_wrong'] = 'Có lỗi xảy ra, vui lòng thử lại!';
