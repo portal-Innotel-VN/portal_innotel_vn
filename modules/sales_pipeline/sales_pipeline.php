@@ -86,6 +86,14 @@ function sales_pipeline_cron_reminder()
     $CI->sales_pipeline_model->process_weekly_reminders();
 }
 
+hooks()->add_action('app_init', 'sales_pipeline_load_helpers');
+
+function sales_pipeline_load_helpers()
+{
+    $CI = &get_instance();
+    $CI->load->helper('sales_pipeline/sales_pipeline');
+}
+
 /**
  * Hook khi kích hoạt module - chạy install.php
  */
@@ -109,6 +117,10 @@ function sales_pipeline_load_js()
 {
     $CI = &get_instance();
     if ($CI->router->fetch_module() == 'sales_pipeline') {
+        $translations = json_encode([
+            'pleaseWait' => _l('please_wait'),
+        ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+        echo '<script>window.salesPipelineI18n=' . $translations . ';</script>';
         echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/sales_pipeline.js') . '?v=' . time() . '"></script>';
     }
 }

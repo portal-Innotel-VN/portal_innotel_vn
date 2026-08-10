@@ -47,7 +47,7 @@
                                                     <input type="text" class="form-control" name="customer_name" id="customer_name"
                                                            value="<?php echo isset($deal) ? html_escape($deal['customer_name']) : ''; ?>"
                                                            required maxlength="255" autocomplete="off"
-                                                           placeholder="VD: Công Ty TNHH Viễn Thông Sáng Tạo Thuận Phong - INNOTEL">
+                                                           placeholder="<?php echo html_escape(_l('sales_pipeline_customer_name_placeholder')); ?>">
                                                 </div>
                                             </div>
                                         </div>
@@ -57,7 +57,7 @@
                                                     <label for="contact_name" class="control-label"><?php echo _l('sales_pipeline_contact_name'); ?></label>
                                                     <input type="text" class="form-control" name="contact_name" id="contact_name"
                                                            value="<?php echo isset($deal) ? html_escape($deal['contact_name']) : ''; ?>"
-                                                           maxlength="100" autocomplete="off" placeholder="Tên người liên hệ">
+                                                           maxlength="100" autocomplete="off" placeholder="<?php echo html_escape(_l('sales_pipeline_contact_name_placeholder')); ?>">
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
@@ -65,7 +65,7 @@
                                                     <label for="contact_phone" class="control-label"><?php echo _l('sales_pipeline_contact_phone'); ?></label>
                                                     <input type="text" class="form-control" name="contact_phone" id="contact_phone" pattern="[0-9]{1,10}" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                                                            value="<?php echo isset($deal) ? html_escape($deal['contact_phone']) : ''; ?>"
-                                                           placeholder="SĐT">
+                                                           autocomplete="off" placeholder="<?php echo html_escape(_l('sales_pipeline_contact_phone_placeholder')); ?>">
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
@@ -73,7 +73,7 @@
                                                     <label for="contact_email" class="control-label"><?php echo _l('sales_pipeline_contact_email'); ?></label>
                                                     <input type="email" class="form-control" name="contact_email" id="contact_email"
                                                            value="<?php echo isset($deal) ? html_escape($deal['contact_email']) : ''; ?>"
-                                                           maxlength="100" autocomplete="off" placeholder="Email liên hệ">
+                                                           maxlength="100" autocomplete="off" placeholder="<?php echo html_escape(_l('sales_pipeline_contact_email_placeholder')); ?>">
                                                 </div>
                                             </div>
                                         </div>
@@ -113,13 +113,13 @@
                                             <input type="text" class="form-control" name="deal_name" id="deal_name"
                                                    value="<?php echo isset($deal) ? html_escape($deal['deal_name']) : ''; ?>"
                                                    required maxlength="500" autocomplete="off"
-                                                   placeholder="VD: Báo giá Sangfor NSF1200">
+                                                   placeholder="<?php echo html_escape(_l('sales_pipeline_deal_name_placeholder')); ?>">
                                         </div>
                                         <div class="row">
                                             <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="deal_value" class="control-label">
-                                                        <?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)
+                                                        <?php echo _l('sales_pipeline_deal_value'); ?> (<?php echo _l('sales_pipeline_vnd'); ?>)
                                                     </label>
                                                     <input type="number" class="form-control positive-number-only" name="deal_value" id="deal_value"
                                                            value="<?php echo isset($deal) && is_numeric($deal['deal_value']) ? (float)$deal['deal_value'] : ''; ?>"
@@ -130,7 +130,7 @@
                                             <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="cost_price" class="control-label">
-                                                        <?php echo _l('sales_pipeline_cost_price'); ?> (VNĐ)
+                                                        <?php echo _l('sales_pipeline_cost_price'); ?> (<?php echo _l('sales_pipeline_vnd'); ?>)
                                                         <i class="fa fa-question-circle" data-toggle="tooltip" 
                                                            title="<?php echo _l('sales_pipeline_cost_price_hint'); ?>"></i>
                                                     </label>
@@ -145,7 +145,7 @@
                                             </div>
                                             <div class="col-md-4">
                                                 <div class="form-group">
-                                                    <label class="control-label"><?php echo _l('sales_pipeline_profit'); ?> (VNĐ)</label>
+                                                    <label class="control-label"><?php echo _l('sales_pipeline_profit'); ?> (<?php echo _l('sales_pipeline_vnd'); ?>)</label>
                                                     <input type="text" class="form-control" id="expected_profit_display"
                                                            value="<?php echo isset($deal) && isset($deal['actual_profit']) && $deal['actual_profit'] !== null ? number_format($deal['actual_profit']) : '--'; ?>"
                                                            readonly style="background: #f0f0f0; font-weight: bold; color: #27ae60;">
@@ -219,7 +219,7 @@
                                                 <i class="fa fa-comment"></i> <?php echo _l('sales_pipeline_progress_note'); ?>
                                             </label>
                                             <textarea name="activity_description" id="activity_description" class="form-control" rows="3" 
-                                                maxlength="2000" placeholder="Nhập nhật ký trao đổi với khách hàng..."><?php echo isset($deal['activity_description']) ? html_escape($deal['activity_description']) : ''; ?></textarea>
+                                                maxlength="2000" placeholder="<?php echo html_escape(_l('sales_pipeline_progress_note_placeholder')); ?>"><?php echo isset($deal['activity_description']) ? html_escape($deal['activity_description']) : ''; ?></textarea>
                                         </div>
 
                                         <!-- Timeline activity (khi sửa) -->
@@ -268,7 +268,7 @@
                                                         <input type="number" class="form-control" name="reminder_frequency" id="reminder_frequency"
                                                                value="<?php echo isset($deal) ? $deal['reminder_frequency'] : '2'; ?>"
                                                                min="1" max="30">
-                                                        <span class="input-group-addon"><?php echo _l('sales_pipeline_days'); ?></span>
+                                                        <span class="input-group-addon"><?php echo _l('sales_pipeline_reminder_days'); ?></span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -346,6 +346,7 @@
 </style>
 
 <script>
+var salesPipelineLocale = <?php echo json_encode(_l('sales_pipeline_js_locale')); ?>;
 function calculateProfit() {
     var dealValue = parseFloat($('#deal_value').val()) || 0;
     var costPrice = parseFloat($('#cost_price').val()) || 0;
@@ -354,7 +355,7 @@ function calculateProfit() {
         var profit = dealValue - costPrice;
         var profitPercent = (profit / dealValue) * 100;
 
-        $('#expected_profit_display').val(profit.toLocaleString('vi-VN'));
+        $('#expected_profit_display').val(profit.toLocaleString(salesPipelineLocale));
         $('#profit_percent_display').text('(' + profitPercent.toFixed(1) + '%)');
     } else {
         $('#expected_profit_display').val('--');

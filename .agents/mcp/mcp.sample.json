@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "antigravity": {
+      "command": "/Users/dieterhoang/.pyenv/versions/3.12.9/bin/python",
+      "args": [
+        "/Users/dieterhoang/Developer/Tool/local_mcp_server.py"
+      ]
+    }
+  }
+}

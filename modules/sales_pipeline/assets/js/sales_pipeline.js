@@ -43,7 +43,9 @@
 
         // 2. Dọn dẹp các toast cũ của module nếu clearPrevious = true
         if (clearPrevious) {
-            $('.float-alert.sp-toast').remove();
+            $('.float-alert.sp-toast').fadeOut(150, function () {
+                $(this).remove();
+            });
         }
 
         // 3. Giới hạn tối đa 2 toast cùng lúc
@@ -57,9 +59,24 @@
         // 4. Bật alert_float của Perfex CRM
         alert_float(type, message, timeout);
 
-        // Đánh dấu class sp-toast
+        // 5. Đánh dấu class sp-toast và tự đóng sau timeout
+        // NOTE: Perfex CRM có bug trong alert_float - dòng tính ID dùng selector sai
+        // ("float-alert" tag thay vì ".float-alert" class) khiến n luôn = 0, tức là
+        // mọi toast đều có ID = "alert_float_1". setTimeout của toast trước bị ghi đè
+        // bởi toast mới → toast không bao giờ tự đóng được.
+        // Giải pháp: SalesPipeline.alert tự quản lý việc đóng toast của chính module.
         setTimeout(function () {
-            $('.float-alert').not('.sp-toast').last().addClass('sp-toast');
+            var $newToast = $('.float-alert').not('.sp-toast').last();
+            if ($newToast.length) {
+                $newToast.addClass('sp-toast');
+
+                // Tự đóng toast sau timeout (bypass cơ chế bị lỗi của Perfex)
+                setTimeout(function () {
+                    $newToast.fadeOut('fast', function () {
+                        $(this).remove();
+                    });
+                }, timeout);
+            }
         }, 50);
     };
 
@@ -74,7 +91,8 @@
     SalesPipeline.btnLoading = function (btn, text) {
         var $btn = $(btn);
         if ($btn.length === 0) return;
-        text = text || (typeof app !== 'undefined' && app.lang ? app.lang.please_wait : 'Processing...');
+        text = text || (window.salesPipelineI18n && window.salesPipelineI18n.pleaseWait)
+            || (typeof app !== 'undefined' && app.lang ? app.lang.please_wait : '');
 
         if (!$btn.data('sp-original-html')) {
             $btn.data('sp-original-html', $btn.html());

@@ -68,7 +68,7 @@
                                         <th style="width: 12%;"><?php echo _l('sales_pipeline_expected_date'); ?></th>
                                         <th style="width: 25%;"><?php echo _l('sales_pipeline_customer_name'); ?></th>
                                         <th style="width: 25%;"><?php echo _l('sales_pipeline_deal_name'); ?></th>
-                                        <th style="width: 15%;" class="text-right"><?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)</th>
+                                        <th style="width: 15%;" class="text-right"><?php echo _l('sales_pipeline_deal_value'); ?> (<?php echo _l('sales_pipeline_vnd'); ?>)</th>
                                         <th style="width: 13%;"><?php echo _l('sales_pipeline_assigned_staff'); ?></th>
                                         <th style="width: 12%;"><?php echo _l('sales_pipeline_status'); ?></th>
                                         <th style="width: 8%;" class="text-center"><?php echo _l('sales_pipeline_actions'); ?></th>
@@ -206,18 +206,18 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="modal_deal_value"><?php echo _l('sales_pipeline_deal_value'); ?> (VNĐ)</label>
+                    <label for="modal_deal_value"><?php echo _l('sales_pipeline_deal_value'); ?> (<?php echo _l('sales_pipeline_vnd'); ?>)</label>
                     <input type="text" class="form-control" id="modal_deal_value" readonly style="background: #f5f5f5;">
                 </div>
                 <div class="form-group">
-                    <label for="modal_cost_price"><span class="text-danger">*</span> <?php echo _l('sales_pipeline_cost_price'); ?> (VNĐ)</label>
+                    <label for="modal_cost_price"><span class="text-danger">*</span> <?php echo _l('sales_pipeline_cost_price'); ?> (<?php echo _l('sales_pipeline_vnd'); ?>)</label>
                     <input type="number" class="form-control" id="modal_cost_price" min="0" step="any" placeholder="<?php echo _l('sales_pipeline_enter_cost_price'); ?>">
                     <small class="text-muted"><?php echo _l('sales_pipeline_cost_price_hint'); ?></small>
                 </div>
                 <div class="form-group" id="profit_preview" style="display:none;">
                     <label><?php echo _l('sales_pipeline_profit_preview'); ?></label>
                     <div class="well well-sm">
-                        <strong><?php echo _l('sales_pipeline_profit'); ?>:</strong> <span id="preview_profit" class="text-success">0</span> VNĐ
+                        <strong><?php echo _l('sales_pipeline_profit'); ?>:</strong> <span id="preview_profit" class="text-success">0</span> <?php echo _l('sales_pipeline_vnd'); ?>
                         <br>
                         <strong><?php echo _l('sales_pipeline_profit_margin'); ?>:</strong> <span id="preview_percent" class="text-info">0</span>%
                     </div>
@@ -246,6 +246,17 @@
 </style>
 
 <script>
+var salesPipelineLocale = <?php echo json_encode(_l('sales_pipeline_js_locale')); ?>;
+// Fallback: đảm bảo sp_alert luôn tồn tại kể cả khi sales_pipeline.js chưa tải xong
+if (typeof window.sp_alert !== 'function') {
+    window.sp_alert = function(type, message, timeout) {
+        if (typeof alert_float === 'function') {
+            alert_float(type, message, timeout || 3500);
+        } else if (typeof console !== 'undefined' && console.log) {
+            console.log('[' + type + '] ' + message);
+        }
+    };
+}
 $(function() {
     // Mở modal nhập giá nhanh
     $('body').on('click', '.edit-cost-price', function(e) {
@@ -255,7 +266,7 @@ $(function() {
         var currentCost = $(this).data('current-cost') || '';
 
         $('#modal_deal_id').val(dealId);
-        $('#modal_deal_value').val(parseInt(dealValue).toLocaleString('vi-VN'));
+        $('#modal_deal_value').val(parseInt(dealValue).toLocaleString(salesPipelineLocale));
         $('#modal_cost_price').val(currentCost);
         $('#profit_preview').hide();
 
@@ -271,7 +282,7 @@ $(function() {
             var profit = dealValue - costPrice;
             var percent = (profit / dealValue) * 100;
 
-            $('#preview_profit').text(profit.toLocaleString('vi-VN'));
+            $('#preview_profit').text(profit.toLocaleString(salesPipelineLocale));
             $('#preview_percent').text(percent.toFixed(2));
             $('#profit_preview').show();
         } else {
@@ -280,40 +291,67 @@ $(function() {
     });
 
     // Lưu giá nhập qua AJAX
-    $('#saveCostPrice').on('click', function() {
+    $(document).off('click', '#saveCostPrice').on('click', '#saveCostPrice', function(e) {
+        e.preventDefault();
+
+        // Khóa nút NGAY LẬP TỨC để chống spam click, kể cả khi validation thất bại
+        var btn = $(this);
+        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> <?php echo _l('please_wait'); ?>');
+
         var dealId = $('#modal_deal_id').val();
         var costPrice = $('#modal_cost_price').val();
 
-        if (costPrice === '' || isNaN(costPrice) || parseFloat(costPrice) < 0) {
-            alert_float('danger', '<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
+        if (!dealId) {
+            sp_alert('danger', '<?php echo _l('sales_pipeline_invalid_deal_id'); ?>');
+            // Giữ nút bị khóa đúng 1500ms (= throttle window của sp_alert) rồi mới mở lại
+            setTimeout(function() {
+                btn.prop('disabled', false).html('<i class="fa fa-save"></i> <?php echo _l('save'); ?>');
+            }, 1500);
             return;
         }
 
-        var btn = $(this);
-        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> <?php echo _l('please_wait'); ?>');
+        if (costPrice === '' || isNaN(costPrice) || parseFloat(costPrice) < 0) {
+            sp_alert('danger', '<?php echo _l('sales_pipeline_invalid_cost_price'); ?>');
+            // Giữ nút bị khóa đúng 1500ms (= throttle window của sp_alert) rồi mới mở lại
+            setTimeout(function() {
+                btn.prop('disabled', false).html('<i class="fa fa-save"></i> <?php echo _l('save'); ?>');
+            }, 1500);
+            return;
+        }
+
+        var postData = {
+            pipeline_id: dealId,
+            cost_price: costPrice
+        };
+        if (typeof(csrfData) !== 'undefined') {
+            postData[csrfData['token_name']] = csrfData['hash'];
+        }
 
         $.ajax({
             url: admin_url + 'sales_pipeline/update_cost_price',
             type: 'POST',
             dataType: 'json',
-            data: {
-                pipeline_id: dealId,
-                cost_price: costPrice
-            },
+            data: postData,
             success: function(response) {
-                var isSuccess = response && (response.status === true || response.success === true);
-                if (isSuccess) {
-                    alert_float('success', response.message);
-                    $('#costPriceModal').modal('hide');
-                    
-                    // Reload page to update list
-                    location.reload();
-                } else {
-                    alert_float('danger', response.message || '<?php echo _l('something_went_wrong'); ?>');
+                try {
+                    var isSuccess = response && (response.status === true || response.success === true);
+                    if (isSuccess) {
+                        sp_alert('success', response.message);
+                        $('#costPriceModal').modal('hide');
+
+                        // Reload page to update list
+                        location.reload();
+                    } else {
+                        sp_alert('danger', (response && response.message) ? response.message : '<?php echo _l('something_went_wrong'); ?>');
+                    }
+                } catch (e) {
+                    console.error("Lỗi khi xử lý phản hồi:", e);
+                    sp_alert('danger', '<?php echo _l('something_went_wrong'); ?>');
                 }
             },
-            error: function() {
-                alert_float('danger', '<?php echo _l('something_went_wrong'); ?>');
+            error: function(xhr, status, error) {
+                console.error("AJAX Error:", status, error, xhr.responseText);
+                sp_alert('danger', '<?php echo _l('something_went_wrong'); ?>');
             },
             complete: function() {
                 btn.prop('disabled', false).html('<i class="fa fa-save"></i> <?php echo _l('save'); ?>');

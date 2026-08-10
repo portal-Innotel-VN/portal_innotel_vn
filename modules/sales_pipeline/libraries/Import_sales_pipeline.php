@@ -24,22 +24,16 @@ class Import_sales_pipeline
     protected $CI;
 
     /**
-     * Bảng mapping: Tên trạng thái dropdown → status_id trong tblsales_pipeline_statuses
-     * Phải khớp 100% với danh mục trong sheet "Danh_mục" của Template Excel.
+     * [BUG FIX #2] Giới hạn file tối đa 10MB (bytes) để chặn Zip Bomb / tràn bộ nhớ.
      */
-    private $status_map = [
-        'Đang tư vấn'         => 1,
-        'Đang báo giá'        => 2,
-        'Đã gửi báo giá'      => 3,
-        'Khách đang duyệt'    => 4,
-        'Đã ký hợp đồng'      => 5,
-        'Đã xuất hóa đơn'     => 6,
-        'Đã triển khai'       => 7,
-        'Tạm ngưng'           => 8,
-        'Khách chọn NCC khác' => 9,
-        'Không phê duyệt'     => 10,
-        'Vượt ngân sách'      => 11,
-    ];
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+    /**
+     * Bảng mapping: Tên trạng thái dropdown → status_id trong tblsales_pipeline_statuses.
+     * [BUG FIX #4] Key được chuẩn hóa lowercase bằng mb_strtolower() trong buildStatusMap()
+     * để so sánh case-insensitive (VD: "đang tư vấn" == "Đang tư vấn").
+     */
+    private $status_map = [];
 
     // contract_signed và invoice_issued mặc định = 0 khi import.
     // Nhân viên kinh doanh sẽ tự cập nhật trên form deal.
@@ -48,6 +42,25 @@ class Import_sales_pipeline
     {
         $this->CI = &get_instance();
         $this->CI->load->model('sales_pipeline/sales_pipeline_model');
+
+        // [BUG FIX #4 + #5] Build status_map động từ DB thay vì hardcode
+        $this->buildStatusMap();
+    }
+
+    /**
+     * [BUG FIX #4 + #5] Xây dựng bảng mapping trạng thái từ DB.
+     * Key = mb_strtolower(tên trạng thái) để so sánh case-insensitive.
+     * Value = status_id.
+     */
+    private function buildStatusMap()
+    {
+        $statuses = $this->CI->sales_pipeline_model->get_statuses();
+        $this->status_map = [];
+        foreach ($statuses as $status) {
+            // Chuẩn hóa key lowercase để map_status_to_id() so sánh case-insensitive
+            $key = mb_strtolower(trim($status['name']), 'UTF-8');
+            $this->status_map[$key] = (int) $status['id'];
+        }
     }
 
     /**
@@ -72,6 +85,13 @@ class Import_sales_pipeline
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, ['xls', 'xlsx'])) {
             $result['message'] = _l('sales_pipeline_import_only_excel_supported');
+            return $result;
+        }
+
+        // --- [BUG FIX #2] Kiểm tra kích thước file — chặn Zip Bomb / tràn bộ nhớ ---
+        if ($file['size'] > self::MAX_FILE_SIZE) {
+            $max_mb = self::MAX_FILE_SIZE / (1024 * 1024);
+            $result['message'] = _l('sales_pipeline_import_file_too_large', [(int) $max_mb]);
             return $result;
         }
 
@@ -118,6 +138,15 @@ class Import_sales_pipeline
             $updated_count = 0;
             $skipped       = 0;
 
+            /**
+             * [BUG FIX #5] Truy vấn động danh sách status Won/Lost từ DB 1 lần
+             * thay vì hardcode [5,6,7] / [9,10,11] — và tránh query trong vòng lặp.
+             */
+            $all_statuses    = $this->CI->sales_pipeline_model->get_statuses();
+            $won_status_ids  = array_column(array_filter($all_statuses, function ($s) { return $s['is_won']; }), 'id');
+            $lost_status_ids = array_column(array_filter($all_statuses, function ($s) { return $s['is_lost']; }), 'id');
+            $closed_status_ids = array_merge($won_status_ids, $lost_status_ids);
+
             foreach ($rows as $row) {
                 $data = $this->map_row_to_deal($row, $staff_id, $log_id);
 
@@ -139,11 +168,9 @@ class Import_sales_pipeline
                     $existing_deal = $this->CI->sales_pipeline_model->get($existing_id);
 
                     // Bỏ qua nếu deal đã đóng (Won hoặc Lost) để tránh ghi đè lịch sử
-                    $won_status_ids  = [5, 6, 7];
-                    $lost_status_ids = [9, 10, 11];
-                    $current_status  = isset($existing_deal['status']) ? (int)$existing_deal['status'] : 0;
+                    $current_status = isset($existing_deal['status']) ? (int)$existing_deal['status'] : 0;
 
-                    if (in_array($current_status, array_merge($won_status_ids, $lost_status_ids))) {
+                    if (in_array($current_status, $closed_status_ids)) {
                         $skipped++;
                         continue;
                     }
@@ -266,7 +293,7 @@ class Import_sales_pipeline
             return $rows;
 
         } catch (\Exception $e) {
-            log_activity('Import_sales_pipeline: Lỗi đọc Excel — ' . $e->getMessage());
+            log_activity(_l('sales_pipeline_log_import_read_error', [$e->getMessage()]));
             return [];
         }
     }
@@ -298,7 +325,7 @@ class Import_sales_pipeline
                 $dateObj = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value);
                 return $dateObj->format('Y-m-d');
             } catch (\Exception $e) {
-                log_activity('Import_sales_pipeline: Lỗi parse serial date — ' . $e->getMessage());
+                log_activity(_l('sales_pipeline_log_import_date_parse_error', [$e->getMessage()]));
             }
         }
 
@@ -376,7 +403,11 @@ class Import_sales_pipeline
 
         // --- Col D (3): Giá bán (Doanh số) ---
         $deal_value = (float)str_replace([',', ' '], '', (string)$row[3]);
-        if ($deal_value < 0) {
+        /**
+         * [BUG FIX #3] Chặn giá trị INF/NAN sinh ra khi ép kiểu (float)
+         * với chuỗi lớn bất thường (VD: "1e999" → INF). MySQL sẽ lỗi INSERT.
+         */
+        if (!is_finite($deal_value) || $deal_value < 0) {
             $deal_value = 0;
         }
 
@@ -385,7 +416,8 @@ class Import_sales_pipeline
         $cost_price = null;
         if (isset($row[4]) && $row[4] !== '' && $row[4] !== null) {
             $cp = (float)str_replace([',', ' '], '', (string)$row[4]);
-            if ($cp > 0) {
+            // [BUG FIX #3] Chặn INF/NAN cho cost_price
+            if (is_finite($cp) && $cp > 0) {
                 $cost_price = $cp;
             }
         }
@@ -458,7 +490,12 @@ class Import_sales_pipeline
      */
     private function map_status_to_id($status_text)
     {
-        $status_text = trim($status_text);
+        /**
+         * [BUG FIX #4] Chuẩn hóa lowercase trước khi tra bảng mapping.
+         * $this->status_map đã được build với key = mb_strtolower() trong buildStatusMap().
+         * Nhờ vậy "đang tư vấn" == "Đang Tư Vấn" == "ĐANG TƯ VẤN".
+         */
+        $status_text = mb_strtolower(trim($status_text), 'UTF-8');
         return isset($this->status_map[$status_text])
             ? $this->status_map[$status_text]
             : 1; // Mặc định: Đang tư vấn

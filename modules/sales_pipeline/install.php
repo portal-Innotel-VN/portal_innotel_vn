@@ -2,6 +2,8 @@
 
 defined('BASEPATH') or exit('No direct script access allowed');
 
+$CI =& get_instance();
+
 // Bảng trạng thái deal
 if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_statuses')) {
     $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_statuses` (
@@ -14,19 +16,19 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_statuses')) {
         PRIMARY KEY (`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 
-    // Seed trạng thái mặc định (dựa trên phân tích Excel thực tế phòng KD)
+    // Seed trạng thái mặc định (chuẩn UI/UX tâm lý học màu sắc)
     $statuses = [
-        ['Đang tư vấn',           '#3498db', 1, 0, 0],
-        ['Đang báo giá',          '#f39c12', 2, 0, 0],
-        ['Đã gửi báo giá',        '#e67e22', 3, 0, 0],
-        ['KH đang duyệt',         '#9b59b6', 4, 0, 0],
-        ['Đã ký hợp đồng',        '#27ae60', 5, 1, 0],
-        ['Đã xuất hóa đơn',       '#2ecc71', 6, 1, 0],
-        ['Đã triển khai',          '#1abc9c', 7, 1, 0],
-        ['Tạm ngưng',              '#95a5a6', 8, 0, 0],
-        ['KH chọn NCC khác',      '#e74c3c', 9, 0, 1],
-        ['Không phê duyệt',       '#c0392b', 10, 0, 1],
-        ['Vượt ngân sách',         '#d35400', 11, 0, 1],
+        ['Đang tư vấn',           '#5B93D3', 1, 0, 0],
+        ['Đang báo giá',          '#3B7DD8', 2, 0, 0],
+        ['Đã gửi báo giá',        '#F5A623', 3, 0, 0],
+        ['KH đang duyệt',         '#E8913A', 4, 0, 0],
+        ['Đã ký hợp đồng',        '#27AE60', 5, 1, 0],
+        ['Đã xuất hóa đơn',       '#2ECC71', 6, 1, 0],
+        ['Đã triển khai',          '#1ABC9C', 7, 1, 0],
+        ['Tạm ngưng',              '#95A5A6', 8, 0, 0],
+        ['KH chọn NCC khác',      '#E74C3C', 9, 0, 1],
+        ['Không phê duyệt',       '#C0392B', 10, 0, 1],
+        ['Vượt ngân sách',         '#8E44AD', 11, 0, 1],
     ];
 
     foreach ($statuses as $s) {
@@ -37,6 +39,25 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_statuses')) {
             'is_won'  => $s[3],
             'is_lost' => $s[4],
         ]);
+    }
+} else {
+    // Nếu bảng đã tồn tại, tự động cập nhật lại màu sắc mới cho các trạng thái chuẩn
+    $color_updates = [
+        'Đang tư vấn'           => '#5B93D3',
+        'Đang báo giá'          => '#3B7DD8',
+        'Đã gửi báo giá'        => '#F5A623',
+        'KH đang duyệt'         => '#E8913A',
+        'Đã ký hợp đồng'        => '#27AE60',
+        'Đã xuất hóa đơn'       => '#2ECC71',
+        'Đã triển khai'          => '#1ABC9C',
+        'Tạm ngưng'              => '#95A5A6',
+        'KH chọn NCC khác'      => '#E74C3C',
+        'Không phê duyệt'       => '#C0392B',
+        'Vượt ngân sách'         => '#8E44AD',
+    ];
+    foreach ($color_updates as $name => $color) {
+        $CI->db->where('name', $name);
+        $CI->db->update(db_prefix() . 'sales_pipeline_statuses', ['color' => $color]);
     }
 }
 

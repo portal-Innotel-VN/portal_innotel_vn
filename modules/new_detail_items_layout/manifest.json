@@ -1,0 +1,9 @@
+{
+  "name": "new_detail_items_layout",
+  "display_name": "New Detail Items Layout",
+  "version": "1.0.0",
+  "requires_at_least": "2.3.*",
+  "entry": "new_detail_items_layout.php",
+  "changes_database": false,
+  "modifies_core_files": false
+}

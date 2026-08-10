@@ -102,17 +102,27 @@ $(function() {
     var zone = $('#file_upload_zone');
     var input = $('#import_file');
 
+    /**
+     * [BUG FIX #1] selectedFile phải khai báo ở scope ngoài cùng của closure
+     * để cả 2 hành vi (click chọn file & kéo-thả) đều ghi nhận được giá trị.
+     * Trước đây biến này chỉ được gán trong sự kiện 'drop' → undefined khi click.
+     */
+    var selectedFile = null;
+
     // Click to upload
     zone.on('click', function() {
         input.trigger('click');
     });
 
-    // Display file name
+    // [BUG FIX #1] Gán selectedFile khi người dùng CLICK chọn file
     input.on('change', function() {
-        var fileName = this.files[0] ? this.files[0].name : '';
+        selectedFile = this.files[0] || null;
+        var fileName = selectedFile ? selectedFile.name : '';
         $('#file_name').text(fileName);
         if (fileName) {
             zone.css('border-color', '#27ae60');
+        } else {
+            zone.css('border-color', '#ccc');
         }
     });
 
@@ -131,6 +141,7 @@ $(function() {
         e.preventDefault();
         zone.css('border-color', '#27ae60').css('background', '');
         if(e.originalEvent.dataTransfer.files.length > 0){
+            // [BUG FIX #1] Gán selectedFile khi người dùng KÉO-THẢ file
             selectedFile = e.originalEvent.dataTransfer.files[0];
             input[0].files = e.originalEvent.dataTransfer.files;
             $('#file_name').text(selectedFile.name);
@@ -141,7 +152,7 @@ $(function() {
     $('#import_form').on('submit', function(e) {
         if (!selectedFile) {
             e.preventDefault();
-            sp_alert('warning', '<?php echo _l('sales_pipeline_please_select_excel_file'); ?>');
+            alert_float('warning', '<?php echo _l('sales_pipeline_please_select_excel_file'); ?>');
             return false;
         }
         var $btn = $(this).find('button[type="submit"]');
@@ -149,6 +160,23 @@ $(function() {
             SalesPipeline.btnLoading($btn, '<?php echo _l('please_wait'); ?>');
         }
     });
+
+    /**
+     * [BUG FIX #6] Helper lấy CSRF token cho AJAX requests tương lai.
+     * Khi chuyển form sang AJAX ($.ajax / fetch), gọi getCsrfData() để lấy
+     * object { token_name: token_value } rồi merge vào FormData hoặc POST body.
+     *
+     * Ví dụ sử dụng:
+     *   var formData = new FormData($('#import_form')[0]);
+     *   var csrf = getCsrfData();
+     *   formData.append(csrf.name, csrf.value);
+     *   $.ajax({ data: formData, headers: { 'X-CSRF-TOKEN': csrf.value } });
+     */
+    window.getCsrfData = function() {
+        var tokenName  = '<?php echo $this->security->get_csrf_token_name(); ?>';
+        var tokenValue = '<?php echo $this->security->get_csrf_hash(); ?>';
+        return { name: tokenName, value: tokenValue };
+    };
 });
 </script>
 </body>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Agent Environment"
+  short_description: "Audit the workspace Agent setup without changing it"
+  default_prompt: "Audit this workspace Agent environment and report missing or invalid configuration."

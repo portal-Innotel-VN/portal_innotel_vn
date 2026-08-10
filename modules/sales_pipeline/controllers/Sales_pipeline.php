@@ -9,6 +9,7 @@ class Sales_pipeline extends AdminController
         parent::__construct();
         $this->load->model('sales_pipeline/sales_pipeline_model');
         $this->load->library('form_validation');
+        $this->load->helper('sales_pipeline/sales_pipeline');
     }
 
     /**
@@ -39,7 +40,7 @@ class Sales_pipeline extends AdminController
 
         // Lọc theo quý và nhân viên
         $quarter  = $this->input->get('quarter') ? trim($this->input->get('quarter')) : null;
-        $year     = $this->input->get('year') ? trim($this->input->get('year')) : date('Y');
+        $year     = $this->input->get('year') !== null ? trim($this->input->get('year')) : null;
         $staff_id = $this->input->get('staff_id') ? trim($this->input->get('staff_id')) : null;
         $search   = $this->input->get('search') ? trim($this->input->get('search')) : '';
 
@@ -71,30 +72,37 @@ class Sales_pipeline extends AdminController
         }
 
         // Pagination setup
-        $per_page = $this->input->get('per_page') ?: 25; // Default 25 records per page
-        $page = $this->input->get('page') ?: 1;
+        $per_page = (int) ($this->input->get('per_page') ?: 25); // Default 25 records per page
+        $page = (int) ($this->input->get('page') ?: 1);
         
         // Validate per_page values
         $allowed_per_page = [10, 25, 50, 100];
         if (!in_array($per_page, $allowed_per_page)) {
             $per_page = 25;
         }
-        
-        // Calculate offset
-        $offset = ($page - 1) * $per_page;
+        if ($page < 1) {
+            $page = 1;
+        }
         
         // Get total count for pagination
         $total_deals = $this->sales_pipeline_model->count_deals($where, $search);
+        $total_pages = max(1, (int) ceil($total_deals / $per_page));
+        if ($page > $total_pages) {
+            $page = $total_pages;
+        }
+
+        // Calculate offset
+        $offset = ($page - 1) * $per_page;
         
         // Get paginated deals
         $data['deals'] = $this->sales_pipeline_model->get('', $where, $per_page, $offset, $search);
-        $data['summary'] = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search);
+        $data['summary'] = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search, $contract_signed, $invoice_issued);
 
         // Pagination data
         $data['total_deals'] = $total_deals;
         $data['current_page'] = $page;
         $data['per_page'] = $per_page;
-        $data['total_pages'] = ceil($total_deals / $per_page);
+        $data['total_pages'] = $total_deals > 0 ? $total_pages : 0;
 
         $data['current_quarter']  = $quarter;
         $data['current_year']     = $year;
@@ -109,8 +117,107 @@ class Sales_pipeline extends AdminController
             $data['total_missing_cost_prices'] = count($this->sales_pipeline_model->get_deals_missing_cost_price());
         }
 
+        $data['can_access_dashboard'] = $this->can_access_dashboard();
+
         $data['title'] = _l('sales_pipeline');
         $this->load->view('sales_pipeline/manage', $data);
+    }
+
+    /**
+     * Trang Dashboard Phân Tích Sales Pipeline
+     * URL: admin/sales_pipeline/dashboard
+     */
+    public function dashboard()
+    {
+        if (!$this->can_access_dashboard()) {
+            access_denied('sales_pipeline');
+        }
+
+        $can_view_all = $this->can_view_dashboard_all();
+        $staff_id = $can_view_all ? null : get_staff_user_id();
+        $period = $this->input->get('period') ?: 'this_month';
+
+        $data['dashboard'] = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period);
+        $data['can_view_all'] = $can_view_all;
+        $data['title'] = _l('sales_pipeline_dashboard_title');
+        $this->load->view('sales_pipeline/dashboard', $data);
+    }
+
+    /**
+     * AJAX leaderboard theo kỳ thời gian.
+     * URL: admin/sales_pipeline/ajax_dashboard_leaderboard
+     */
+    public function ajax_dashboard_leaderboard()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        if (!$this->can_access_dashboard()) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $can_view_all = $this->can_view_dashboard_all();
+        $staff_id = $can_view_all ? null : get_staff_user_id();
+        $period = $this->input->get('period') ?: 'this_month';
+        $dashboard = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period);
+
+        $html = $this->load->view('sales_pipeline/partials/_leaderboard', [
+            'dashboard' => $dashboard,
+        ], true);
+
+        return $this->json_response(true, '', ['html' => $html]);
+    }
+
+    /**
+     * Drawer chi tiết nhân viên Dashboard (Chỉ đọc: Cơ hội mở & Nhật ký hoạt động).
+     * URL: admin/sales_pipeline/dashboard_staff_pipeline/{staff_id}
+     */
+    public function dashboard_staff_pipeline($staff_id = null)
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        if (!$this->can_access_dashboard()) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        if (!$staff_id || !is_numeric($staff_id)) {
+            return $this->json_response(false, _l('sales_pipeline_invalid_staff'), [], 400);
+        }
+
+        $staff_id = (int) $staff_id;
+        if (!$this->can_view_dashboard_all() && $staff_id !== (int) get_staff_user_id()) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $staff = $this->staff_model->get($staff_id);
+        if (!$staff || (int) $staff->active !== 1) {
+            return $this->json_response(false, _l('sales_pipeline_invalid_staff'), [], 404);
+        }
+
+        $metrics = $this->sales_pipeline_model->get_staff_kpi_metrics($staff_id);
+        $open_deals = $this->sales_pipeline_model->get_staff_open_deals($staff_id, 10);
+        $actionable_feed = $this->sales_pipeline_model->get_reminder_response_stats([
+            'staff_id' => $staff_id,
+            'limit'    => 20,
+        ]);
+        $can_open_pipeline_deal = is_admin()
+            || has_permission('sales_pipeline', '', 'edit')
+            || has_permission('sales_pipeline', '', 'view_deal_details');
+
+        $view_data = [
+            'staff'                  => $staff,
+            'metric'                 => !empty($metrics) ? $metrics[0] : null,
+            'open_deals'             => $open_deals,
+            'actionable_feed'        => $actionable_feed,
+            'can_open_pipeline_deal' => $can_open_pipeline_deal,
+            'can_open_staff_profile' => $this->can_view_dashboard_all(),
+        ];
+
+        $html = $this->load->view('sales_pipeline/_dashboard_staff_pipeline', $view_data, true);
+        return $this->json_response(true, '', ['html' => $html]);
     }
 
     /**
@@ -118,6 +225,7 @@ class Sales_pipeline extends AdminController
      * URL: admin/sales_pipeline/deal hoặc admin/sales_pipeline/deal/{id}
      */
     public function deal($id = null)
+
     {
         // Kiểm tra tính hợp lệ của ID nếu được truyền vào
         if ($id !== null && !is_numeric($id)) {
@@ -287,30 +395,117 @@ class Sales_pipeline extends AdminController
     }
 
     /**
-     * Nhân viên phản hồi nhắc nhở (AJAX)
+     * Form phản hồi nhanh cho reminder.
+     * URL: admin/sales_pipeline/reminder_response/{reminder_id}
+     */
+    public function reminder_response($reminder_id = null)
+    {
+        if (!$reminder_id || !is_numeric($reminder_id)) {
+            show_404();
+        }
+
+        $reminder = $this->sales_pipeline_model->get_reminder_log((int) $reminder_id);
+        if (!$reminder || empty($reminder['deal_exists'])) {
+            show_404();
+        }
+
+        if (!$this->can_access_reminder($reminder)) {
+            access_denied('sales_pipeline');
+        }
+
+        $data['reminder'] = $reminder;
+        $data['title'] = _l('sales_pipeline_quick_response_title');
+        $this->load->view('sales_pipeline/reminder_response', $data);
+    }
+
+    /**
+     * Nhân viên gửi phản hồi nhắc nhở.
+     * Hỗ trợ form POST chuẩn và giữ JSON response cho client AJAX cũ.
      * URL: admin/sales_pipeline/respond_reminder/{reminder_id}
      */
     public function respond_reminder($reminder_id = null)
     {
-        if (!$this->input->is_ajax_request()) {
+        $is_ajax = $this->input->is_ajax_request();
+
+        if (strtoupper($this->input->method()) !== 'POST') {
             show_404();
         }
 
-        if (!$reminder_id) {
-            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
+        if (!$reminder_id || !is_numeric($reminder_id)) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
+            }
+            show_404();
         }
 
-        if (!has_permission('sales_pipeline', '', 'edit')) {
-            return $this->json_response(false, _l('access_denied'), [], 403);
+        $reminder_id = (int) $reminder_id;
+        $reminder = $this->sales_pipeline_model->get_reminder_log($reminder_id);
+        if (!$reminder || empty($reminder['deal_exists'])) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_reminder_not_found'), [], 404);
+            }
+            show_404();
         }
 
-        $response = $this->input->post('response');
-        if (!$response) {
-            $this->json_response(false, _l('sales_pipeline_missing_deal_or_status'), [], 400);
+        if (!$this->can_access_reminder($reminder)) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('access_denied'), [], 403);
+            }
+            access_denied('sales_pipeline');
         }
 
-        $this->sales_pipeline_model->update_reminder_response($reminder_id, $response);
-        $this->json_response(true, _l('sales_pipeline_reminder_responded'));
+        $response = trim((string) $this->input->post('response', false));
+        if ($response === '' || mb_strlen($response) > 2000) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_reminder_response_invalid'), [], 422);
+            }
+            set_alert('warning', _l('sales_pipeline_reminder_response_invalid'));
+            redirect(admin_url('sales_pipeline/reminder_response/' . $reminder_id));
+        }
+
+        $result = $this->sales_pipeline_model->submit_reminder_response(
+            $reminder_id,
+            $response,
+            get_staff_user_id()
+        );
+
+        if ($result['status'] === 'success') {
+            if ($is_ajax) {
+                return $this->json_response(true, _l('sales_pipeline_reminder_responded'), $result);
+            }
+            set_alert('success', _l('sales_pipeline_reminder_responded'));
+            redirect(admin_url('sales_pipeline/reminder_response/' . $reminder_id));
+        }
+
+        $message_key = 'sales_pipeline_reminder_response_failed';
+        $http_code = 500;
+        if ($result['status'] === 'already_responded') {
+            $message_key = 'sales_pipeline_reminder_already_responded';
+            $http_code = 409;
+        } elseif ($result['status'] === 'forbidden') {
+            $message_key = 'access_denied';
+            $http_code = 403;
+        } elseif ($result['status'] === 'not_found' || $result['status'] === 'deal_not_found') {
+            $message_key = 'sales_pipeline_reminder_not_found';
+            $http_code = 404;
+        } elseif ($result['status'] === 'invalid') {
+            $message_key = 'sales_pipeline_reminder_response_invalid';
+            $http_code = 422;
+        }
+
+        if ($is_ajax) {
+            return $this->json_response(false, _l($message_key), [], $http_code);
+        }
+
+        if ($http_code === 403) {
+            access_denied('sales_pipeline');
+        }
+        if ($http_code === 404) {
+            show_404();
+        }
+
+        set_alert($http_code === 409 ? 'warning' : 'danger', _l($message_key));
+        redirect(admin_url('sales_pipeline/reminder_response/' . $reminder_id));
     }
 
     /**
@@ -357,17 +552,25 @@ class Sales_pipeline extends AdminController
 
         $success = $this->sales_pipeline_model->update_cost_price($id, $cost_price);
         if (!$success) {
-            $this->json_response(false, _l('sales_pipeline_update_failed'));
+            return $this->json_response(false, _l('sales_pipeline_update_failed'));
         }
 
         // Lấy thông tin deal mới sau update để trả về cho UI
         $updated_deal = $this->sales_pipeline_model->get($id);
+
+        if (!$updated_deal) {
+            return $this->json_response(false, _l('sales_pipeline_deal_not_found'));
+        }
+
+        $actual_profit   = $updated_deal['actual_profit'] !== null ? (float) $updated_deal['actual_profit'] : null;
+        $profit_pct      = $updated_deal['profit_percentage'] !== null ? round((float) $updated_deal['profit_percentage'], 1) : null;
+
         $this->json_response(true, _l('sales_pipeline_cost_price_updated'), [
-            'cost_price'             => $updated_deal['cost_price'],
-            'cost_price_formatted'   => number_format($updated_deal['cost_price']),
-            'actual_profit'          => $updated_deal['actual_profit'],
-            'actual_profit_formatted' => number_format($updated_deal['actual_profit']),
-            'profit_percentage'      => $updated_deal['profit_percentage'] !== null ? round($updated_deal['profit_percentage'], 1) : null,
+            'cost_price'              => $updated_deal['cost_price'],
+            'cost_price_formatted'    => number_format((float) $updated_deal['cost_price']),
+            'actual_profit'           => $actual_profit,
+            'actual_profit_formatted' => $actual_profit !== null ? number_format($actual_profit) : null,
+            'profit_percentage'       => $profit_pct,
         ]);
     }
 
@@ -472,14 +675,14 @@ class Sales_pipeline extends AdminController
         }
 
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
-        $data['search'] = $this->input->post('search') ? trim($this->input->post('search')) : '';
-        $data['sort_by'] = $this->input->post('sort') ? trim($this->input->post('sort')) : 'deal_date';
-        $data['sort_type'] = $this->input->post('sort_type') ? trim($this->input->post('sort_type')) : 'desc';
-        $data['quarter'] = $this->input->post('quarter') ? trim($this->input->post('quarter')) : '';
-        $data['year'] = $this->input->post('year') ? trim($this->input->post('year')) : '';
-        $data['staff_id'] = $this->input->post('staff_id') ? trim($this->input->post('staff_id')) : '';
-        $data['contract_signed'] = $this->input->post('contract_signed') !== null ? trim($this->input->post('contract_signed')) : null;
-        $data['invoice_issued'] = $this->input->post('invoice_issued') !== null ? trim($this->input->post('invoice_issued')) : null;
+        $data['search'] = $this->input->post_get('search') ? trim($this->input->post_get('search')) : '';
+        $data['sort_by'] = $this->input->post_get('sort') ? trim($this->input->post_get('sort')) : 'deal_date';
+        $data['sort_type'] = $this->input->post_get('sort_type') ? trim($this->input->post_get('sort_type')) : 'desc';
+        $data['quarter'] = $this->input->post_get('quarter') ? trim($this->input->post_get('quarter')) : '';
+        $data['year'] = $this->input->post_get('year') ? trim($this->input->post_get('year')) : '';
+        $data['staff_id'] = $this->input->post_get('staff_id') ? trim($this->input->post_get('staff_id')) : '';
+        $data['contract_signed'] = $this->input->post_get('contract_signed') !== null ? trim($this->input->post_get('contract_signed')) : null;
+        $data['invoice_issued'] = $this->input->post_get('invoice_issued') !== null ? trim($this->input->post_get('invoice_issued')) : null;
         
         // Build query string to preserve filter states when clicking kanban cards
         $query_params = [];
@@ -489,10 +692,26 @@ class Sales_pipeline extends AdminController
         if ($data['search'])  $query_params['search'] = $data['search'];
         if ($data['contract_signed'] !== null && $data['contract_signed'] !== '') $query_params['contract_signed'] = $data['contract_signed'];
         if ($data['invoice_issued'] !== null && $data['invoice_issued'] !== '') $query_params['invoice_issued'] = $data['invoice_issued'];
+        if ($data['sort_by']) $query_params['sort'] = $data['sort_by'];
+        if ($data['sort_type']) $query_params['sort_type'] = $data['sort_type'];
         $data['query_string'] = !empty($query_params) ? '?' . http_build_query($query_params) : '';
 
+        $summary_staff_id = $data['staff_id'];
+        if (!has_permission('sales_pipeline', '', 'view')) {
+            $summary_staff_id = get_staff_user_id();
+        }
+
+        $summary = $this->sales_pipeline_model->get_summary(
+            $data['quarter'],
+            $data['year'],
+            $summary_staff_id,
+            $data['search'],
+            $data['contract_signed'],
+            $data['invoice_issued']
+        );
+
         $html = $this->load->view('sales_pipeline/kan-ban', $data, true);
-        echo json_encode(['kanban' => $html]);
+        echo json_encode(['kanban' => $html, 'summary' => $summary]);
         die();
     }
 
@@ -510,21 +729,29 @@ class Sales_pipeline extends AdminController
             $this->json_response(false, _l('access_denied'), [], 403);
         }
 
-        $status_id = $this->input->post('status_id');
-        $page      = $this->input->post('page') ? (int) $this->input->post('page') : 1;
-        $search    = $this->input->post('search');
+        $status_id = $this->input->post_get('status_id');
+        $page      = $this->input->post_get('page') ? (int) $this->input->post_get('page') : 1;
+        $search    = $this->input->post_get('search');
 
         $status = $this->sales_pipeline_model->get_status_by_id($status_id);
 
         $sort = [
-            'sort_by'         => $this->input->post('sort'),
-            'sort'            => $this->input->post('sort_type'),
-            'quarter'         => $this->input->post('quarter'),
-            'year'            => $this->input->post('year'),
-            'staff_id'        => $this->input->post('staff_id'),
-            'contract_signed' => $this->input->post('contract_signed'),
-            'invoice_issued'  => $this->input->post('invoice_issued'),
+            'sort_by'         => $this->input->post_get('sort'),
+            'sort'            => $this->input->post_get('sort_type'),
+            'quarter'         => $this->input->post_get('quarter'),
+            'year'            => $this->input->post_get('year'),
+            'staff_id'        => $this->input->post_get('staff_id'),
+            'contract_signed' => $this->input->post_get('contract_signed'),
+            'invoice_issued'  => $this->input->post_get('invoice_issued'),
         ];
+
+        $query_params = [];
+        foreach (['search' => $search, 'quarter' => $sort['quarter'], 'year' => $sort['year'], 'staff_id' => $sort['staff_id'], 'contract_signed' => $sort['contract_signed'], 'invoice_issued' => $sort['invoice_issued'], 'sort' => $sort['sort_by'], 'sort_type' => $sort['sort']] as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $query_params[$key] = $value;
+            }
+        }
+        $query_string = !empty($query_params) ? '?' . http_build_query($query_params) : '';
 
         $deals       = $this->sales_pipeline_model->do_kanban_query($status_id, $search, $page, $sort);
         $total_deals = $this->sales_pipeline_model->do_kanban_query($status_id, $search, 1, $sort, true);
@@ -533,7 +760,7 @@ class Sales_pipeline extends AdminController
         // Render tất cả card thành HTML rồi trả về JSON chuẩn
         $html = '';
         foreach ($deals as $deal) {
-            $html .= $this->load->view('sales_pipeline/_kanban_card', ['deal' => $deal, 'status' => $status], true);
+            $html .= $this->load->view('sales_pipeline/_kanban_card', ['deal' => $deal, 'status' => $status, 'query_string' => $query_string], true);
         }
 
         $this->json_response(true, '', [
@@ -789,9 +1016,13 @@ class Sales_pipeline extends AdminController
             show_404();
         }
 
+        if (!has_permission('sales_pipeline', '', 'view') && !has_permission('sales_pipeline', '', 'view_own')) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
         $search          = trim($this->input->get('search') ?? '');
         $quarter         = $this->input->get('quarter') ? trim($this->input->get('quarter')) : null;
-        $year            = $this->input->get('year') ? trim($this->input->get('year')) : date('Y');
+        $year            = $this->input->get('year') !== null ? trim($this->input->get('year')) : null;
         $staff_id        = $this->input->get('staff_id') ? trim($this->input->get('staff_id')) : null;
         $contract_signed = $this->input->get('contract_signed') !== null ? trim($this->input->get('contract_signed')) : null;
         $invoice_issued  = $this->input->get('invoice_issued') !== null ? trim($this->input->get('invoice_issued')) : null;
@@ -829,12 +1060,20 @@ class Sales_pipeline extends AdminController
         if ($page < 1) {
             $page = 1;
         }
-        $offset = ($page - 1) * $per_page;
-
         // Truy vấn dữ liệu & đếm tổng
         $total_deals = $this->sales_pipeline_model->count_deals($where, $search);
+        $total_pages = max(1, (int) ceil($total_deals / $per_page));
+        if ($page > $total_pages) {
+            $page = $total_pages;
+        }
+        $offset = ($page - 1) * $per_page;
+
         $deals       = $this->sales_pipeline_model->get('', $where, $per_page, $offset, $search);
-        $summary     = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search);
+        $summary     = $this->sales_pipeline_model->get_summary($quarter, $year, $staff_id, $search, $contract_signed, $invoice_issued);
+
+        $can_view_deal_details = is_admin() || has_permission('sales_pipeline', '', 'view_deal_details');
+        $can_delete_deal       = is_admin() || has_permission('sales_pipeline', '', 'delete');
+        $can_edit_cost_price   = is_admin();
 
         // Chuẩn hóa định dạng JSON Response
         $this->json_response(true, '', [
@@ -844,10 +1083,12 @@ class Sales_pipeline extends AdminController
                 'total_records' => (int) $total_deals,
                 'per_page'      => (int) $per_page,
                 'current_page'  => (int) $page,
-                'total_pages'   => (int) ceil($total_deals / $per_page),
+                'total_pages'   => $total_deals > 0 ? (int) $total_pages : 0,
             ],
-            'is_admin'         => is_admin() || has_permission('sales_pipeline', '', 'view_deal_details') || has_permission('sales_pipeline', '', 'delete'),
-            'current_user_id'  => get_staff_user_id(),
+            'can_view_deal_details' => $can_view_deal_details,
+            'can_delete_deal'       => $can_delete_deal,
+            'can_edit_cost_price'   => $can_edit_cost_price,
+            'current_user_id'       => get_staff_user_id(),
         ]);
     }
 
@@ -877,5 +1118,28 @@ class Sales_pipeline extends AdminController
              ->set_output(json_encode($response))
              ->_display();
         exit;
+    }
+
+    private function can_access_dashboard($staff_id = '')
+    {
+        return is_admin($staff_id)
+            || has_permission('sales_pipeline', $staff_id, 'view')
+            || has_permission('sales_pipeline', $staff_id, 'view_own');
+    }
+
+    private function can_view_dashboard_all($staff_id = '')
+    {
+        return is_admin($staff_id)
+            || has_permission('sales_pipeline', $staff_id, 'view');
+    }
+
+    /**
+     * Chủ reminder luôn được truy cập; admin/người có quyền edit có thể hỗ trợ.
+     */
+    private function can_access_reminder($reminder)
+    {
+        return (int) $reminder['staff_id'] === (int) get_staff_user_id()
+            || is_admin()
+            || has_permission('sales_pipeline', '', 'edit');
     }
 }

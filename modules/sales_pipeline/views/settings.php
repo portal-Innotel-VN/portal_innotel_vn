@@ -114,20 +114,20 @@
         <input type="hidden" name="id" id="status_id" value="">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="<?php echo html_escape(_l('sales_pipeline_close')); ?>"><span aria-hidden="true">&times;</span></button>
                 <h4 class="modal-title" id="status_modal_title"><?php echo _l('sales_pipeline_add_status'); ?></h4>
             </div>
             <div class="modal-body">
                 <?php echo render_input('name', _l('sales_pipeline_status_name'), '', 'text', ['required' => 'true']); ?>
                 <?php echo render_color_picker('color', _l('sales_pipeline_status_color')); ?>
-                <?php echo render_input('order', 'Thứ tự hiển thị', '0', 'number'); ?>
+                <?php echo render_input('order', _l('sales_pipeline_display_order'), '0', 'number'); ?>
                 <div class="checkbox checkbox-primary">
                     <input type="checkbox" name="is_won" id="is_won" value="1">
-                    <label for="is_won">Là trạng thái Thành Công (Won)</label>
+                    <label for="is_won"><?php echo _l('sales_pipeline_is_won_status'); ?></label>
                 </div>
                 <div class="checkbox checkbox-danger">
                     <input type="checkbox" name="is_lost" id="is_lost" value="1">
-                    <label for="is_lost">Là trạng thái Thất Bại (Lost)</label>
+                    <label for="is_lost"><?php echo _l('sales_pipeline_is_lost_status'); ?></label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -147,7 +147,7 @@
         <input type="hidden" name="id" id="source_id_input" value="">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="<?php echo html_escape(_l('sales_pipeline_close')); ?>"><span aria-hidden="true">&times;</span></button>
                 <h4 class="modal-title" id="source_modal_title"><?php echo _l('sales_pipeline_add_source_title'); ?></h4>
             </div>
             <div class="modal-body">
