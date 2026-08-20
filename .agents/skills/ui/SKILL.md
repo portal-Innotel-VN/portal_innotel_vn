@@ -1,21 +1,70 @@
 ---
 name: ui
 description: >-
-  Bộ tiêu chuẩn UI/UX CRM cho portal_18. Khi tạo hoặc chỉnh sửa bất kỳ
+  Bộ tiêu chuẩn UI/UX CRM & Frontend Design cho portal_18. Khi tạo hoặc chỉnh sửa bất kỳ
   view, component, CSS hoặc giao diện nào trong dự án, Agent PHẢI tuân thủ
-  bộ quy tắc thiết kế này để đảm bảo tính đồng bộ, chuyên nghiệp và
+  bộ quy tắc thiết kế này để đảm bảo tính đồng bộ, chuyên nghiệp, cá tính và
   hiện đại trên toàn bộ ứng dụng.
 ---
 
-# Portal 18 — CRM UI/UX Design System
+# Portal 18 — CRM UI/UX & Frontend Design System
 
-> **Mục tiêu**: Mọi giao diện mới hoặc cải tiến trong portal_18 đều PHẢI
-> tuân thủ bộ tiêu chuẩn này để đảm bảo sự đồng nhất, chuyên nghiệp và
-> trải nghiệm người dùng cao cấp.
+> **Mục tiêu**: Mọi giao diện mới hoặc cải tiến trong portal_18 đều PHẢI tuân thủ bộ tiêu chuẩn này để đảm bảo sự đồng nhất kỹ thuật, tính chuyên nghiệp, trải nghiệm người dùng cao cấp và có dấu ấn thiết kế đặc trưng (distinctive design).
 
 ---
 
-## 1. Nền tảng kỹ thuật (Tech Foundation)
+## 1. Triết lý Thiết kế & Định hướng Mỹ thuật (Design Philosophy & Aesthetic Direction)
+
+Tiếp cận phát triển UI với tinh thần của một **Lead Designer**: tạo ra giao diện sắc nét, chuyên nghiệp cho hệ thống CRM nhưng không rập khuôn hay vô hồn.
+
+### 1.1 Nguyên tắc cốt lõi (Core Principles)
+1. **Gắn liền với Ngữ cảnh Nghiệp vụ (Ground in the Subject)**:
+   - Hiểu rõ đối tượng người dùng (Sales, Admin, CSKH), mục đích của trang và dữ liệu thực tế.
+   - **Tuyệt đối không dùng dữ liệu giả vô nghĩa (`Lorem Ipsum`)**. Sử dụng đúng ngữ cảnh dữ liệu CRM (khách hàng, hợp đồng, báo giá, doanh số).
+2. **Điểm nhấn Đặc trưng (Signature Element)**:
+   - Mỗi view chính nên có **1 chi tiết độc đáo duy nhất** đại diện cho nhận diện trang (vd: KPI Summary Card tương tác cao, thanh tiến trình Pipeline sống động, hoặc bảng xếp hạng Leaderboard độc đáo).
+   - Hãy dành sự táo bạo cho điểm nhấn này, giữ các thành phần xung quanh kỷ luật, tối giản và ngăn nắp.
+3. **Cấu trúc mang Thông tin (Structure is Information)**:
+   - Nhãn, đường phân cách, các con số chỉ dẫn phải chứa đựng ý nghĩa thực sự.
+   - **Không dùng số thứ tự trang trí (01 / 02 / 03)** trừ khi nội dung thực sự là một quy trình tuần tự có thứ tự trước sau.
+4. **Tiết chế & Tự phê bình (Restraint & Self-Critique)**:
+   - Áp dụng nguyên tắc Chanel trong thiết kế: *Trước khi hoàn tất giao diện, hãy kiểm tra lại và loại bỏ 1 chi tiết trang trí không thực sự phục vụ nghiệp vụ*.
+   - Chất lượng nền tảng là bắt buộc: Responsive trên mọi màn hình, trạng thái focus rõ ràng cho bàn phím, tôn trọng thiết lập giảm chuyển động (reduced motion).
+5. **Chuyển động có Mục đích (Motion with Purpose)**:
+   - Sử dụng micro-interactions mượt mà để phản hồi hành động người dùng (`0.15s – 0.24s`). Tránh over-animation làm giao diện có cảm giác rườm rà hoặc "AI-generated".
+
+### 1.2 Quy trình Thiết kế 2 Bước (2-Pass Design Workflow)
+Trước khi viết mã HTML/CSS cho một view mới hoặc nâng cấp UI:
+
+- **Pass 1: Lập Kế hoạch Thiết kế (Design Plan)**:
+  - **Token System**: Xác định màu sắc (4–6 mã HEX từ hệ thống CRM), font chữ, layout wireframe.
+  - **Signature Element**: Chọn 1 chi tiết nhận diện độc đáo cho trang này.
+- **Pass 2: Phê bình & Tránh Các Dạng Default của AI (Anti-AI Defaults Self-Critique)**:
+  - Tự kiểm tra để tránh 3 dạng giao diện rập khuôn AI phổ biến:
+    1. Background màu kem (`#F4F1EA`) + font serif + accent màu terracotta.
+    2. Background gần đen + accent màu xanh acid/đỏ tươi.
+    3. Broadsheet/Newspaper với đường kẻ hairline mỏng nét, zero border-radius.
+  - Nếu bất kỳ thành phần nào mang cảm giác template generic, hãy chỉnh sửa lại để phù hợp với ngôn ngữ thiết kế CRM của `portal_18`.
+
+---
+
+## 2. Quy tắc Viết Nội dung & Microcopy trong UI (Writing in Design)
+
+Nội dung chữ trong UI là **vật liệu thiết kế**, không phải chi tiết trang trí.
+
+1. **Viết từ góc nhìn người dùng**:
+   - Đặt tên dựa trên những gì người dùng điều khiển và nhận biết (vd: "Cấu hình thông báo" thay vì "Webhook config").
+   - Mô tả bằng thuật ngữ đơn giản, dễ hiểu thay vì sử dụng ngôn từ kỹ thuật hệ thống.
+2. **Sử dụng Active Voice (Động từ chủ động)**:
+   - Nút bấm hành động cụ thể: `Lưu thay đổi`, `Tạo báo giá`, `Gửi email` (tránh nút ghi `Gửi` chung chung hoặc `Submit`).
+   - Nhất quán thuật ngữ từ nút bấm tới thông báo toast: Nút `Xuất bản` sinh ra toast `Đã xuất bản thành công`.
+3. **Xử lý Trạng thái Lỗi & Empty State có tính Định hướng**:
+   - **Thông báo lỗi**: Giải thích rõ điều gì chưa đúng và hướng dẫn cụ thể cách khắc phục trong giọng văn hệ thống chuyên nghiệp. Không dùng câu từ mơ hồ.
+   - **Trạng thái rỗng (Empty State)**: Đừng chỉ hiển thị "Không có dữ liệu". Hãy kết hợp icon minh họa + câu hướng dẫn + nút hành động (Call-to-action) rõ ràng (vd: *"Chưa có báo giá nào được tạo. [Tạo báo giá ngay]"*).
+
+---
+
+## 3. Nền tảng kỹ thuật (Tech Foundation)
 
 | Thành phần          | Giá trị hiện tại                                         |
 | ------------------- | -------------------------------------------------------- |
@@ -27,21 +76,18 @@ description: >-
 
 ### Quy tắc chung
 
-- **Không sửa file core** (`assets/css/style.css`, `bs-overides.css`) trừ khi
-  được yêu cầu rõ ràng. Ưu tiên viết CSS mới trong thư mục `modules/<tên>/assets/css/`.
+- **Không sửa file core** (`assets/css/style.css`, `bs-overides.css`) trừ khi được yêu cầu rõ ràng. Ưu tiên viết CSS mới trong thư mục `modules/<tên>/assets/css/`.
 - CSS mới **PHẢI** sử dụng CSS Custom Properties (variables) để dễ bảo trì.
-- Sử dụng **BEM-like naming** với prefix module (vd: `sp-`, `tech-`, `pr-`)
-  để tránh xung đột với core CSS.
+- Sử dụng **BEM-like naming** với prefix module (vd: `sp-`, `tech-`, `pr-`) để tránh xung đột với core CSS.
 - Luôn đặt `box-sizing: border-box` cho container gốc module.
 
 ---
 
-## 2. Bảng màu (Color Palette)
+## 4. Bảng màu (Color Palette)
 
-### 2.1 Màu hệ thống gốc (System Colors)
+### 4.1 Màu hệ thống gốc (System Colors)
 
-Các giá trị dưới đây được trích xuất trực tiếp từ `style.css` và
-`bs-overides.css`. **KHÔNG** thay thế bằng giá trị khác.
+Các giá trị dưới đây được trích xuất trực tiếp từ `style.css` và `bs-overides.css`. **KHÔNG** thay thế bằng giá trị khác.
 
 ```css
 /* ── Core Brand ── */
@@ -95,7 +141,7 @@ Các giá trị dưới đây được trích xuất trực tiếp từ `style.c
 --crm-badge-bg:         #6c7888;
 ```
 
-### 2.2 Màu trạng thái CRM mở rộng (CRM Status Colors)
+### 4.2 Màu trạng thái CRM mở rộng (CRM Status Colors)
 
 Dùng cho Deal stages, Lead status, Pipeline tags:
 
@@ -124,21 +170,19 @@ Dùng cho Deal stages, Lead status, Pipeline tags:
 --crm-rank-bronze-text:  #8b5837;
 ```
 
-### 2.3 Quy tắc sử dụng màu
+### 4.3 Quy tắc sử dụng màu
 
-1. **KHÔNG dùng màu thuần** (`red`, `blue`, `green`). Luôn dùng mã hex
-   từ bảng trên hoặc CSS variable tương ứng.
+1. **KHÔNG dùng màu thuần** (`red`, `blue`, `green`). Luôn dùng mã hex từ bảng trên hoặc CSS variable tương ứng.
 2. **Gradient header**: Luôn dùng `linear-gradient(to right, var(--crm-header) 0%, var(--crm-header-mid) 60%, var(--crm-header-end) 100%)`.
-3. **Trạng thái hover**: Darken 10-15% so với màu gốc, đã định nghĩa sẵn
-   trong các biến `*-hover`.
+3. **Trạng thái hover**: Darken 10-15% so với màu gốc, đã định nghĩa sẵn trong các biến `*-hover`.
 4. **Background tối cho overlay**: `rgba(50, 58, 69, 0.48)` (đã dùng trong drawer backdrop).
 5. **Focus ring** cho input: Border color `#03a9f4` (crm-info).
 
 ---
 
-## 3. Typography (Kiểu chữ)
+## 5. Typography (Kiểu chữ)
 
-### 3.1 Font Stack
+### 5.1 Font Stack
 
 ```css
 /* Font chính — dùng cho toàn bộ ứng dụng */
@@ -151,10 +195,9 @@ font-family: Verdana, serif;
 font-family: Consolas, monospace;
 ```
 
-> **Quy tắc**: Mọi component mới PHẢI kế thừa font từ `body`. Chỉ khai báo
-> `font-family` nếu cần font khác (mono cho code block).
+> **Quy tắc**: Mọi component mới PHẢI kế thừa font từ `body`. Chỉ khai báo `font-family` nếu cần font khác (mono cho code block).
 
-### 3.2 Font Size Scale
+### 5.2 Font Size Scale
 
 | Token            | Giá trị   | Sử dụng                                      |
 | ---------------- | --------- | --------------------------------------------- |
@@ -175,7 +218,7 @@ font-family: Consolas, monospace;
 | `--fs-stat`      | `28px`    | KPI big number (summary card)                  |
 | `--fs-display`   | `36px`    | Display số lớn, hero stat                      |
 
-### 3.3 Font Weight
+### 5.3 Font Weight & Line Height
 
 | Token    | Giá trị | Sử dụng                                           |
 | -------- | ------- | -------------------------------------------------- |
@@ -185,8 +228,6 @@ font-family: Consolas, monospace;
 | Bold     | `700`   | Page title, card value, table header, KPI           |
 | ExtraBold| `800`   | Table column header (uppercase)                     |
 
-### 3.4 Line Height
-
 - Body text: `1.42857` (Bootstrap default)
 - Heading / title: `1.35`
 - Table cell: `1.3 – 1.45`
@@ -194,9 +235,9 @@ font-family: Consolas, monospace;
 
 ---
 
-## 4. Spacing & Layout
+## 6. Spacing & Layout
 
-### 4.1 Spacing Scale
+### 6.1 Spacing Scale
 
 ```css
 --space-2:   2px;     /* micro gap */
@@ -216,7 +257,7 @@ font-family: Consolas, monospace;
 --space-30:  30px;    /* empty state padding */
 ```
 
-### 4.2 Layout Grid
+### 6.2 Layout Grid & Container
 
 ```css
 /* Dashboard summary grid — 3 cột đều */
@@ -237,8 +278,6 @@ margin-top: 18px;
 }
 ```
 
-### 4.3 Container & Wrapper
-
 - `#wrapper` padding-left: `220px` (desktop sidebar) / `0` (mobile).
 - `.content` padding: `20px`.
 - Header height: `63px`.
@@ -246,9 +285,9 @@ margin-top: 18px;
 
 ---
 
-## 5. Border & Radius
+## 7. Border, Radius & Shadow (Elevation)
 
-### 5.1 Border Radius Scale
+### 7.1 Border Radius Scale
 
 | Token         | Giá trị | Sử dụng                                        |
 | ------------- | ------- | ----------------------------------------------- |
@@ -260,62 +299,29 @@ margin-top: 18px;
 | `--radius-pill`| `50px` | Pill badge, header active link                   |
 | `--radius-circle`| `50%`| Avatar, rank badge                               |
 
-### 5.2 Border Style
+### 7.2 Border & Shadow Elevation
 
 ```css
 /* Standard card/panel border */
 border: 1px solid var(--crm-border);          /* #e4e8f1 — module mới */
 border: 1px solid var(--crm-border-panel);     /* #dce1ef — panel_s gốc */
+border-input: 1px solid var(--crm-border-input); /* #d6d6d6 */
 
-/* Input border */
-border: 1px solid var(--crm-border-input);     /* #d6d6d6 */
-
-/* Accent border (action feed left) */
-border-left: 3px solid var(--crm-danger);      /* urgent item */
-border-left: 3px solid var(--crm-warning);     /* responded item */
-
-/* Top accent stripe (summary card) */
-.card::before {
-    height: 3px;
-    background: var(--crm-success);  /* or warning, danger */
-}
+/* Elevation Shadows */
+box-shadow: none;                                                 /* Level 0 */
+box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);                        /* Level 1 - Summary Card */
+box-shadow: 0 1px 15px 1px rgba(90, 90, 90, 0.08);                /* Level 2 - Panel */
+box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 2px 4px 0 rgba(0, 0, 0, 0.2); /* Level 3 - Modal */
+box-shadow: -10px 0 30px rgba(50, 58, 69, 0.2);                   /* Level 4 - Drawer */
 ```
 
 ---
 
-## 6. Shadow (Elevation)
+## 8. Component Patterns
+
+### 8.1 Buttons
 
 ```css
-/* Level 0 — Flat */
-box-shadow: none;
-
-/* Level 1 — Subtle card (dashboard summary card) */
-box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
-
-/* Level 2 — Panel (.panel_s) */
-box-shadow: 0 1px 15px 1px rgba(90, 90, 90, 0.08);
-
-/* Level 3 — Modal content */
-box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 2px 4px 0 rgba(0, 0, 0, 0.2);
-
-/* Level 4 — Drawer panel */
-box-shadow: -10px 0 30px rgba(50, 58, 69, 0.2);
-
-/* Utility — Avatar ring */
-box-shadow: 0 0 0 1px #d5dde5;
-
-/* Utility — Focus ring */
-box-shadow: 0 0 0 2px var(--crm-info);  /* #03a9f4 */
-```
-
----
-
-## 7. Component Patterns
-
-### 7.1 Buttons
-
-```css
-/* Tất cả button */
 .btn {
     text-transform: uppercase;
     font-size: 13.5px;
@@ -325,7 +331,6 @@ box-shadow: 0 0 0 2px var(--crm-info);  /* #03a9f4 */
     transition: all 0.15s ease-in-out;
 }
 
-/* Kích thước button module mới (dashboard actions) */
 .module-btn {
     display: inline-flex;
     align-items: center;
@@ -337,25 +342,11 @@ box-shadow: 0 0 0 2px var(--crm-info);  /* #03a9f4 */
     font-size: 12px;
     font-weight: 600;
 }
-
-/* Icon-only button */
-.icon-btn {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 6px;
-}
 ```
 
-**Quy tắc**: Không tạo biến thể button mới. Sử dụng hệ thống Bootstrap
-gốc (`btn-primary`, `btn-success`, `btn-info`, `btn-warning`, `btn-danger`,
-`btn-default`) hoặc module-specific action button với prefix.
-
-### 7.2 Cards / Panels
+### 8.2 Cards / Panels
 
 ```css
-/* Panel gốc (.panel_s) — dùng cho các trang truyền thống */
 .panel_s {
     background: none;
     border: none;
@@ -370,7 +361,6 @@ gốc (`btn-primary`, `btn-success`, `btn-info`, `btn-warning`, `btn-danger`,
     padding: 20px;
 }
 
-/* Summary card — module mới (dashboard) */
 .summary-card {
     position: relative;
     padding: 17px 18px 15px;
@@ -380,7 +370,6 @@ gốc (`btn-primary`, `btn-success`, `btn-info`, `btn-warning`, `btn-danger`,
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
 }
 
-/* Top accent stripe */
 .summary-card::before {
     position: absolute;
     top: 0; right: 0; left: 0;
@@ -390,103 +379,47 @@ gốc (`btn-primary`, `btn-success`, `btn-info`, `btn-warning`, `btn-danger`,
 }
 ```
 
-### 7.3 Forms
+### 8.3 Forms & Tables
 
 ```css
-/* Input mặc định */
 input, select, textarea {
     padding: 5px 10px;
     border: 1px solid #d6d6d6;
-    box-shadow: none;
-    color: #494949;
-    font-size: 14px;
     height: 36px;
+    font-size: 14px;
     transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
-/* Focus state */
 input:focus, select:focus, textarea:focus {
     border-color: #03a9f4;
-    box-shadow: none;
     outline: 0;
 }
 
-/* Label */
-label, .control-label {
-    font-weight: 500;
-    font-size: 13px;
-    color: #4a4a4a;
-    margin-bottom: 7px;
-}
-```
-
-**Quy tắc**: Giữ nguyên height `36px` cho input. Form group margin-bottom `15px`.
-
-### 7.4 Tables
-
-```css
-/* Table header */
 th {
     height: 46px;
     padding: 10px 12px;
-    border-bottom: 1px solid var(--crm-border);
     background: var(--crm-bg-soft);
-    color: var(--crm-ink);
     font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;
 }
 
-/* Table cell */
 td {
-    height: 76px;  /* đủ rộng cho avatar + 2 dòng text */
+    height: 76px;
     padding: 11px 12px;
     border-bottom: 1px solid var(--crm-border);
     vertical-align: middle;
 }
-
-/* Row hover */
-tbody tr:hover td {
-    background: #fbfdff;
-}
 ```
 
-### 7.5 Modal
+### 8.4 Drawer & Modal
 
 ```css
-/* Modal header — gradient */
-.modal-header {
-    background: linear-gradient(
-        to right,
-        var(--crm-modal-header-start) 0%,
-        var(--crm-modal-header-mid)   37%,
-        var(--crm-modal-header-end)   100%
-    );
-    border-radius: 6px 6px 0 0;
-    color: #fff;
-    padding: 18px;
-    border-color: transparent;
-}
-
-/* Modal content */
-.modal-content {
-    border-radius: 6px;
-    border: 0;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05),
-                0 2px 4px 0 rgba(0, 0, 0, 0.2);
-}
-```
-
-### 7.6 Drawer (Slide-over Panel)
-
-```css
-/* Backdrop */
 .drawer__backdrop {
     background: rgba(50, 58, 69, 0.48);
     transition: opacity 0.2s ease;
 }
 
-/* Panel */
 .drawer__panel {
     width: min(760px, 92vw);
     background: #f7f8fa;
@@ -495,39 +428,24 @@ tbody tr:hover td {
     transition: transform 0.24s ease;
 }
 
-/* Toolbar */
-.drawer__toolbar {
-    min-height: 68px;
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--crm-border);
-    background: #ffffff;
+.modal-header {
+    background: linear-gradient(to right, var(--crm-modal-header-start) 0%, var(--crm-modal-header-mid) 37%, var(--crm-modal-header-end) 100%);
+    border-radius: 6px 6px 0 0;
+    color: #fff;
+    padding: 18px;
 }
 ```
 
-### 7.7 Avatar
+### 8.5 Status Badges, Avatars & Progress
 
 ```css
-/* Standard avatar */
 .avatar {
-    width: 38px;
-    height: 38px;
-    border: 2px solid #ffffff;
+    width: 38px; height: 38px;
     border-radius: 50%;
-    object-fit: cover;
+    border: 2px solid #ffffff;
     box-shadow: 0 0 0 1px #d5dde5;
 }
 
-/* Small avatar (feed) */
-.avatar--sm {
-    width: 34px;
-    height: 34px;
-}
-```
-
-### 7.8 Status Badge / Tag
-
-```css
-/* Status tag nhỏ */
 .status-tag {
     display: inline-flex;
     align-items: center;
@@ -536,182 +454,74 @@ tbody tr:hover td {
     border-radius: 4px;
     font-size: 9px;
     font-weight: 700;
-    line-height: 1.2;
 }
 
-/* Danger status */
-.status-tag--danger {
-    background: #fff0f1;
-    color: #d91f35;
-}
-
-/* Warning status (responded) */
-.status-tag--warning {
-    background: #fef3e0;
-    color: #cc5900;
-}
-
-/* Success status */
-.status-tag--success {
-    background: #f0f9e0;
-    color: #5a8f12;
-}
-
-/* Chip / Pill badge */
-.chip {
-    display: inline-block;
-    height: 32px;
-    font-size: 13px;
-    line-height: 32px;
-    padding: 0 12px;
-    color: #fff;
-    border-radius: 16px;
-    background: #4b5158;
-}
-```
-
-### 7.9 Progress Bar
-
-```css
 .progress {
-    position: relative;
-    width: 100%;
     height: 5px;
     border-radius: 3px;
     background: #e4e8f1;
-    overflow: hidden;
-}
-
-.progress__bar {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--crm-muted);
 }
 ```
 
 ---
 
-## 8. Animations & Transitions
-
-### 8.1 Transition Timing Functions
+## 9. Animations & Transitions
 
 ```css
-/* Default — dùng cho button, link hover */
-transition: all 0.15s ease-in-out;
-
-/* Color change — dùng cho button, icon */
-transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-
-/* Input focus */
-transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
-
-/* Overlay fade */
-transition: opacity 0.2s ease;
-
-/* Drawer slide */
-transition: transform 0.24s ease;
-
-/* Panel heading */
-transition: all 0.3s;
-
-/* Tab filter */
-transition: background 0.15s ease, border-color 0.15s ease;
+transition: all 0.15s ease-in-out;                                /* Micro-interactions */
+transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1); /* Form Input focus */
+transition: transform 0.24s ease;                                 /* Drawer Slide */
 ```
 
-### 8.2 Quy tắc Animation
-
-1. **KHÔNG** dùng animation dài hơn `0.4s` cho UI interaction.
-2. **Micro-interaction** (hover, focus, toggle): `0.15s – 0.24s`.
-3. **Entrance** (drawer, modal): `0.2s – 0.3s`.
-4. **Mặc định dùng `ease`** hoặc `ease-in-out`. Chỉ dùng `cubic-bezier`
-   cho input focus.
-5. Trên mobile `@media (max-width: 767px)`, **DISABLE** transition cho
-   drawer/overlay để đảm bảo hiệu năng: `transition: none;`.
+- **Quy tắc**: Không dùng animation > `0.4s` cho tác vụ UI. Tránh animation rườm rà gây mất tập trung. On mobile (`≤767px`), dùng `transition: none;` cho drawer/overlay để tối ưu hiệu năng.
 
 ---
 
-## 9. Responsive Breakpoints
+## 10. Responsive Breakpoints
 
 ```css
-/* Mobile first */
 @media (max-width: 767px)  { /* Phone */       }
 @media (min-width: 768px)  { /* Tablet */      }
 @media (min-width: 992px)  { /* Desktop SM */  }
 @media (min-width: 1200px) { /* Desktop LG */  }
-@media (min-width: 1400px) { /* Desktop XL */  }
 ```
-
-### 9.1 Quy tắc Responsive
-
-1. **Summary grid**: 3 cột → `repeat(2, 1fr)` ở `≤992px` → `1fr` ở `≤600px`.
-2. **Leaderboard table**: `overflow-x: auto` + `min-width: 1080px`.
-3. **Drawer**: Luôn `width: min(760px, 92vw)` — tự co trên mobile.
-4. **Sidebar**: Ẩn bằng class `hide-sidebar` / `show-sidebar`.
-5. **Dashboard commandbar**: `flex-wrap: wrap` trên `≤600px`, gap thu hẹp
-   xuống `12px`.
 
 ---
 
-## 10. Navigation & Header
+## 11. Navigation & Header
 
 ```css
-/* Header bar */
 #header {
     background: linear-gradient(to right, #415165, #51647c 26%, #51647c 73%, #4f5d7a);
     height: 63px;
-    z-index: 99;
 }
 
-/* Sidebar menu */
-#side-menu {
-    background: #626f80;
-}
-
-#side-menu li a {
-    color: #fff;
-    text-transform: uppercase;
-    padding: 11px 20px 11px 16px;
-    font-size: 13px;
-    font-family: 'Roboto';
-}
-
-/* Active state */
-#side-menu li.active > a {
-    border-radius: 0;
-    color: #323a45;
-    background: #e3e8ee;
-}
-
-/* Menu icon */
-.menu-icon {
-    margin-right: 16px;
-    width: 18px;
-    font-size: 17px;
-}
+#side-menu { background: #626f80; }
+#side-menu li.active > a { background: #e3e8ee; color: #323a45; }
 ```
 
 ---
 
-## 11. Accessibility & UX Checklist
+## 12. Accessibility & UX Checklist
 
-Mọi component mới PHẢI đáp ứng:
+Mọi component/view mới PHẢI đáp ứng các mục kiểm tra sau:
 
 - [ ] **Contrast ratio** ≥ 4.5:1 cho text trên background.
-- [ ] **Focus visible**: Mọi interactive element phải có focus style rõ ràng.
-- [ ] **Keyboard navigation**: Tab order logic, Enter/Space kích hoạt.
-- [ ] **Touch target**: Tối thiểu `38×38px` cho nút bấm trên mobile.
-- [ ] **Loading state**: Hiển thị skeleton hoặc spinner khi fetch dữ liệu.
-- [ ] **Empty state**: Hiển thị message + icon khi không có dữ liệu.
-- [ ] **Error state**: Border đỏ (`--crm-danger`) + message text rõ ràng.
-- [ ] **RTL support**: Kiểm tra layout nếu cần hỗ trợ RTL (dự án có CSS RTL).
+- [ ] **Focus visible**: Interactive elements có viền focus rõ ràng.
+- [ ] **Keyboard navigation**: Hỗ trợ Tab, Enter, Space đầy đủ.
+- [ ] **Touch target**: Tối thiểu `38×38px` trên mobile.
+- [ ] **Loading state**: Hiển thị skeleton/spinner khi tải dữ liệu.
+- [ ] **Empty state**: Hiển thị icon + lời mời gọi hành động (Call-to-action) rõ ràng.
+- [ ] **Error state**: Viền đỏ (`--crm-danger`) + thông báo khắc phục cụ thể.
+- [ ] **Signature Element**: Đã chọn 1 chi tiết thiết kế nhận diện đặc trưng cho view.
+- [ ] **Microcopy active voice**: Đặt tên nút và câu thông báo bằng động từ chủ động.
+- [ ] **Restraint check**: Đã rà soát và loại bỏ các chi tiết trang trí thừa.
 
 ---
 
-## 12. CRM-Specific Patterns
+## 13. CRM-Specific Patterns
 
-### 12.1 Dashboard KPI Card
-
+### 13.1 Dashboard KPI Card
 ```
 ┌─────────────────────────────┐
 │▀▀▀▀▀▀▀▀▀ (3px accent bar) ▀│  ← màu theo trạng thái
@@ -722,8 +532,7 @@ Mọi component mới PHẢI đáp ứng:
 └─────────────────────────────┘
 ```
 
-### 12.2 Kanban Pipeline Card
-
+### 13.2 Kanban Pipeline Card
 ```
 ┌──────────────────┐
 │ Deal Name        │  ← 14px, bold
@@ -735,57 +544,78 @@ Mọi component mới PHẢI đáp ứng:
 └──────────────────┘
 ```
 
-### 12.3 Action Feed Item
-
+### 13.3 Action Feed Item & Leaderboard Row
 ```
 ┌ 3px danger border ───────────────────┐
 │ [Avatar] Staff Name                  │
-│          Role • 2 phút trước         │
-│                          [Quá hạn]   │  ← status-tag--danger
-│ Customer: Nguyễn Văn A               │
 │ Task: Gọi điện xác nhận hợp đồng    │
-│ [Gọi ngay] [Bỏ qua]                 │  ← btn-info, btn-default
+│ [Gọi ngay] [Bỏ qua]                 │
 └──────────────────────────────────────┘
-```
 
-### 12.4 Leaderboard Table Row
-
-```
 │ 🥇 │ [Av] Tên NV    │ Pipeline │ Doanh thu │ Tỷ lệ   │ Cơ hội │
-│ #1 │      Phòng ban  │ █████░  │ 150M      │ 75%      │ 12     │
 ```
+
+### 13.4 Quy tắc Sử dụng Icon Đồng bộ & Thông minh (Smart Icon System)
+
+Bộ icon chính của ứng dụng là **Font Awesome (v4.7.0)**. Khi thiết kế hoặc chỉnh sửa bất kỳ UI/View/Component nào, Agent PHẢI tuân thủ bộ quy tắc chọn và định dạng icon dưới đây:
+
+#### A. Ánh xạ Icon theo Ngữ cảnh Nghiệp vụ (Semantic Mapping)
+Mỗi đối tượng hoặc hành động nghiệp vụ CHỈ ĐƯỢC DÙNG đúng 1 đại diện icon cố định trên toàn bộ hệ thống:
+
+| Đối tượng Nghiệp vụ | Icon Class chuẩn | Mô tả & Ngữ cảnh sử dụng |
+| :--- | :--- | :--- |
+| **Cơ hội / Deal** | `fa-briefcase` hoặc `fa-folder-open-o` | Danh sách cơ hội, tab deal, danh mục deal đang mở |
+| **Báo giá / Estimate** | `fa-file-text-o` | Danh sách báo giá, tạo/sửa báo giá |
+| **Doanh thu / Giá trị** | `fa-line-chart` / `fa-money` | Thẻ chỉ số doanh thu, tiền tệ, KPI tài chính |
+| **Cần theo dõi / Nhắc nhở** | `fa-bell-o` | Thẻ theo dõi, thông báo nhắc nhở, rủi ro cần xử lý |
+| **Nhật ký / Activity Log** | `fa-comments-o` / `fa-history` | Activity feed, lịch sử phản hồi, mốc thời gian |
+| **Xếp hạng / Leaderboard** | `fa-trophy` | Bảng vinh danh, xếp hạng hiệu suất nhân viên |
+| **Khách hàng / Công ty** | `fa-building-o` / `fa-user` | Doanh nghiệp, người đại diện liên hệ |
+| **Thời gian / Hạn chót** | `fa-clock-o` / `fa-calendar` | Mốc ngày deal, lịch nhắc, thời gian phản hồi |
+
+#### B. Phân loại Icon theo Trạng thái & Thị giác (Status & Visual Hierarchy)
+- **Đang chờ / Pending**: `<i class="fa fa-clock-o text-warning" aria-hidden="true"></i>`
+- **Thành công / Hoàn thành / Won**: `<i class="fa fa-check-circle text-success" aria-hidden="true"></i>`
+- **Cảnh báo / Rủi ro / Risk**: `<i class="fa fa-exclamation-triangle text-danger" aria-hidden="true"></i>`
+- **Chỉ thông báo / Informational**: `<i class="fa fa-info-circle text-info" aria-hidden="true"></i>`
+
+#### C. Quy chuẩn Kỹ thuật & Accessibility (Technical Standards)
+1. **Accessibility**: Luôn thêm `aria-hidden="true"` cho icon trang trí đi kèm chữ:
+   `<i class="fa fa-refresh" aria-hidden="true"></i>`
+2. **Căn lề danh sách (Fixed Width)**: Khi hiển thị icon trong danh sách hàng dọc (Vertical menu / List), luôn thêm class `fa-fw` để văn bản bên phải thẳng hàng tuyệt đối.
+3. **Kích thước Icon**:
+   - Trong Button / Badge: `12px – 14px`
+   - Trong Tab / Card Header: `16px`
+   - Trong Stat Card / Empty State: `24px – 32px`
 
 ---
 
-## 13. Do's and Don'ts
+## 14. Do's and Don'ts
 
 ### ✅ DO
 
-- Dùng CSS Custom Properties cho mọi giá trị lặp lại.
-- Prefix class name với tên module (`sp-`, `tech-`, `cr-`).
-- Sử dụng `gap` thay vì `margin` trong flex/grid container.
-- Dùng `min-width: 0` trong flex children để tránh overflow.
-- Đặt `text-overflow: ellipsis` cho text có thể tràn.
-- Test trên ≥ 3 breakpoints trước khi commit.
-- Sử dụng `transition` cho mọi state change (hover, active, focus).
-- Dùng gradient header giống hệ thống cho mọi commandbar module mới.
+- Thực hiện quy trình thiết kế 2 bước (Pass 1: Token & Signature, Pass 2: Self-critique anti-defaults).
+- Xác định 1 điểm nhấn thiết kế nhận diện duy nhất (Signature Element) cho mỗi trang chính.
+- Sử dụng CSS Custom Properties (variables) cho mọi giá trị màu, spacing.
+- Đặt tên nút và thông báo bằng câu chủ động (Active voice).
+- Thiết kế Empty state hấp dẫn có nút hành động (Call-to-action).
+- Dùng `gap` thay vì `margin` trong layout container.
+- Test trên ≥ 3 breakpoints trước khi hoàn tất.
 
 ### ❌ DON'T
 
-- ❌ Hardcode màu trực tiếp — luôn dùng variable.
+- ❌ Rập khuôn giao diện dạng AI template vô hồn.
+- ❌ Dùng `Lorem Ipsum` hoặc dữ liệu mẫu không có thật.
+- ❌ Đặt tên nút mơ hồ (`Submit`, `OK`, `Thực hiện`).
+- ❌ Dùng số thứ tự trang trí (`01`, `02`, `03`) khi nội dung không phải là quy trình tuần tự.
+- ❌ Nhồi nhét quá nhiều hiệu ứng animation hoặc trang trí rườm rà.
+- ❌ Hardcode màu trực tiếp — luôn dùng CSS variable.
 - ❌ Dùng `!important` trừ khi override core CSS bắt buộc.
-- ❌ Tạo font-size ngoài scale đã định nghĩa.
-- ❌ Dùng `box-shadow` lớn hơn Level 4 (drawer).
-- ❌ Inline style trong PHP view — tách ra file CSS riêng.
-- ❌ Thay đổi `body` font-family, font-size, color.
 - ❌ Xóa hoặc ghi đè `bs-overides.css` / `style.css`.
-- ❌ Dùng animation > 0.4s cho micro-interaction.
-- ❌ Quên RTL mirror cho `margin-left`/`padding-left` layout.
-- ❌ Bỏ qua empty state và loading state.
 
 ---
 
-## 14. File Organization
+## 15. Cấu trúc File & Đăng ký Asset Module
 
 ```
 modules/<module_name>/
@@ -795,25 +625,21 @@ modules/<module_name>/
 │   └── js/
 │       └── <module>.js
 ├── views/
-│   ├── dashboard.php             ← main view
+│   ├── dashboard.php
 │   └── partials/
-│       ├── _card.php
-│       ├── _table.php
-│       └── _drawer.php
 └── <module>.php                  ← register CSS/JS qua hooks
 ```
 
 **Hook đăng ký CSS**:
 ```php
 hooks()->add_action('app_admin_head', function() {
-    echo '<link rel="stylesheet"
-           href="' . module_dir_url(MODULE_NAME, 'assets/css/module.css') . '">';
+    echo '<link rel="stylesheet" href="' . module_dir_url(MODULE_NAME, 'assets/css/module.css') . '">';
 });
 ```
 
 ---
 
-## 15. Khi nào KHÔNG áp dụng skill này
+## 16. Khi nào KHÔNG áp dụng skill này
 
 - Sửa lỗi logic PHP / database — không liên quan UI.
 - Viết migration, model, hoặc API endpoint — không có giao diện.
@@ -822,4 +648,4 @@ hooks()->add_action('app_admin_head', function() {
 
 ---
 
-*Skill version: 1.0.0 — Audited from portal_18 codebase on 2026-08-10.*
+*Skill version: 2.0.0 — Integrated Frontend Design Philosophy with Portal 18 CRM UI System on 2026-08-10.*

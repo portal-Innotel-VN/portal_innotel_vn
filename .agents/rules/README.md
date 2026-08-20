@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Rules
 
 Rules là chính sách bắt buộc cấp workspace. Giữ mỗi file ngắn, tập trung vào một

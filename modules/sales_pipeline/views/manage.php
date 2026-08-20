@@ -377,7 +377,7 @@ $query_string = $_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '';
                                                class="btn btn-xs btn-danger _delete" 
                                                title="<?php echo html_escape(_l('sales_pipeline_delete_deal')); ?>"
                                                data-toggle="tooltip">
-                                                <i class="fa fa-remove"></i>
+                                                <i class="fa fa-trash-o" aria-hidden="true"></i>
                                             </a>
                                             <?php } ?>
                                         </td>
@@ -1031,7 +1031,7 @@ function renderDealTable(deals, permissions, currentUserId, offset) {
                 html += '<a href="' + admin_url + 'sales_pipeline/deal/' + deal.id + currentQs + '" class="btn btn-xs btn-info mright5" title="' + salesPipelineLang.viewDetails + '" data-toggle="tooltip"><i class="fa fa-eye"></i></a>';
             }
             if (canDeleteDeal) {
-                html += '<a href="' + admin_url + 'sales_pipeline/delete/' + deal.id + currentQs + '" class="btn btn-xs btn-danger _delete" title="' + salesPipelineLang.deleteDeal + '" data-toggle="tooltip"><i class="fa fa-remove"></i></a>';
+                html += '<a href="' + admin_url + 'sales_pipeline/delete/' + deal.id + currentQs + '" class="btn btn-xs btn-danger _delete" title="' + salesPipelineLang.deleteDeal + '" data-toggle="tooltip"><i class="fa fa-trash-o"></i></a>';
             }
             html += '</td>';
         }

@@ -7,17 +7,95 @@
             return;
         }
 
-        var $drawer = $dashboard.find('[data-dashboard-drawer]');
+        var $drawer = $('#sp-dashboard-drawer');
         var $drawerPanel = $drawer.find('.sp-dashboard-drawer__panel');
         var $drawerContent = $drawer.find('[data-dashboard-drawer-content]');
-        var $leaderboardWrapper = $dashboard.find('[data-dashboard-leaderboard-wrapper]');
+        var $contentWrapper = $dashboard.find('[data-dashboard-content-wrapper]');
         var staffUrl = String($dashboard.data('staff-url') || '').replace(/\/$/, '');
-        var leaderboardUrl = String($dashboard.data('leaderboard-url') || '');
+        var dashboardUrl = String($dashboard.data('dashboard-url') || '');
         var loadingMessage = String($dashboard.data('loading-message') || 'Loading...');
         var errorMessage = String($dashboard.data('error-message') || 'Unable to load data.');
         var activeRequest = null;
-        var activeLeaderboardRequest = null;
+        var activeDashboardRequest = null;
         var lastTrigger = null;
+        var activeDashboardTab = String(
+            $contentWrapper.find('[data-dashboard-tab][aria-selected="true"]').data('dashboard-tab') || 'deals'
+        );
+
+        function updateDashboardUrl(period, tab) {
+            var urlParams = new URLSearchParams(window.location.search);
+            if (period && period !== 'this_month') {
+                urlParams.set('period', period);
+            } else {
+                urlParams.delete('period');
+            }
+            if (tab && tab !== 'deals') {
+                urlParams.set('dashboard_tab', tab);
+            } else {
+                urlParams.delete('dashboard_tab');
+            }
+            var nextQuery = urlParams.toString();
+            window.history.replaceState({}, '', window.location.pathname + (nextQuery ? '?' + nextQuery : ''));
+        }
+
+        function activateDashboardTab(tab, moveFocus) {
+            if (tab !== 'deals' && tab !== 'estimates') {
+                tab = 'deals';
+            }
+
+            activeDashboardTab = tab;
+            var $tabs = $contentWrapper.find('[data-dashboard-tab]');
+            var $panels = $contentWrapper.find('[data-dashboard-panel]');
+            $tabs.each(function () {
+                var isActive = String($(this).data('dashboard-tab')) === tab;
+                $(this)
+                    .toggleClass('is-active', isActive)
+                    .attr('aria-selected', isActive ? 'true' : 'false')
+                    .attr('tabindex', isActive ? '0' : '-1');
+                if (isActive && moveFocus) {
+                    $(this).trigger('focus');
+                }
+            });
+            $panels.each(function () {
+                var isActive = String($(this).data('dashboard-panel')) === tab;
+                $(this).toggleClass('is-active', isActive).prop('hidden', !isActive);
+            });
+
+            updateDashboardUrl($('#sp-dashboard-time-filter').val() || 'this_month', tab);
+        }
+
+        function initializeDashboardContent() {
+            if ($.fn.tooltip) {
+                $contentWrapper.find('[data-toggle="tooltip"]').tooltip();
+            }
+        }
+
+        function setDashboardLoading(isLoading) {
+            $contentWrapper.find('[data-performance-loading]').remove();
+            if (!isLoading) {
+                $contentWrapper.removeClass('sp-loading').removeAttr('aria-busy');
+                return;
+            }
+
+            var $loading = $('<div>', {
+                class: 'sp-dashboard-loading-state',
+                'data-performance-loading': '',
+                role: 'status',
+                'aria-label': loadingMessage
+            });
+            for (var rowIndex = 0; rowIndex < 3; rowIndex++) {
+                var $row = $('<div>', { class: 'sp-dashboard-loading-state__row' });
+                for (var cellIndex = 0; cellIndex < 6; cellIndex++) {
+                    $('<span>', {
+                        class: 'sp-dashboard-loading-state__cell'
+                            + (cellIndex === 1 ? ' sp-dashboard-loading-state__cell--staff' : ''),
+                        'aria-hidden': 'true'
+                    }).appendTo($row);
+                }
+                $row.appendTo($loading);
+            }
+            $contentWrapper.addClass('sp-loading').attr('aria-busy', 'true').append($loading);
+        }
 
         function createState(iconClass, message, isError) {
             var $state = $('<div>', {
@@ -35,7 +113,10 @@
             $drawerContent.empty().append(createState(iconClass, message, isError));
         }
 
-        function openDrawer(staffId, trigger) {
+        function openDrawer(trigger) {
+            var $trigger = $(trigger);
+            var staffId = $trigger.data('staff-id');
+
             if (!staffId || !staffUrl) {
                 return;
             }
@@ -44,7 +125,13 @@
                 activeRequest.abort();
             }
 
-            lastTrigger = trigger || null;
+            lastTrigger = trigger;
+            $drawer = $('#sp-dashboard-drawer');
+            $drawerPanel = $drawer.find('.sp-dashboard-drawer__panel');
+            $drawerContent = $drawer.find('[data-dashboard-drawer-content]');
+
+            var period = $('#sp-dashboard-time-filter').val() || 'this_month';
+
             $drawer.addClass('is-open').attr('aria-hidden', 'false');
             $drawerPanel.attr('aria-busy', 'true');
             $('body').addClass('sp-dashboard-drawer-open');
@@ -56,9 +143,14 @@
             activeRequest = $.ajax({
                 url: staffUrl + '/' + encodeURIComponent(staffId),
                 method: 'GET',
-                dataType: 'json'
+                dataType: 'json',
+                data: {
+                    dashboard_tab: activeDashboardTab,
+                    period: period
+                }
             }).done(function (response) {
-                if (response && response.success && response.data && response.data.html) {
+                if (response && response.success && response.data
+                    && Object.prototype.hasOwnProperty.call(response.data, 'html')) {
                     $drawerContent.html(response.data.html);
                     if ($.fn.tooltip) {
                         $drawerContent.find('[data-toggle="tooltip"]').tooltip();
@@ -103,47 +195,36 @@
         }
 
         $dashboard.on('click', '.js-sp-open-staff', function () {
-            openDrawer($(this).data('staff-id'), this);
+            openDrawer(this);
         });
 
         $dashboard.on('change', '#sp-dashboard-time-filter', function () {
             var period = $(this).val() || 'this_month';
 
-            if (!leaderboardUrl || !$leaderboardWrapper.length) {
+            if (!dashboardUrl || !$contentWrapper.length) {
                 return;
             }
 
-            if (activeLeaderboardRequest) {
-                activeLeaderboardRequest.abort();
+            if (activeDashboardRequest) {
+                activeDashboardRequest.abort();
             }
 
-            var urlParams = new URLSearchParams(window.location.search);
-            if (period && period !== 'this_month') {
-                urlParams.set('period', period);
-            } else {
-                urlParams.delete('period');
-            }
-            var nextQuery = urlParams.toString();
-            window.history.replaceState({}, '', window.location.pathname + (nextQuery ? '?' + nextQuery : ''));
+            updateDashboardUrl(period, activeDashboardTab);
 
-            $leaderboardWrapper.addClass('sp-loading').attr('aria-busy', 'true');
+            setDashboardLoading(true);
 
-            activeLeaderboardRequest = $.ajax({
-                url: leaderboardUrl,
+            var dashboardRequest = $.ajax({
+                url: dashboardUrl,
                 method: 'GET',
                 dataType: 'json',
                 data: {
-                    period: period
+                    period: period,
+                    dashboard_tab: activeDashboardTab
                 }
             }).done(function (response) {
                 if (response && response.success && response.data && response.data.html) {
-                    $leaderboardWrapper.html(response.data.html);
-                    if (typeof init_selectpicker === 'function') {
-                        init_selectpicker();
-                    }
-                    if ($.fn.tooltip) {
-                        $leaderboardWrapper.find('[data-toggle="tooltip"]').tooltip();
-                    }
+                    $contentWrapper.html(response.data.html);
+                    initializeDashboardContent();
                     return;
                 }
 
@@ -163,9 +244,36 @@
                     sp_alert('danger', responseMessage);
                 }
             }).always(function () {
-                activeLeaderboardRequest = null;
-                $leaderboardWrapper.removeClass('sp-loading').removeAttr('aria-busy');
+                if (activeDashboardRequest === dashboardRequest) {
+                    activeDashboardRequest = null;
+                    setDashboardLoading(false);
+                }
             });
+
+            activeDashboardRequest = dashboardRequest;
+        });
+
+        $dashboard.on('click', '[data-dashboard-tab]', function (event) {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                return;
+            }
+            event.preventDefault();
+            activateDashboardTab(String($(this).data('dashboard-tab')), false);
+        });
+
+        $dashboard.on('keydown', '[data-dashboard-tab]', function (event) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+                return;
+            }
+
+            event.preventDefault();
+            var nextTab = activeDashboardTab;
+            if (event.key === 'Home' || event.key === 'ArrowLeft') {
+                nextTab = 'deals';
+            } else if (event.key === 'End' || event.key === 'ArrowRight') {
+                nextTab = 'estimates';
+            }
+            activateDashboardTab(nextTab, true);
         });
 
         $drawer.on('click', '.js-sp-close-drawer', closeDrawer);
@@ -183,5 +291,6 @@
         if ($.fn.tooltip) {
             $dashboard.find('[data-toggle="tooltip"]').tooltip();
         }
+        initializeDashboardContent();
     });
 })(jQuery);

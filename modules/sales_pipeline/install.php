@@ -4,6 +4,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 $CI =& get_instance();
 
+require_once(__DIR__ . '/includes/estimate_group_schema.php');
+require_once(__DIR__ . '/includes/performance_score_defaults.php');
+require_once(__DIR__ . '/includes/reminder_rule_defaults.php');
+
 // Bảng trạng thái deal
 if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_statuses')) {
     $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_statuses` (
@@ -200,6 +204,8 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline')) {
     }
 }
 
+sales_pipeline_ensure_estimate_group_schema($CI);
+
 // Bảng activity log (timeline tiến độ thay cho cột ghi chú nối →)
 if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_activity')) {
     $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_activity` (
@@ -219,10 +225,13 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_activity')) {
 if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_reminders_log')) {
     $CI->db->query('CREATE TABLE `' . db_prefix() . "sales_pipeline_reminders_log` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
-        `pipeline_id` int(11) NOT NULL COMMENT 'FK tblsales_pipeline',
+        `pipeline_id` int(11) DEFAULT NULL COMMENT 'FK tblsales_pipeline; NULL với reminder theo kỳ',
         `staff_id` int(11) NOT NULL COMMENT 'Nhân viên được nhắc',
         `reminder_type` varchar(50) NOT NULL DEFAULT 'email' COMMENT 'email / notification',
+        `rule_code` varchar(80) NOT NULL DEFAULT 'DEAL_FREQUENCY_REMINDER',
+        `entity_type` varchar(40) NOT NULL DEFAULT 'deal',
         `message` text NOT NULL COMMENT 'Nội dung nhắc nhở',
+        `snapshot_json` longtext DEFAULT NULL,
         `staff_response` text DEFAULT NULL COMMENT 'Phản hồi từ nhân viên',
         `responded_at` datetime DEFAULT NULL,
         `sent_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -231,6 +240,9 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_reminders_log')) {
         KEY `staff_id` (`staff_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 }
+
+require_once(module_dir_path('sales_pipeline', 'includes/reminder_repository_schema.php'));
+sales_pipeline_ensure_reminder_repository_schema($CI);
 
 // Bảng theo dõi alerts cho deal thiếu giá nhập
 if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_cost_alerts')) {
@@ -290,3 +302,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_import_log')) {
         KEY `uploaded_by` (`uploaded_by`)
     ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . ';');
 }
+
+// Performance Score v1 defaults. add_option preserves administrator overrides.
+sales_pipeline_seed_performance_score_options();
+sales_pipeline_seed_reminder_rule_options();

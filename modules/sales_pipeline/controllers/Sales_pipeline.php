@@ -136,15 +136,18 @@ class Sales_pipeline extends AdminController
         $can_view_all = $this->can_view_dashboard_all();
         $staff_id = $can_view_all ? null : get_staff_user_id();
         $period = $this->input->get('period') ?: 'this_month';
+        $active_tab = $this->resolve_dashboard_tab($this->input->get('dashboard_tab'));
 
         $data['dashboard'] = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period);
+        $this->attach_estimate_performance_ranking($data['dashboard'], $period, $can_view_all);
+        $data['dashboard']['selected_dashboard_tab'] = $active_tab;
         $data['can_view_all'] = $can_view_all;
         $data['title'] = _l('sales_pipeline_dashboard_title');
         $this->load->view('sales_pipeline/dashboard', $data);
     }
 
     /**
-     * AJAX leaderboard theo kỳ thời gian.
+     * AJAX nội dung Dashboard theo kỳ thời gian.
      * URL: admin/sales_pipeline/ajax_dashboard_leaderboard
      */
     public function ajax_dashboard_leaderboard()
@@ -160,9 +163,12 @@ class Sales_pipeline extends AdminController
         $can_view_all = $this->can_view_dashboard_all();
         $staff_id = $can_view_all ? null : get_staff_user_id();
         $period = $this->input->get('period') ?: 'this_month';
+        $active_tab = $this->resolve_dashboard_tab($this->input->get('dashboard_tab'));
         $dashboard = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period);
+        $this->attach_estimate_performance_ranking($dashboard, $period, $can_view_all);
+        $dashboard['selected_dashboard_tab'] = $active_tab;
 
-        $html = $this->load->view('sales_pipeline/partials/_leaderboard', [
+        $html = $this->load->view('sales_pipeline/partials/_dashboard_content', [
             'dashboard' => $dashboard,
         ], true);
 
@@ -170,7 +176,64 @@ class Sales_pipeline extends AdminController
     }
 
     /**
-     * Drawer chi tiết nhân viên Dashboard (Chỉ đọc: Cơ hội mở & Nhật ký hoạt động).
+     * Duplicate an estimate while retaining its Estimate-only revision group.
+     * This endpoint intentionally accepts POST only.
+     *
+     * URL: admin/sales_pipeline/duplicate_estimate/{source_id}
+     */
+    public function duplicate_estimate($source_id = null)
+    {
+        $is_ajax = $this->input->is_ajax_request();
+        if (strtoupper($this->input->method()) !== 'POST') {
+            show_404();
+        }
+
+        if (!$source_id || !is_numeric($source_id)) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_quote_invalid_estimate'), [], 400);
+            }
+            show_404();
+        }
+
+        $source_id = (int) $source_id;
+        if (!has_permission('estimates', '', 'create') || !user_can_view_estimate($source_id)) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('access_denied'), [], 403);
+            }
+            access_denied('estimates');
+        }
+
+        $this->load->model('estimates_model');
+        $source = $this->estimates_model->get($source_id);
+        if (!$source) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_quote_invalid_estimate'), [], 404);
+            }
+            show_404();
+        }
+
+        $new_id = $this->sales_pipeline_model->duplicate_estimate_revision($source_id);
+        if (!$new_id) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_quote_duplicate_failed'), [], 500);
+            }
+            set_alert('danger', _l('sales_pipeline_quote_duplicate_failed'));
+            redirect(admin_url('estimates/list_estimates/' . $source_id));
+        }
+
+        if ($is_ajax) {
+            return $this->json_response(true, _l('sales_pipeline_quote_duplicate_success'), [
+                'estimate_id' => (int) $new_id,
+                'url'         => admin_url('estimates/estimate/' . (int) $new_id),
+            ]);
+        }
+
+        set_alert('success', _l('sales_pipeline_quote_duplicate_success'));
+        redirect(admin_url('estimates/estimate/' . (int) $new_id));
+    }
+
+    /**
+     * Drawer chi tiết nhân viên Dashboard theo tab đang chọn.
      * URL: admin/sales_pipeline/dashboard_staff_pipeline/{staff_id}
      */
     public function dashboard_staff_pipeline($staff_id = null)
@@ -197,22 +260,48 @@ class Sales_pipeline extends AdminController
             return $this->json_response(false, _l('sales_pipeline_invalid_staff'), [], 404);
         }
 
-        $metrics = $this->sales_pipeline_model->get_staff_kpi_metrics($staff_id);
-        $open_deals = $this->sales_pipeline_model->get_staff_open_deals($staff_id, 10);
+        $dashboard_tab = $this->resolve_dashboard_tab($this->input->get('dashboard_tab'));
+        $period = $this->input->get('period') ?: 'this_month';
+        $metrics = $this->sales_pipeline_model->get_staff_kpi_metrics($staff_id, ['period' => $period]);
+        $open_deals = $dashboard_tab === 'deals'
+            ? $this->sales_pipeline_model->get_staff_open_deals($staff_id, 10)
+            : ['deals' => [], 'total' => 0];
+        $estimate_follow_ups = $dashboard_tab === 'estimates'
+            ? $this->sales_pipeline_model->get_staff_open_estimates($staff_id, 20)
+            : [];
+        $performance_metric = null;
+        if ($dashboard_tab === 'estimates') {
+            $performance_ranking = $this->sales_pipeline_model->get_estimate_performance_ranking($period);
+            foreach ($performance_ranking['leaderboard'] as $ranking_row) {
+                if ((int) $ranking_row['staff_id'] === $staff_id) {
+                    $performance_metric = $ranking_row;
+                    break;
+                }
+            }
+        }
         $actionable_feed = $this->sales_pipeline_model->get_reminder_response_stats([
-            'staff_id' => $staff_id,
-            'limit'    => 20,
+            'staff_id'     => $staff_id,
+            'dashboard_tab' => $dashboard_tab,
+            'limit'        => 20,
         ]);
         $can_open_pipeline_deal = is_admin()
             || has_permission('sales_pipeline', '', 'edit')
             || has_permission('sales_pipeline', '', 'view_deal_details');
+        $can_open_estimate = is_admin()
+            || staff_can('view', 'estimates')
+            || ($staff_id === (int) get_staff_user_id() && staff_can('view_own', 'estimates'));
 
         $view_data = [
             'staff'                  => $staff,
+            'dashboard_tab'          => $dashboard_tab,
+            'period'                 => $period,
             'metric'                 => !empty($metrics) ? $metrics[0] : null,
             'open_deals'             => $open_deals,
+            'estimate_follow_ups'    => $estimate_follow_ups,
+            'performance_metric'     => $performance_metric,
             'actionable_feed'        => $actionable_feed,
             'can_open_pipeline_deal' => $can_open_pipeline_deal,
+            'can_open_estimate'      => $can_open_estimate,
             'can_open_staff_profile' => $this->can_view_dashboard_all(),
         ];
 
@@ -248,7 +337,15 @@ class Sales_pipeline extends AdminController
         $this->form_validation->set_rules('customer_name', _l('sales_pipeline_customer_name'), 'trim|required|max_length[255]');
         $this->form_validation->set_rules('contact_name', _l('sales_pipeline_contact_name'), 'trim|max_length[100]');
         $this->form_validation->set_rules('contact_phone', _l('sales_pipeline_contact_phone'), 'trim|numeric|max_length[10]');
-        $this->form_validation->set_rules('contact_email', _l('sales_pipeline_contact_email'), 'trim|valid_email|max_length[100]');
+        $this->form_validation->set_rules(
+            'contact_email',
+            _l('sales_pipeline_contact_email'),
+            'trim|valid_email|regex_match[/^[^@\s]+@[^@\s]+\.[^@\s]+$/]|max_length[100]',
+            [
+                'valid_email' => _l('sales_pipeline_validation_contact_email_email'),
+                'regex_match' => _l('sales_pipeline_validation_contact_email_email'),
+            ]
+        );
         $this->form_validation->set_rules('deal_name', _l('sales_pipeline_deal_name'), 'trim|required|max_length[500]');
         $this->form_validation->set_rules('deal_value', _l('sales_pipeline_deal_value'), 'trim|required|numeric');
         $this->form_validation->set_rules('deal_date', _l('sales_pipeline_expected_date'), 'trim|required');
@@ -308,10 +405,32 @@ class Sales_pipeline extends AdminController
                     $redirect_url .= '?' . $_SERVER['QUERY_STRING'];
                 }
                 redirect($redirect_url);
+            } else {
+                // Populate $data['deal'] from $_POST data on validation failure to preserve filled form values
+                $post = $this->input->post();
+                $data['deal'] = [
+                    'id'                   => $id,
+                    'customer_name'        => $post['customer_name'] ?? '',
+                    'contact_name'         => $post['contact_name'] ?? '',
+                    'contact_phone'        => $post['contact_phone'] ?? '',
+                    'contact_email'        => $post['contact_email'] ?? '',
+                    'source_id'            => $post['source_id'] ?? null,
+                    'deal_name'            => $post['deal_name'] ?? '',
+                    'deal_value'           => $post['deal_value'] ?? '',
+                    'cost_price'           => $post['cost_price'] ?? '',
+                    'deal_date'            => $post['deal_date'] ?? '',
+                    'status'               => $post['status'] ?? '',
+                    'staff_id'             => $post['staff_id'] ?? get_staff_user_id(),
+                    'contract_signed'      => $post['contract_signed'] ?? 0,
+                    'invoice_issued'       => $post['invoice_issued'] ?? 0,
+                    'reminder_enabled'     => $post['reminder_enabled'] ?? 0,
+                    'reminder_frequency'   => $post['reminder_frequency'] ?? 2,
+                    'activity_description' => $post['activity_description'] ?? '',
+                ];
             }
         }
 
-        if ($is_id) {
+        if ($is_id && !isset($data['deal'])) {
             $data['deal'] = $this->sales_pipeline_model->get($id);
             if (!$data['deal']) {
                 show_404();
@@ -405,7 +524,7 @@ class Sales_pipeline extends AdminController
         }
 
         $reminder = $this->sales_pipeline_model->get_reminder_log((int) $reminder_id);
-        if (!$reminder || empty($reminder['deal_exists'])) {
+        if (!$reminder) {
             show_404();
         }
 
@@ -440,7 +559,7 @@ class Sales_pipeline extends AdminController
 
         $reminder_id = (int) $reminder_id;
         $reminder = $this->sales_pipeline_model->get_reminder_log($reminder_id);
-        if (!$reminder || empty($reminder['deal_exists'])) {
+        if (!$reminder) {
             if ($is_ajax) {
                 return $this->json_response(false, _l('sales_pipeline_reminder_not_found'), [], 404);
             }
@@ -452,6 +571,14 @@ class Sales_pipeline extends AdminController
                 return $this->json_response(false, _l('access_denied'), [], 403);
             }
             access_denied('sales_pipeline');
+        }
+
+        if ((int) ($reminder['response_required'] ?? 1) !== 1) {
+            if ($is_ajax) {
+                return $this->json_response(false, _l('sales_pipeline_reminder_response_not_required'), [], 422);
+            }
+            set_alert('warning', _l('sales_pipeline_reminder_response_not_required'));
+            redirect(admin_url('sales_pipeline/reminder_response/' . $reminder_id));
         }
 
         $response = trim((string) $this->input->post('response', false));
@@ -485,11 +612,14 @@ class Sales_pipeline extends AdminController
         } elseif ($result['status'] === 'forbidden') {
             $message_key = 'access_denied';
             $http_code = 403;
-        } elseif ($result['status'] === 'not_found' || $result['status'] === 'deal_not_found') {
+        } elseif ($result['status'] === 'not_found') {
             $message_key = 'sales_pipeline_reminder_not_found';
             $http_code = 404;
         } elseif ($result['status'] === 'invalid') {
             $message_key = 'sales_pipeline_reminder_response_invalid';
+            $http_code = 422;
+        } elseif ($result['status'] === 'response_not_required') {
+            $message_key = 'sales_pipeline_reminder_response_not_required';
             $http_code = 422;
         }
 
@@ -958,12 +1088,96 @@ class Sales_pipeline extends AdminController
                         set_alert('success', _l('updated_successfully', _l('sales_pipeline_source')));
                     }
                 }
+            } elseif ($type == 'reminder') {
+                $errors = [];
+                $normalized = [];
+                $toggles = ['sp_reminder_global_enabled','sp_reminder_skip_weekends','sp_reminder_deal_frequency_enabled','sp_reminder_est_daily_enabled','sp_reminder_est_monthly_enabled','sp_reminder_est_weekly_enabled','sp_reminder_lc_draft_enabled','sp_reminder_lc_sent_enabled','sp_reminder_lc_declined_enabled','sp_reminder_lc_expired_enabled','sp_reminder_lc_accepted_enabled','sp_reminder_email_cc_manager_enabled'];
+                foreach ($toggles as $key) { $normalized[$key] = isset($data[$key]) ? '1' : '0'; }
+                $channels = [
+                    'sp_reminder_deal_frequency_channels' => 'sp_reminder_deal_frequency_enabled',
+                    'sp_reminder_est_daily_channels' => 'sp_reminder_est_daily_enabled',
+                    'sp_reminder_est_monthly_channels' => 'sp_reminder_est_monthly_enabled',
+                    'sp_reminder_est_weekly_channels' => 'sp_reminder_est_weekly_enabled',
+                    'sp_reminder_lc_draft_channels' => 'sp_reminder_lc_draft_enabled',
+                    'sp_reminder_lc_sent_channels' => 'sp_reminder_lc_sent_enabled',
+                    'sp_reminder_lc_declined_channels' => 'sp_reminder_lc_declined_enabled',
+                    'sp_reminder_lc_expired_channels' => 'sp_reminder_lc_expired_enabled',
+                    'sp_reminder_lc_accepted_channels' => 'sp_reminder_lc_accepted_enabled',
+                ];
+                foreach ($channels as $key => $enabledKey) {
+                    $selected = [];
+                    if (!empty($data[$key . '_crm'])) { $selected[] = 'crm'; }
+                    if (!empty($data[$key . '_email'])) { $selected[] = 'email'; }
+                    if ($normalized[$enabledKey] === '1' && !$selected) { $errors[] = _l('sp_reminder_error_channel_required', [$key]); }
+                    $normalized[$key] = implode(',', $selected);
+                }
+                $scope = trim((string) ($data['sp_reminder_email_cc_scope'] ?? 'all'));
+                $normalized['sp_reminder_email_cc_scope'] = in_array($scope, ['all', 'critical_only'], true) ? $scope : 'all';
+                $rawFallback = trim((string) ($data['sp_reminder_manager_fallback_emails'] ?? ''));
+                $validFallbackEmails = [];
+                if ($rawFallback !== '') {
+                    foreach (explode(',', $rawFallback) as $item) {
+                        $email = trim($item);
+                        if ($email !== '') {
+                            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                                $validFallbackEmails[] = $email;
+                            } else {
+                                $errors[] = _l('sp_reminder_error_invalid_fallback_email', [$email]);
+                            }
+                        }
+                    }
+                }
+                $normalized['sp_reminder_manager_fallback_emails'] = implode(',', array_unique($validFallbackEmails));
+                $numbers = [
+                    'sp_reminder_est_daily_threshold'=>[1,100], 'sp_reminder_est_monthly_d10'=>[1,100],
+                    'sp_reminder_est_monthly_d20'=>[1,200], 'sp_reminder_est_monthly_final'=>[1,500],
+                    'sp_reminder_est_weekly_target'=>[1,100000000000], 'sp_reminder_lc_draft_days'=>[1,90],
+                    'sp_reminder_lc_sent_days'=>[1,90], 'sp_reminder_lc_sent_expiry_days'=>[1,30], 'sp_reminder_lc_declined_days'=>[1,90],
+                ];
+                foreach ($numbers as $key => $limits) {
+                    $raw = trim((string) ($data[$key] ?? ''));
+                    if (!preg_match('/^\d+$|^\d{1,3}([.,\s]\d{3})+$/', $raw)) { $errors[] = _l('sp_reminder_error_invalid_number', [$key, $limits[0], $limits[1]]); continue; }
+                    $value = (int) preg_replace('/[.,\s]/', '', $raw);
+                    if ($value < $limits[0] || $value > $limits[1]) { $errors[] = _l('sp_reminder_error_invalid_number', [$key, $limits[0], $limits[1]]); continue; }
+                    $normalized[$key] = (string) $value;
+                }
+                foreach (['sp_reminder_est_daily_time','sp_reminder_est_monthly_time','sp_reminder_est_weekly_midweek_time','sp_reminder_est_weekly_final_time'] as $key) {
+                    $value = trim((string) ($data[$key] ?? ''));
+                    if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value)) { $errors[] = _l('sp_reminder_error_invalid_time', [$key]); }
+                    else { $normalized[$key] = $value; }
+                }
+                $quietStart = trim((string) ($data['sp_reminder_quiet_hours_start'] ?? ''));
+                $quietEnd = trim((string) ($data['sp_reminder_quiet_hours_end'] ?? ''));
+                if (($quietStart === '') !== ($quietEnd === '')) { $errors[] = _l('sp_reminder_error_quiet_hours_incomplete'); }
+                elseif ($quietStart !== '' && (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $quietStart) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $quietEnd) || $quietStart === $quietEnd)) { $errors[] = _l('sp_reminder_error_invalid_time', [_l('sp_reminder_quiet_hours_label')]); }
+                $normalized['sp_reminder_quiet_hours_start'] = $quietStart;
+                $normalized['sp_reminder_quiet_hours_end'] = $quietEnd;
+                $holidays = [];
+                foreach (array_filter(array_map('trim', preg_split('/\R/', (string) ($data['sp_reminder_holiday_dates'] ?? '')))) as $date) {
+                    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+                    if (!$parsed || $parsed->format('Y-m-d') !== $date) { $errors[] = _l('sp_reminder_error_invalid_date', [$date]); }
+                    else { $holidays[] = $date; }
+                }
+                $normalized['sp_reminder_holiday_dates'] = implode("\n", array_unique($holidays));
+                if ($errors) { set_alert('warning', implode('<br>', $errors)); redirect(admin_url('sales_pipeline/settings#reminders')); }
+                $changed = [];
+                $this->db->trans_begin();
+                foreach ($normalized as $key => $value) {
+                    if ((string) get_option($key) !== $value) { $changed[] = $key; update_option($key, $value); }
+                }
+                if ($this->db->trans_status() === false) { $this->db->trans_rollback(); set_alert('danger', _l('problem_updating')); }
+                else { $this->db->trans_commit(); if ($changed) { log_activity('Sales Pipeline reminder settings updated by Staff #' . get_staff_user_id() . ': ' . implode(', ', $changed)); } set_alert('success', _l('updated_successfully', _l('sales_pipeline_settings_reminders'))); }
+                redirect(admin_url('sales_pipeline/settings#reminders'));
             }
             redirect(admin_url('sales_pipeline/settings'));
         }
 
         $data['statuses'] = $this->sales_pipeline_model->get_statuses();
         $data['sources'] = $this->sales_pipeline_model->get_sources();
+        $data['reminder_options'] = [];
+        foreach (sales_pipeline_reminder_rule_default_options() as $key => $default) {
+            $data['reminder_options'][$key] = get_option($key) === false ? $default : get_option($key);
+        }
         $data['title'] = _l('sales_pipeline_settings');
 
         $this->load->view('sales_pipeline/settings', $data);
@@ -1129,8 +1343,42 @@ class Sales_pipeline extends AdminController
 
     private function can_view_dashboard_all($staff_id = '')
     {
-        return is_admin($staff_id)
-            || has_permission('sales_pipeline', $staff_id, 'view');
+        // The Performance Score contract is role-based: only Administrators
+        // receive the full cohort. A Staff account may hold `view` permission
+        // for other module workflows, but its Dashboard remains personal.
+        return is_admin($staff_id);
+    }
+
+    private function resolve_dashboard_tab($tab)
+    {
+        return in_array($tab, ['deals', 'estimates'], true) ? $tab : 'deals';
+    }
+
+    /**
+     * Preserve the viewer's personal summary while ranking the full Estimate cohort.
+     *
+     * @param array  $dashboard
+     * @param string $period
+     * @param bool   $can_view_all
+     * @return void
+     */
+    private function attach_estimate_performance_ranking(&$dashboard, $period, $can_view_all)
+    {
+        $current_staff_id = (int) get_staff_user_id();
+        $ranking = $this->sales_pipeline_model->get_estimate_performance_ranking($period);
+        $dashboard['estimates']['leaderboard'] = $this->sales_pipeline_model
+            ->project_estimate_performance_ranking(
+                $ranking['leaderboard'],
+                $can_view_all,
+                $current_staff_id
+            );
+        $dashboard['estimates']['performance_status'] = $ranking['status'];
+        $dashboard['estimates']['performance_formula_version'] = $ranking['formula_version'];
+        $dashboard['estimates']['performance_configuration_errors'] = $ranking['configuration_errors'];
+        $dashboard['viewer'] = [
+            'can_view_all'     => (bool) $can_view_all,
+            'current_staff_id' => $current_staff_id,
+        ];
     }
 
     /**

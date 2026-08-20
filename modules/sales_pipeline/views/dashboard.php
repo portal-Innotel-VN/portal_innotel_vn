@@ -1,51 +1,16 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php
-$summary = $dashboard['summary'] ?? [];
-$staff_metrics = $dashboard['staff'] ?? [];
-$periods = $dashboard['periods'] ?? [];
-
-$resolve_status = static function ($progress) {
-    if ($progress >= 100) {
-        return 'success';
-    }
-    if ($progress >= 60) {
-        return 'warning';
-    }
-    return 'danger';
-};
-
-$summary_cards = [
-    [
-        'label'    => _l('sales_pipeline_dashboard_estimates_today'),
-        'value'    => number_format((int) ($summary['estimates_today'] ?? 0), 0, ',', '.'),
-        'progress' => (float) ($summary['estimates_today_progress'] ?? 0),
-        'period'   => !empty($periods['today']) ? date('d/m/Y', strtotime($periods['today'])) : date('d/m/Y'),
-    ],
-    [
-        'label'    => _l('sales_pipeline_dashboard_revenue_week'),
-        'value'    => sales_pipeline_compact_money($summary['revenue_week'] ?? 0),
-        'progress' => (float) ($summary['revenue_week_progress'] ?? 0),
-        'period'   => !empty($periods['week_start']) && !empty($periods['week_end'])
-            ? date('d/m', strtotime($periods['week_start'])) . ' - ' . date('d/m', strtotime($periods['week_end']))
-            : '',
-    ],
-    [
-        'label'    => _l('sales_pipeline_dashboard_estimates_month'),
-        'value'    => number_format((int) ($summary['estimates_month'] ?? 0), 0, ',', '.'),
-        'progress' => (float) ($summary['estimates_month_progress'] ?? 0),
-        'period'   => !empty($periods['month_start']) ? date('m/Y', strtotime($periods['month_start'])) : date('m/Y'),
-    ],
-];
+$selected_period = $dashboard['selected_period'] ?? 'this_month';
 ?>
 <?php init_head(); ?>
-<link rel="stylesheet" href="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/css/dashboard.css')); ?>?v=1.0.3">
+<link rel="stylesheet" href="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/css/dashboard.css')); ?>?v=1.1.0">
 
 <div id="wrapper">
     <div class="content">
         <main class="sp-dashboard-shell"
               data-sales-pipeline-dashboard
               data-staff-url="<?php echo html_escape(admin_url('sales_pipeline/dashboard_staff_pipeline')); ?>"
-              data-leaderboard-url="<?php echo html_escape(admin_url('sales_pipeline/ajax_dashboard_leaderboard')); ?>"
+              data-dashboard-url="<?php echo html_escape(admin_url('sales_pipeline/ajax_dashboard_leaderboard')); ?>"
               data-loading-message="<?php echo html_escape(_l('sales_pipeline_dashboard_loading')); ?>"
               data-error-message="<?php echo html_escape(_l('sales_pipeline_dashboard_load_failed')); ?>">
             <section class="sp-dashboard-overview" aria-labelledby="sp-dashboard-title">
@@ -76,31 +41,28 @@ $summary_cards = [
                     </div>
                 </div>
 
-                <div class="sp-dashboard-summary-grid">
-                    <?php foreach ($summary_cards as $card) { ?>
-                        <?php $card_status = $resolve_status($card['progress']); ?>
-                        <article class="sp-summary-card sp-summary-card--<?php echo $card_status; ?>">
-                            <div class="sp-summary-card__topline">
-                                <h2><?php echo $card['label']; ?></h2>
-                                <span class="sp-summary-card__period"><?php echo html_escape($card['period']); ?></span>
-                            </div>
-                            <div class="sp-summary-card__value"><?php echo html_escape($card['value']); ?></div>
-                            <div class="sp-progress" role="progressbar"
-                                 aria-valuemin="0"
-                                 aria-valuemax="100"
-                                 aria-valuenow="<?php echo html_escape((string) $card['progress']); ?>">
-                                <span class="sp-progress__bar sp-progress__bar--<?php echo $card_status; ?>"
-                                      style="width: <?php echo number_format($card['progress'], 1, '.', ''); ?>%"></span>
-                            </div>
-                        </article>
-                    <?php } ?>
+                <div class="sp-dashboard-filterbar">
+                    <div class="sp-dashboard-filter-control">
+                        <select id="sp-dashboard-time-filter" class="selectpicker" data-dropup-auto="false" data-width="fit">
+                            <option value="this_week" <?php echo $selected_period === 'this_week' ? 'selected' : ''; ?>>
+                                <?php echo _l('sales_pipeline_dashboard_filter_this_week'); ?>
+                            </option>
+                            <option value="this_month" <?php echo $selected_period === 'this_month' ? 'selected' : ''; ?>>
+                                <?php echo _l('sales_pipeline_dashboard_filter_this_month'); ?>
+                            </option>
+                            <option value="this_quarter" <?php echo $selected_period === 'this_quarter' ? 'selected' : ''; ?>>
+                                <?php echo _l('sales_pipeline_dashboard_filter_this_quarter'); ?>
+                            </option>
+                            <option value="this_year" <?php echo $selected_period === 'this_year' ? 'selected' : ''; ?>>
+                                <?php echo _l('sales_pipeline_dashboard_filter_this_year'); ?>
+                            </option>
+                        </select>
+                    </div>
                 </div>
             </section>
 
-            <div class="sp-dashboard-main-grid">
-                <div class="sp-dashboard-leaderboard-wrapper" data-dashboard-leaderboard-wrapper>
-                    <?php $this->load->view('sales_pipeline/partials/_leaderboard', ['dashboard' => $dashboard]); ?>
-                </div>
+            <div class="sp-dashboard-content-wrapper" data-dashboard-content-wrapper aria-live="polite">
+                <?php $this->load->view('sales_pipeline/partials/_dashboard_content', ['dashboard' => $dashboard]); ?>
             </div>
 
             <div id="sp-dashboard-drawer"
@@ -134,6 +96,6 @@ $summary_cards = [
 </div>
 
 <?php init_tail(); ?>
-<script src="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/js/dashboard.js')); ?>?v=1.0.3"></script>
+<script src="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/js/dashboard.js')); ?>?v=1.0.9"></script>
 </body>
 </html>

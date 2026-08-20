@@ -1,7 +1,10 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php
 $staff_metrics = $dashboard['staff'] ?? [];
-$selected_period = $dashboard['selected_period'] ?? 'this_month';
+$selected_range = $dashboard['selected_period_range'] ?? [];
+$period_label = !empty($selected_range['start']) && !empty($selected_range['end'])
+    ? date('d/m/Y', strtotime($selected_range['start'])) . ' - ' . date('d/m/Y', strtotime($selected_range['end']))
+    : '';
 ?>
 <section class="sp-dashboard-leaderboard" aria-labelledby="sp-leaderboard-title">
     <header class="sp-leaderboard-header">
@@ -12,22 +15,7 @@ $selected_period = $dashboard['selected_period'] ?? 'this_month';
             </h2>
         </div>
         <div class="sp-leaderboard-header__right">
-            <div class="sp-dashboard-time-filter">
-                <select id="sp-dashboard-time-filter" class="selectpicker" data-width="fit">
-                    <option value="this_week" <?php echo $selected_period === 'this_week' ? 'selected' : ''; ?>>
-                        <?php echo _l('sales_pipeline_dashboard_filter_this_week'); ?>
-                    </option>
-                    <option value="this_month" <?php echo $selected_period === 'this_month' ? 'selected' : ''; ?>>
-                        <?php echo _l('sales_pipeline_dashboard_filter_this_month'); ?>
-                    </option>
-                    <option value="this_quarter" <?php echo $selected_period === 'this_quarter' ? 'selected' : ''; ?>>
-                        <?php echo _l('sales_pipeline_dashboard_filter_this_quarter'); ?>
-                    </option>
-                    <option value="this_year" <?php echo $selected_period === 'this_year' ? 'selected' : ''; ?>>
-                        <?php echo _l('sales_pipeline_dashboard_filter_this_year'); ?>
-                    </option>
-                </select>
-            </div>
+            <span class="sp-leaderboard-period"><?php echo html_escape($period_label); ?></span>
         </div>
     </header>
 
@@ -38,10 +26,10 @@ $selected_period = $dashboard['selected_period'] ?? 'this_month';
                     <tr>
                         <th scope="col" class="sp-column-rank"><?php echo _l('sales_pipeline_dashboard_rank'); ?></th>
                         <th scope="col" class="sp-column-staff"><?php echo _l('sales_pipeline_dashboard_staff'); ?></th>
-                        <th scope="col"><?php echo _l('sales_pipeline_dashboard_period_quotes'); ?></th>
+
                         <th scope="col"><?php echo _l('sales_pipeline_dashboard_period_deals'); ?></th>
-                        <th scope="col"><?php echo _l('sales_pipeline_dashboard_win_rate'); ?></th>
                         <th scope="col"><?php echo _l('sales_pipeline_dashboard_period_revenue'); ?></th>
+                        <th scope="col"><?php echo _l('sales_pipeline_dashboard_win_rate'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -75,24 +63,22 @@ $selected_period = $dashboard['selected_period'] ?? 'this_month';
                                     <span class="sp-staff-copy">
                                         <strong><?php echo html_escape($metric['staff_name']); ?></strong>
                                         <small><?php echo html_escape($metric['email']); ?></small>
-                                        <small class="sp-staff-pipeline-label">
-                                            <?php echo _l('sales_pipeline_dashboard_open_deals'); ?>: <?php echo (int) ($metric['open_pipeline_deals'] ?? 0); ?>
-                                        </small>
                                     </span>
                                     <i class="fa fa-angle-right" aria-hidden="true"></i>
                                 </button>
                             </td>
-                            <td>
-                                <div class="sp-table-kpi">
-                                    <div class="sp-table-kpi__line">
-                                        <strong><?php echo number_format((int) ($metric['period_estimates'] ?? 0), 0, ',', '.'); ?></strong>
-                                    </div>
-                                </div>
-                            </td>
+
                             <td>
                                 <div class="sp-table-kpi">
                                     <div class="sp-table-kpi__line">
                                         <strong><?php echo number_format((int) ($metric['period_deals'] ?? 0), 0, ',', '.'); ?></strong>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="sp-table-kpi" title="<?php echo html_escape($period_revenue_full); ?>">
+                                    <div class="sp-table-kpi__line">
+                                        <strong><?php echo html_escape($period_revenue_formatted); ?></strong>
                                     </div>
                                 </div>
                             </td>
@@ -103,13 +89,6 @@ $selected_period = $dashboard['selected_period'] ?? 'this_month';
                                             <?php echo number_format($win_rate, 1, '.', ''); ?>%
                                         </span>
                                         <small class="text-muted">(<?php echo (int) ($metric['period_won_deals'] ?? 0); ?> / <?php echo (int) ($metric['period_deals'] ?? 0); ?>)</small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="sp-table-kpi" title="<?php echo html_escape($period_revenue_full); ?>">
-                                    <div class="sp-table-kpi__line">
-                                        <strong><?php echo html_escape($period_revenue_formatted); ?></strong>
                                     </div>
                                 </div>
                             </td>
