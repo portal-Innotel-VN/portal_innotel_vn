@@ -3,6 +3,18 @@
 $responseRequired = (int) ($reminder['response_required'] ?? 1) === 1;
 $responded = $reminder['staff_response'] !== null;
 $canRespond = (int) $reminder['staff_id'] === (int) get_staff_user_id();
+$isDeal = $reminder['entity_type'] === 'deal';
+$isEstimateRisk = $reminder['entity_type'] === 'estimate'
+    && !empty($reminder['snapshot']['risk_reason']);
+$showReason = $isDeal || $isEstimateRisk || !empty($reminder['reason_text']);
+$reasonText = $isEstimateRisk
+    ? $reminder['snapshot']['risk_reason']
+    : ($reminder['reason_text'] ?? $reminder['display_message']);
+$targetSummary = html_entity_decode(
+    rtrim(trim((string) $reminder['target_summary']), " :"),
+    ENT_QUOTES,
+    'UTF-8'
+);
 ?>
 <?php init_head(); ?>
 <link rel="stylesheet" href="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/css/reminder_response.css')); ?>?v=1.0.7">
@@ -35,12 +47,19 @@ $canRespond = (int) $reminder['staff_id'] === (int) get_staff_user_id();
                         <section class="sp-reminder-message" role="note">
                             <i class="fa fa-bell-o sp-reminder-message__icon" aria-hidden="true"></i>
                             <div class="sp-reminder-message__content">
-                                <p class="sp-reminder-message__greeting"><?php echo nl2br(html_escape($reminder['display_message'])); ?></p>
+                                <?php if ($showReason) { ?>
+                                    <p class="sp-reminder-message__reason">
+                                        <span><?php echo html_escape(_l('sales_pipeline_reminder_reason')); ?></span>
+                                        <strong><?php echo html_escape($reasonText); ?></strong>
+                                    </p>
+                                <?php } else { ?>
+                                    <p class="sp-reminder-message__greeting"><?php echo nl2br(html_escape($reminder['display_message'])); ?></p>
+                                <?php } ?>
                                 <p class="sp-reminder-message__target">
                                     <strong><?php echo html_escape($reminder['target_label']); ?></strong>
-                                    <?php echo html_escape($reminder['target_summary']); ?>
-                                    <?php echo html_escape($reminder['target_question']); ?>
+                                    <span><?php echo html_escape($targetSummary); ?></span>
                                 </p>
+                                <p class="sp-reminder-message__question"><?php echo html_escape($reminder['target_question']); ?></p>
                                 <p class="sp-reminder-message__intro"><?php echo html_escape($reminder['snapshot_intro']); ?></p>
                                 <ul class="sp-reminder-message__questions">
                                     <?php foreach ($reminder['snapshot_questions'] as $question) { ?>

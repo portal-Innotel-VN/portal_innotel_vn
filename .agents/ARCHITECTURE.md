@@ -13,6 +13,8 @@ Context trả lời: “Hệ thống này là gì và ranh giới của nó ở 
 
 Chứa chính sách bắt buộc về code, dữ liệu, bảo mật, quyền truy cập và phạm vi sửa
 đổi. Governance trả lời: “Agent được phép và không được phép làm gì?”.
+`.agents/AGENTS.md` cũng là điểm vào bắt buộc để chạy Context Loading Protocol
+ở đầu mỗi cuộc hội thoại/task mới.
 
 ## Tầng 3 — Roles
 

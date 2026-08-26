@@ -233,6 +233,204 @@ class Sales_pipeline extends AdminController
     }
 
     /**
+     * Get candidate estimate revision sources for a customer (for UI revision dropdown).
+     * URL: admin/sales_pipeline/estimate_revision_sources?client_id={client_id}
+     */
+    public function estimate_revision_sources()
+    {
+        if (!is_staff_logged_in()) {
+            return $this->json_response(false, _l('access_denied'), [], 401);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $can_view = is_admin($staff_id)
+            || (function_exists('staff_can') && (staff_can('view', 'estimates', $staff_id) || staff_can('view_own', 'estimates', $staff_id)));
+
+        if (!$can_view) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $client_id = (int) $this->input->get('client_id');
+        if ($client_id <= 0) {
+            return $this->json_response(true, '', ['sources' => []]);
+        }
+
+        $sources = $this->sales_pipeline_model->get_customer_estimate_revision_sources($client_id, $staff_id);
+
+        return $this->json_response(true, '', [
+            'sources'    => $sources,
+            'is_manager' => is_admin($staff_id) || (function_exists('has_permission') && has_permission('sales_pipeline', (string) $staff_id, 'manage_estimate_revisions')),
+        ]);
+    }
+
+    /**
+     * Smart Prompt: Endpoint returning ranked candidate estimates for suggestion banner.
+     * GET /admin/sales_pipeline/estimate_revision_candidates
+     */
+    public function estimate_revision_candidates()
+    {
+        if (!is_staff_logged_in()) {
+            return $this->json_response(false, _l('access_denied'), [], 401);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $can_view = is_admin($staff_id)
+            || (function_exists('staff_can') && (staff_can('view', 'estimates', $staff_id) || staff_can('view_own', 'estimates', $staff_id)));
+
+        if (!$can_view) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $client_id = (int) $this->input->get('client_id');
+        if ($client_id <= 0) {
+            return $this->json_response(true, '', ['candidates' => []]);
+        }
+
+        $project_id = $this->input->get('project_id') ? (int) $this->input->get('project_id') : null;
+        $limit = $this->input->get('limit') ? (int) $this->input->get('limit') : 10;
+
+        $candidates = $this->sales_pipeline_model->get_estimate_revision_candidates($client_id, $project_id, $staff_id, $limit);
+
+        return $this->json_response(true, '', [
+            'candidates' => $candidates,
+            'is_manager' => is_admin($staff_id) || (function_exists('has_permission') && has_permission('sales_pipeline', (string) $staff_id, 'manage_estimate_revisions')),
+        ]);
+    }
+
+    /**
+     * Manual Link: Gộp báo giá standalone vào nhóm báo giá có sẵn.
+     * POST /admin/sales_pipeline/link_estimate_revision
+     */
+    public function link_estimate_revision()
+    {
+        if (!is_staff_logged_in()) {
+            return $this->json_response(false, _l('access_denied'), [], 401);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $source_id = (int) $this->input->post('source_estimate_id');
+        $target_id = (int) $this->input->post('target_estimate_id');
+        $reason = $this->input->post('reason');
+
+        $this->load->library('sales_pipeline/estimate_revision_service');
+        $result = $this->estimate_revision_service->link_standalone_revision($source_id, $target_id, $staff_id, $reason);
+
+        $message = _l($result['message_key'] ?? ($result['success'] ? 'sales_pipeline_revision_linked' : 'sales_pipeline_error_occurred'));
+        return $this->json_response($result['success'], $message, $result);
+    }
+
+    /**
+     * Manual Unlink: Tách phiên bản mới nhất ra thành standalone group.
+     * POST /admin/sales_pipeline/unlink_estimate_revision
+     */
+    public function unlink_estimate_revision()
+    {
+        if (!is_staff_logged_in()) {
+            return $this->json_response(false, _l('access_denied'), [], 401);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $estimate_id = (int) $this->input->post('estimate_id');
+        $reason = $this->input->post('reason');
+
+        $this->load->library('sales_pipeline/estimate_revision_service');
+        $result = $this->estimate_revision_service->unlink_estimate_revision($estimate_id, $staff_id, $reason);
+
+        $message = _l($result['message_key'] ?? ($result['success'] ? 'sales_pipeline_revision_unlinked' : 'sales_pipeline_error_occurred'));
+        return $this->json_response($result['success'], $message, $result);
+    }
+
+    /**
+     * Version History & Audit Timeline API.
+     * GET /admin/sales_pipeline/estimate_version_history
+     */
+    public function estimate_version_history()
+    {
+        if (!is_staff_logged_in()) {
+            return $this->json_response(false, _l('access_denied'), [], 401);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $estimate_id = (int) $this->input->get('estimate_id');
+        if ($estimate_id <= 0) {
+            return $this->json_response(false, _l('sales_pipeline_quote_invalid_estimate'), [], 400);
+        }
+
+        if (function_exists('user_can_view_estimate') && !user_can_view_estimate($estimate_id, $staff_id)) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $this->load->library('sales_pipeline/estimate_revision_service');
+        $history = $this->estimate_revision_service->get_estimate_version_history($estimate_id);
+
+        return $this->json_response(true, '', $history);
+    }
+
+    /**
+     * Set Deal Manual Lock (Khóa/Mở khóa cập nhật tự động từ Estimate Group).
+     * POST /admin/sales_pipeline/set_deal_manual_lock
+     */
+    public function set_deal_manual_lock()
+    {
+        if (!is_staff_logged_in()) {
+            return $this->json_response(false, _l('access_denied'), [], 401);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $deal_id = (int) $this->input->post('deal_id');
+        $is_locked = (int) $this->input->post('is_locked') ? 1 : 0;
+        $reason = trim((string) $this->input->post('reason'));
+
+        if ($deal_id <= 0) {
+            return $this->json_response(false, _l('sales_pipeline_deal_not_found'), [], 400);
+        }
+
+        if ($is_locked === 1 && $reason === '') {
+            return $this->json_response(false, _l('sales_pipeline_override_reason_required'), [], 400);
+        }
+
+        $deal = $this->sales_pipeline_model->get_deal($deal_id);
+        if (!$deal) {
+            return $this->json_response(false, _l('sales_pipeline_deal_not_found'), [], 404);
+        }
+
+        // Check permission: Deal owner or Admin or Edit capability
+        $can_edit = is_admin($staff_id) || (int) $deal['staff_id'] === $staff_id || has_permission('sales_pipeline', '', 'edit');
+        if (!$can_edit) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $pipeline_table = db_prefix() . 'sales_pipeline';
+        $now = date('Y-m-d H:i:s');
+        $this->db->where('id', $deal_id)->update($pipeline_table, [
+            'is_manual_lock'     => $is_locked,
+            'manual_lock_by'     => $is_locked ? $staff_id : null,
+            'manual_lock_at'     => $is_locked ? $now : null,
+            'manual_lock_reason' => $is_locked ? $reason : null,
+            'datemodified'       => $now,
+        ]);
+
+        $this->load->library('sales_pipeline/estimate_revision_service');
+
+        // On unlock, immediately resync deal values to current estimate group state
+        if ($is_locked === 0) {
+            $this->estimate_revision_service->sync_deal($deal_id);
+        }
+
+        $activity_msg = $is_locked
+            ? _l('sales_pipeline_activity_deal_locked', [$reason])
+            : _l('sales_pipeline_activity_deal_unlocked');
+
+        $this->sales_pipeline_model->log_activity($deal_id, $activity_msg, $staff_id);
+
+        return $this->json_response(true, _l('sales_pipeline_updated_successfully'), [
+            'deal_id'        => $deal_id,
+            'is_manual_lock' => $is_locked,
+        ]);
+    }
+
+
+    /**
      * Drawer chi tiết nhân viên Dashboard theo tab đang chọn.
      * URL: admin/sales_pipeline/dashboard_staff_pipeline/{staff_id}
      */
@@ -279,10 +477,14 @@ class Sales_pipeline extends AdminController
                 }
             }
         }
+
+        $period_range = $this->sales_pipeline_model->resolve_dashboard_period($period);
         $actionable_feed = $this->sales_pipeline_model->get_reminder_response_stats([
-            'staff_id'     => $staff_id,
+            'staff_id'      => $staff_id,
             'dashboard_tab' => $dashboard_tab,
-            'limit'        => 20,
+            'date_from'     => $period_range['start'],
+            'date_to'       => $period_range['end'],
+            'limit'         => 20,
         ]);
         $can_open_pipeline_deal = is_admin()
             || has_permission('sales_pipeline', '', 'edit')
@@ -1091,10 +1293,11 @@ class Sales_pipeline extends AdminController
             } elseif ($type == 'reminder') {
                 $errors = [];
                 $normalized = [];
-                $toggles = ['sp_reminder_global_enabled','sp_reminder_skip_weekends','sp_reminder_deal_frequency_enabled','sp_reminder_est_daily_enabled','sp_reminder_est_monthly_enabled','sp_reminder_est_weekly_enabled','sp_reminder_lc_draft_enabled','sp_reminder_lc_sent_enabled','sp_reminder_lc_declined_enabled','sp_reminder_lc_expired_enabled','sp_reminder_lc_accepted_enabled','sp_reminder_email_cc_manager_enabled'];
+                $toggles = ['sp_reminder_global_enabled','sp_reminder_skip_weekends','sp_reminder_deal_pipeline_enabled','sp_reminder_deal_stale_enabled','sp_reminder_est_daily_enabled','sp_reminder_est_monthly_enabled','sp_reminder_est_weekly_enabled','sp_reminder_lc_draft_enabled','sp_reminder_lc_sent_enabled','sp_reminder_lc_declined_enabled','sp_reminder_lc_expired_enabled','sp_reminder_lc_accepted_enabled','sp_reminder_email_cc_manager_enabled'];
                 foreach ($toggles as $key) { $normalized[$key] = isset($data[$key]) ? '1' : '0'; }
                 $channels = [
-                    'sp_reminder_deal_frequency_channels' => 'sp_reminder_deal_frequency_enabled',
+                    'sp_reminder_deal_pipeline_channels' => 'sp_reminder_deal_pipeline_enabled',
+                    'sp_reminder_deal_stale_channels' => 'sp_reminder_deal_stale_enabled',
                     'sp_reminder_est_daily_channels' => 'sp_reminder_est_daily_enabled',
                     'sp_reminder_est_monthly_channels' => 'sp_reminder_est_monthly_enabled',
                     'sp_reminder_est_weekly_channels' => 'sp_reminder_est_weekly_enabled',
@@ -1129,6 +1332,8 @@ class Sales_pipeline extends AdminController
                 }
                 $normalized['sp_reminder_manager_fallback_emails'] = implode(',', array_unique($validFallbackEmails));
                 $numbers = [
+                    'sp_reminder_deal_pipeline_min_count'=>[1,1000],
+                    'sp_reminder_deal_stale_cutoff_days'=>[1,3650], 'sp_reminder_deal_stale_max_per_run'=>[1,1000],
                     'sp_reminder_est_daily_threshold'=>[1,100], 'sp_reminder_est_monthly_d10'=>[1,100],
                     'sp_reminder_est_monthly_d20'=>[1,200], 'sp_reminder_est_monthly_final'=>[1,500],
                     'sp_reminder_est_weekly_target'=>[1,100000000000], 'sp_reminder_lc_draft_days'=>[1,90],
@@ -1141,7 +1346,7 @@ class Sales_pipeline extends AdminController
                     if ($value < $limits[0] || $value > $limits[1]) { $errors[] = _l('sp_reminder_error_invalid_number', [$key, $limits[0], $limits[1]]); continue; }
                     $normalized[$key] = (string) $value;
                 }
-                foreach (['sp_reminder_est_daily_time','sp_reminder_est_monthly_time','sp_reminder_est_weekly_midweek_time','sp_reminder_est_weekly_final_time'] as $key) {
+                foreach (['sp_reminder_deal_pipeline_check_time','sp_reminder_est_daily_time','sp_reminder_est_monthly_time','sp_reminder_est_weekly_midweek_time','sp_reminder_est_weekly_final_time'] as $key) {
                     $value = trim((string) ($data[$key] ?? ''));
                     if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value)) { $errors[] = _l('sp_reminder_error_invalid_time', [$key]); }
                     else { $normalized[$key] = $value; }

@@ -55,7 +55,9 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
             $CI->db->query('ALTER TABLE `' . $reminders . '` MODIFY `sent_at` datetime NULL DEFAULT NULL');
         }
 
-        // Legacy rows cannot reconstruct a reliable dedupe key; keep it NULL.
+        // Legacy rows predate the shared repository. Preserve their retired
+        // rule code strictly as audit classification; no evaluator emits it.
+        // Their dedupe key cannot be reconstructed reliably, so keep it NULL.
         $CI->db->query('UPDATE `' . $reminders . '` SET'
             . " `rule_code` = COALESCE(NULLIF(`rule_code`, ''), 'DEAL_FREQUENCY_REMINDER'),"
             . " `entity_type` = COALESCE(NULLIF(`entity_type`, ''), 'deal'),"

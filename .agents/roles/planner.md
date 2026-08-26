@@ -2,6 +2,8 @@
 
 ## Trách nhiệm
 
+- Hoàn tất [`Context Loading Protocol`](../context/context-loading.md) trước
+  khi viết hoặc cập nhật Plan.
 - Làm rõ mục tiêu, non-goals và acceptance criteria.
 - Đọc basecode và ghi bằng chứng theo file, class, function, endpoint hoặc schema.
 - Mô tả data flow, permission, failure states, migration và rollback nếu có.

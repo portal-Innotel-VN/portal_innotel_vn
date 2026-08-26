@@ -15,8 +15,15 @@ function sales_pipeline_reminder_rule_default_options()
         'sp_reminder_quiet_hours_start'       => '',
         'sp_reminder_quiet_hours_end'         => '',
 
-        'sp_reminder_deal_frequency_enabled'  => '1',
-        'sp_reminder_deal_frequency_channels' => 'crm,email',
+        'sp_reminder_deal_pipeline_enabled'    => '1',
+        'sp_reminder_deal_pipeline_channels'   => 'crm,email',
+        'sp_reminder_deal_pipeline_min_count'  => '1',
+        'sp_reminder_deal_pipeline_check_time' => '09:00',
+
+        'sp_reminder_deal_stale_enabled'       => '1',
+        'sp_reminder_deal_stale_channels'      => 'crm,email',
+        'sp_reminder_deal_stale_cutoff_days'   => '30',
+        'sp_reminder_deal_stale_max_per_run'   => '5',
 
         'sp_reminder_est_daily_enabled'       => '1',
         'sp_reminder_est_daily_channels'      => 'crm,email',

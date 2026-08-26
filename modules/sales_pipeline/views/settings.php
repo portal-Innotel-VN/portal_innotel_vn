@@ -136,7 +136,10 @@
                                 </div>
                                 <?php
                                 $groups = [
-                                    'sp-reminder-section--deal' => ['title' => 'sp_reminder_section_deal', 'rules' => [['sp_reminder_deal_frequency', 'sp_reminder_deal_note', []]]],
+                                    'sp-reminder-section--deal' => ['title' => 'sp_reminder_section_deal', 'rules' => [
+                                        ['sp_reminder_deal_pipeline', 'sp_reminder_deal_pipeline_label', [['sp_reminder_deal_pipeline_min_count','sp_reminder_deal_pipeline_min_count_label','number'],['sp_reminder_deal_pipeline_check_time','sp_reminder_check_time_label','time']]],
+                                        ['sp_reminder_deal_stale', 'sp_reminder_deal_stale_label', [['sp_reminder_deal_stale_cutoff_days','sp_reminder_deal_stale_cutoff_label','number'],['sp_reminder_deal_stale_max_per_run','sp_reminder_deal_stale_max_label','number']]],
+                                    ]],
                                     'sp-reminder-section--kpi' => ['title' => 'sp_reminder_section_kpi', 'rules' => [
                                         ['sp_reminder_est_daily', 'sp_reminder_daily', [['sp_reminder_est_daily_threshold','sp_reminder_threshold_label','number'],['sp_reminder_est_daily_time','sp_reminder_check_time_label','time']]],
                                         ['sp_reminder_est_monthly', 'sp_reminder_monthly', [['sp_reminder_est_monthly_d10','sp_reminder_monthly_d10','number'],['sp_reminder_est_monthly_d20','sp_reminder_monthly_d20','number'],['sp_reminder_est_monthly_final','sp_reminder_monthly_final','number'],['sp_reminder_est_monthly_time','sp_reminder_check_time_label','time']]],

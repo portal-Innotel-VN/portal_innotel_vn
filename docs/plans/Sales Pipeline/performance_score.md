@@ -1,8 +1,9 @@
 # Performance Score — Điểm hiệu suất Sales Pipeline
 
 > **Module**: Sales Pipeline  
-> **Phạm vi**: Bảng xếp hạng tại `/admin/sales_pipeline/dashboard?dashboard_tab=estimates`  
-> **Trạng thái**: To-Be — đặc tả nghiệp vụ, chưa triển khai  
+> **Phạm vi**: Bảng xếp hạng tại `/admin/sales_pipeline/dashboard?dashboard_tab=estimates`
+> **Trạng thái đặc tả**: Chuẩn nghiệp vụ
+> **Trạng thái triển khai**: Đã triển khai một phần
 > **Phiên bản công thức**: `performance_score_v1`  
 > **Cập nhật lần cuối**: 2026-08-13
 

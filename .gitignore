@@ -88,3 +88,17 @@ php-error.log
 *.temp
 *.swp
 *~
+
+# =============================================================================
+# 10. File & thư mục Test, Playwright CLI, Browser testing
+# =============================================================================
+.playwright-cli/
+tests/
+**/tests/
+*_test.php
+*Test.php
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+

@@ -232,26 +232,38 @@ class Sales_pipeline_model extends App_Model
 
         $deal = $this->get($id);
 
+        $this->db->trans_start();
+
+        // 1. Xóa các liên kết trong bảng bridge (không xóa Estimate Group, Version, hay Audit History)
+        $bridgeTable = db_prefix() . 'sales_pipeline_deal_estimate_groups';
+        if ($this->db->table_exists($bridgeTable)) {
+            $this->db->where('pipeline_id', $id);
+            $this->db->delete($bridgeTable);
+        }
+
+        // 2. Xóa activity liên quan
+        $this->db->where('pipeline_id', $id);
+        $this->db->delete(db_prefix() . 'sales_pipeline_activity');
+
+        // 3. Xóa log nhắc nhở
+        $this->db->where('pipeline_id', $id);
+        $this->db->delete(db_prefix() . 'sales_pipeline_reminders_log');
+
+        // 4. Xóa deal row chính
         $this->db->where('id', $id);
         $this->db->delete(db_prefix() . 'sales_pipeline');
 
-        if ($this->db->affected_rows() > 0) {
-            // Xóa activity liên quan
-            $this->db->where('pipeline_id', $id);
-            $this->db->delete(db_prefix() . 'sales_pipeline_activity');
+        $this->db->trans_complete();
 
-            // Xóa log nhắc nhở
-            $this->db->where('pipeline_id', $id);
-            $this->db->delete(db_prefix() . 'sales_pipeline_reminders_log');
-
-            if ($deal) {
-                log_activity(_l('sales_pipeline_log_delete_deal', [$id, $deal['deal_name']]));
-            }
-
-            return true;
+        if ($this->db->trans_status() === false) {
+            return false;
         }
 
-        return false;
+        if ($deal) {
+            log_activity(_l('sales_pipeline_log_delete_deal', [$id, $deal['deal_name']]));
+        }
+
+        return true;
     }
 
     /**
@@ -924,14 +936,22 @@ class Sales_pipeline_model extends App_Model
             $reminder['entity_url'] = $canViewEstimate
                 ? admin_url('estimates/list_estimates/' . (int) $reminder['entity_id'] . '#' . (int) $reminder['entity_id'])
                 : null;
-        } elseif ($reminder['entity_type'] === 'staff_estimate_period') {
-            $reminder['entity_label'] = _l('sales_pipeline_reminder_estimate_period');
+        } elseif (in_array($reminder['entity_type'], ['staff_estimate_period', 'staff_deal_period', 'staff_deal_backlog'], true)) {
+            $reminder['entity_label'] = in_array($reminder['entity_type'], ['staff_deal_period', 'staff_deal_backlog'], true)
+                ? ($reminder['entity_type'] === 'staff_deal_backlog' ? _l('sales_pipeline_reminder_deal_backlog') : _l('sales_pipeline_reminder_deal_period'))
+                : _l('sales_pipeline_reminder_estimate_period');
             $reminder['entity_name'] = $reminder['title'] ?: $reminder['rule_code'];
             $reminder['customer_name'] = '-';
             $reminder['deal_value'] = null;
-            $reminder['deal_date'] = $reminder['period_key'];
-            $reminder['status_name'] = strtoupper($reminder['severity']);
-            $reminder['entity_url'] = admin_url('sales_pipeline/dashboard?tab=estimates');
+            $severity = strtolower((string) ($reminder['severity'] ?? ''));
+            $severityKey = 'sales_pipeline_severity_' . $severity;
+            $translatedSeverity = _l($severityKey);
+            $reminder['status_name'] = ($translatedSeverity !== $severityKey)
+                ? $translatedSeverity
+                : strtoupper((string) ($reminder['severity'] ?? ''));
+            $reminder['entity_url'] = in_array($reminder['entity_type'], ['staff_deal_period', 'staff_deal_backlog'], true)
+                ? admin_url('sales_pipeline/dashboard')
+                : admin_url('sales_pipeline/dashboard?dashboard_tab=estimates');
         } else {
             $reminder['entity_label'] = _l('sales_pipeline_reminder_deal');
             $reminder['entity_name'] = trim((string) $reminder['deal_name']) ?: trim((string) $reminder['customer_name']);
@@ -986,10 +1006,19 @@ class Sales_pipeline_model extends App_Model
             ? _l('sales_pipeline_reminder_total_amount')
             : _l('sales_pipeline_reminder_revenue');
 
+        $contextDate = in_array($reminder['entity_type'], ['staff_estimate_period', 'staff_deal_period', 'staff_deal_backlog'], true)
+            ? trim((string) (!empty($reminder['sent_at']) ? $reminder['sent_at'] : ($reminder['created_at'] ?? '')))
+            : trim((string) ($reminder['deal_date'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $contextDate)) {
+            $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', substr($contextDate, 0, 10));
+            if ($parsedDate instanceof DateTimeImmutable) {
+                $contextDate = $parsedDate->format('d/m/y');
+            }
+        }
         $reminder['context_date_label'] = $isEstimate
             ? _l('sales_pipeline_reminder_estimate_expiry')
             : _l('sales_pipeline_date');
-        $reminder['context_date'] = $reminder['deal_date'] ?: '-';
+        $reminder['context_date'] = $contextDate !== '' ? $contextDate : '-';
         $reminder['quick_response_title'] = _l('sales_pipeline_quick_response_title');
         $reminder['context_cards'] = [
             ['label' => $reminder['entity_label'], 'value' => $reminder['entity_name'] ?: '-'],
@@ -1007,6 +1036,53 @@ class Sales_pipeline_model extends App_Model
                 number_format($amount, 0, ',', '.'),
             ])
             : $reminder['display_message'];
+        if ($reminder['entity_type'] === 'staff_estimate_period') {
+            $period = (string) ($reminder['period_key'] ?? '');
+            $snapshotActual = (float) ($snapshot['actual_count'] ?? 0);
+            $snapshotRequired = (float) ($snapshot['required_count'] ?? 0);
+            if (in_array($reminder['rule_code'], ['ESTIMATE_DAILY_MIN_COUNT', 'ESTIMATE_MONTHLY_MIN_COUNT'], true)) {
+                $reminder['reason_text'] = _l('sales_pipeline_reminder_period_count_reason', [
+                    number_format($snapshotActual, 0, ',', '.'),
+                    number_format($snapshotRequired, 0, ',', '.'),
+                ]);
+                if ($reminder['rule_code'] === 'ESTIMATE_MONTHLY_MIN_COUNT') {
+                    $periodDate = DateTimeImmutable::createFromFormat('!Y-m', $period);
+                    $periodLabel = $periodDate ? $periodDate->format('m/y') : $period;
+                    $reminder['target_summary'] = _l('sales_pipeline_reminder_period_month_target', [$periodLabel]);
+                } else {
+                    $periodDate = DateTimeImmutable::createFromFormat('!Y-m-d', $period);
+                    $periodLabel = $periodDate ? $periodDate->format('d/m/y') : $period;
+                    $reminder['target_summary'] = _l('sales_pipeline_reminder_period_day_target', [$periodLabel]);
+                }
+            } elseif ($reminder['rule_code'] === 'ESTIMATE_WEEKLY_MIN_REVENUE') {
+                $revenue = number_format((float) ($snapshot['accepted_revenue'] ?? 0), 0, ',', '.');
+                $requiredRevenue = number_format((float) ($snapshot['required_revenue'] ?? 0), 0, ',', '.');
+                $reminder['reason_text'] = _l('sales_pipeline_reminder_period_revenue_reason', [$revenue, $requiredRevenue]);
+                $weekParts = explode('-W', $period, 2);
+                $weekStart = count($weekParts) === 2
+                    ? (new DateTimeImmutable())->setISODate((int) $weekParts[0], (int) $weekParts[1], 1)
+                    : null;
+                $weekEnd = $weekStart ? $weekStart->modify('+6 days') : null;
+                $range = $weekStart && $weekEnd
+                    ? $weekStart->format('d/m/y') . ' đến ' . $weekEnd->format('d/m/y')
+                    : $period;
+                $reminder['target_summary'] = _l('sales_pipeline_reminder_period_week_target', [$range]);
+            }
+        } elseif ($reminder['entity_type'] === 'staff_deal_period' && $reminder['rule_code'] === 'DEAL_PIPELINE_MIN_COUNT') {
+            $snapshotActual = (int) ($snapshot['actual_count'] ?? 0);
+            $snapshotRequired = (int) ($snapshot['required_count'] ?? 0);
+            $reminder['reason_text'] = _l('sales_pipeline_reminder_deal_period_count_reason', [
+                number_format($snapshotActual, 0, ',', '.'),
+                number_format($snapshotRequired, 0, ',', '.'),
+            ]);
+            $reminder['target_summary'] = _l('sales_pipeline_reminder_deal_period_week_target', [
+                (string) ($reminder['period_key'] ?? ''),
+            ]);
+        } elseif ($reminder['rule_code'] === 'DEAL_STALE_FOLLOW_UP') {
+            $reminder['reason_text'] = _l('sales_pipeline_deal_stale_reason');
+        } elseif ($reminder['rule_code'] === 'DEAL_STALE_BACKLOG') {
+            $reminder['reason_text'] = _l('sales_pipeline_deal_stale_backlog_title');
+        }
         $reminder['target_question'] = _l('sales_pipeline_reminder_snapshot_target_question');
         $reminder['snapshot_intro'] = _l('sales_pipeline_reminder_snapshot_intro');
         $reminder['snapshot_questions'] = [
@@ -1356,9 +1432,13 @@ class Sales_pipeline_model extends App_Model
     public function duplicate_estimate_revision($source_estimate_id)
     {
         $this->load->model('estimates_model');
+        $this->load->library('sales_pipeline/Estimate_revision_service');
+        $this->estimate_revision_service->set_copy_context((int) $source_estimate_id, 'module_copy');
         $this->estimate_copy_source_id = (int) $source_estimate_id;
+
         $new_id = $this->estimates_model->copy((int) $source_estimate_id);
         $this->estimate_copy_source_id = null;
+        $this->estimate_revision_service->clear_copy_context();
 
         return $new_id;
     }
@@ -1386,26 +1466,298 @@ class Sales_pipeline_model extends App_Model
             return false;
         }
 
-        $estimate_id = (int) $estimate_id;
-        $existing = $this->get_estimate_version_by_estimate($estimate_id);
-        if ($existing) {
-            return (int) $existing['estimate_group_id'];
+        $this->load->library('sales_pipeline/Estimate_revision_service');
+        $context = $source_estimate_id ? [
+            'source_estimate_id' => (int) $source_estimate_id,
+            'parent_estimate_id' => (int) $source_estimate_id,
+            'link_method'        => 'module_copy',
+        ] : null;
+
+        $result = $this->estimate_revision_service->handle_estimate_added((int) $estimate_id, $context);
+        return $result['estimate_group_id'] ? (int) $result['estimate_group_id'] : false;
+    }
+
+    /**
+     * Get valid candidate source estimates for a customer to populate the revision dropdown.
+     * Respects permissions and strict accepted policy.
+     *
+     * @param int $clientId
+     * @param int|null $staffId
+     * @param int $limit
+     * @return array
+     */
+    public function get_customer_estimate_revision_sources($clientId, $staffId = null, $limit = 50)
+    {
+        $clientId = (int) $clientId;
+        if ($clientId <= 0) {
+            return [];
         }
 
-        if ($source_estimate_id) {
-            $source_version = $this->get_estimate_version_by_estimate((int) $source_estimate_id);
-            if (!$source_version) {
-                $source_group_id = $this->create_estimate_group((int) $source_estimate_id, 'standalone');
-            } else {
-                $source_group_id = (int) $source_version['estimate_group_id'];
-            }
-
-            if ($source_group_id) {
-                return $this->append_estimate_revision($source_group_id, $estimate_id);
-            }
+        if ($staffId === null) {
+            $staffId = get_staff_user_id() ? (int) get_staff_user_id() : 0;
         }
 
-        return $this->create_estimate_group($estimate_id, 'standalone');
+        $isManager = is_admin($staffId)
+            || (function_exists('has_permission') && has_permission('sales_pipeline', (string) $staffId, 'manage_estimate_revisions'));
+
+        // Eligible candidate statuses: draft (1), sent (2), declined (3), expired (5)
+        // Accepted (4) is an explicit Manager/Admin-only exception for the override flow.
+        $candidateStatuses = [1, 2, 3, 5];
+        if ($isManager) {
+            $candidateStatuses[] = 4;
+        }
+        $canViewAll = is_admin($staffId)
+            || (function_exists('staff_can') && staff_can('view', 'estimates', $staffId));
+        $canViewOwn = function_exists('staff_can') && staff_can('view_own', 'estimates', $staffId);
+
+        if (!$canViewAll && !$canViewOwn) {
+            return [];
+        }
+
+        $estimateTable = db_prefix() . 'estimates';
+        $groupTable = db_prefix() . 'sales_pipeline_estimate_groups';
+        $versionTable = db_prefix() . 'sales_pipeline_estimate_versions';
+        $currenciesTable = db_prefix() . 'currencies';
+
+        $this->db->select('e.id, e.number, e.prefix, e.number_format, e.date, e.expirydate, e.total, e.currency, e.status, e.sale_agent, e.addedfrom, '
+            . 'c.symbol as currency_symbol, '
+            . 'COALESCE(ev.estimate_group_id, grp.id) as estimate_group_id, '
+            . 'COALESCE(ev.revision_no, 1) as revision_no, '
+            . 'COALESCE(grp.outcome, "pending") as outcome');
+        $this->db->from($estimateTable . ' e');
+        $this->db->join($currenciesTable . ' c', 'c.id = e.currency', 'left');
+        $this->db->join($versionTable . ' ev', 'ev.estimate_id = e.id', 'left');
+        $this->db->join($groupTable . ' grp', 'grp.id = ev.estimate_group_id', 'left');
+        $this->db->where('e.clientid', $clientId);
+        $this->db->where_in('e.status', $candidateStatuses);
+
+        // Permission filter: view own vs view all
+        if (!$canViewAll && $canViewOwn) {
+            $this->db->group_start();
+            $this->db->where('e.sale_agent', $staffId);
+            $this->db->or_where('e.addedfrom', $staffId);
+            $this->db->group_end();
+        }
+
+        // Accepted policy: Staff cannot see accepted quotes in candidate dropdown
+        if (!$isManager) {
+            $this->db->where('e.status !=', 4);
+            $this->db->group_start();
+            $this->db->where('grp.outcome !=', 'accepted');
+            $this->db->or_where('grp.outcome IS NULL', null, false);
+            $this->db->group_end();
+        }
+
+        $this->db->order_by('e.datecreated', 'desc');
+        $this->db->limit(max(1, min(100, (int) $limit)));
+        $rows = $this->db->get()->result_array();
+
+        $results = [];
+        foreach ($rows as $row) {
+            $isAccepted = (int) $row['status'] === 4 || $row['outcome'] === 'accepted';
+            $statusLabel = function_exists('format_estimate_status')
+                ? strip_tags(format_estimate_status($row['status'], '', false))
+                : (string) $row['status'];
+
+            $estimateNumber = function_exists('format_estimate_number')
+                ? format_estimate_number($row['id'])
+                : (string) $row['id'];
+
+            $results[] = [
+                'estimate_id'       => (int) $row['id'],
+                'estimate_number'   => $estimateNumber,
+                'estimate_group_id' => $row['estimate_group_id'] ? (int) $row['estimate_group_id'] : null,
+                'revision_no'       => (int) $row['revision_no'],
+                'total'             => (float) $row['total'],
+                'total_formatted'   => function_exists('app_format_money') ? app_format_money($row['total'], $row['currency']) : number_format((float) $row['total'], 2),
+                'currency_symbol'   => $row['currency_symbol'] ?: '',
+                'status'            => (int) $row['status'],
+                'status_label'      => $statusLabel,
+                'expirydate'        => $row['expirydate'] && function_exists('_d') ? _d($row['expirydate']) : ($row['expirydate'] ?: ''),
+                'is_accepted'       => $isAccepted,
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Smart Prompt: Retrieve and rank candidate estimates for revision suggestions.
+     * Read-only, deterministic scoring, 60-day cutoff, only current_estimate_id of groups.
+     *
+     * @param int $clientId
+     * @param int|null $projectId
+     * @param int|null $staffId
+     * @param int $limit
+     * @return array
+     */
+    public function get_estimate_revision_candidates($clientId, $projectId = null, $staffId = null, $limit = 10)
+    {
+        $clientId = (int) $clientId;
+        if ($clientId <= 0) {
+            return [];
+        }
+
+        if ($staffId === null) {
+            $staffId = get_staff_user_id() ? (int) get_staff_user_id() : 0;
+        }
+
+        $isManager = is_admin($staffId)
+            || (function_exists('has_permission') && has_permission('sales_pipeline', (string) $staffId, 'manage_estimate_revisions'));
+
+        // Whitelist of valid candidate statuses: draft (1), sent (2), declined (3), expired (5)
+        // Accepted (4) is an explicit Manager/Admin-only exception for override flow.
+        $candidateStatuses = [1, 2, 3, 5];
+        if ($isManager) {
+            $candidateStatuses[] = 4;
+        }
+
+        $estimateTable = db_prefix() . 'estimates';
+        $groupTable = db_prefix() . 'sales_pipeline_estimate_groups';
+        $versionTable = db_prefix() . 'sales_pipeline_estimate_versions';
+        $currenciesTable = db_prefix() . 'currencies';
+        $clientsTable = db_prefix() . 'clients';
+        $projectsTable = db_prefix() . 'projects';
+        $staffTable = db_prefix() . 'staff';
+
+        $this->db->select('e.id, e.number, e.prefix, e.number_format, e.date, e.expirydate, e.total, e.currency, e.status, e.datecreated, '
+            . 'e.sale_agent, e.addedfrom, e.project_id, '
+            . 'c.symbol as currency_symbol, '
+            . 'cl.company as customer_name, '
+            . 'p.name as project_name, '
+            . 'grp.id as estimate_group_id, '
+            . 'COALESCE(grp.owner_staff_id, e.sale_agent, e.addedfrom) as owner_staff_id, '
+            . 'COALESCE(ev.revision_no, 1) as revision_no, '
+            . 'COALESCE(grp.outcome, "pending") as outcome, '
+            . 'st.firstname as owner_firstname, st.lastname as owner_lastname');
+        $this->db->from($estimateTable . ' e');
+        $this->db->join($clientsTable . ' cl', 'cl.userid = e.clientid', 'left');
+        $this->db->join($currenciesTable . ' c', 'c.id = e.currency', 'left');
+        $this->db->join($projectsTable . ' p', 'p.id = e.project_id', 'left');
+        $this->db->join($versionTable . ' ev', 'ev.estimate_id = e.id', 'left');
+        $this->db->join($groupTable . ' grp', 'grp.id = ev.estimate_group_id', 'left');
+        $this->db->join($staffTable . ' st', 'st.staffid = COALESCE(grp.owner_staff_id, e.sale_agent, e.addedfrom)', 'left');
+
+        // Hard Filter 1: client_id
+        $this->db->where('e.clientid', $clientId);
+
+        // Hard Filter 2: 60-day system window (datecreated)
+        $this->db->where('e.datecreated >= DATE_SUB(NOW(), INTERVAL 60 DAY)', null, false);
+
+        // Hard Filter 3: Candidate must belong to an Estimate Group and be its current_estimate_id
+        $this->db->where('grp.id IS NOT NULL', null, false);
+        $this->db->where('grp.current_estimate_id = e.id', null, false);
+
+        // Hard Filter 4: Explicit status whitelist.
+        $this->db->where_in('e.status', $candidateStatuses);
+
+        // Hard Filter 5: Accepted Group policy (Staff cannot see accepted candidates; Manager can)
+        if (!$isManager) {
+            $this->db->where('grp.outcome !=', 'accepted');
+        }
+
+        $rows = $this->db->get()->result_array();
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $thirtyDaysAgo = date('Y-m-d H:i:s', strtotime('-30 days'));
+        $fourteenDaysAgo = date('Y-m-d H:i:s', strtotime('-14 days'));
+        $candidates = [];
+
+        foreach ($rows as $row) {
+            $estimateId = (int) $row['id'];
+
+            // Hard Filter 5: Permission check
+            if (function_exists('user_can_view_estimate') && $staffId > 0) {
+                if (!user_can_view_estimate($estimateId, $staffId)) {
+                    continue;
+                }
+            }
+
+            $score = 0;
+            $reasonCodes = [];
+
+            // Rule 1: Same project (+40)
+            if ($projectId !== null && (int) $projectId > 0 && (int) $row['project_id'] === (int) $projectId) {
+                $score += 40;
+                $reasonCodes[] = 'same_project';
+            }
+
+            // Rule 2: Same owner (+30)
+            $ownerStaffId = (int) $row['owner_staff_id'];
+            if ($ownerStaffId > 0 && $ownerStaffId === (int) $staffId) {
+                $score += 30;
+                $reasonCodes[] = 'same_owner';
+            }
+
+            // Rule 3: Recently expired / declined / draft / sent in last 30 days (+25)
+            $estDateCreated = $row['datecreated'];
+            $estStatus = (int) $row['status'];
+            if ($estDateCreated >= $thirtyDaysAgo) {
+                if ($estStatus === 5) {
+                    $score += 25;
+                    $reasonCodes[] = 'recently_expired';
+                } elseif ($estStatus === 3) {
+                    $score += 25;
+                    $reasonCodes[] = 'recently_declined';
+                } elseif ($estStatus === 1 || $estStatus === 2) {
+                    $score += 25;
+                    $reasonCodes[] = 'recently_active';
+                }
+            }
+
+            // Rule 4: Recent activity in last 14 days (+15)
+            if ($estDateCreated >= $fourteenDaysAgo) {
+                $score += 15;
+                $reasonCodes[] = 'recent_activity';
+            }
+
+            $isAccepted = ($estStatus === 4 || $row['outcome'] === 'accepted');
+            $statusLabel = function_exists('format_estimate_status')
+                ? strip_tags(format_estimate_status($row['status'], '', false))
+                : (string) $row['status'];
+
+            $estimateNumber = function_exists('format_estimate_number')
+                ? format_estimate_number($estimateId)
+                : (string) $estimateId;
+
+            $ownerName = trim(($row['owner_firstname'] ?? '') . ' ' . ($row['owner_lastname'] ?? ''));
+
+            $candidates[] = [
+                'estimate_id'       => $estimateId,
+                'estimate_group_id' => $row['estimate_group_id'] ? (int) $row['estimate_group_id'] : null,
+                'estimate_number'   => $estimateNumber,
+                'revision_no'       => (int) $row['revision_no'],
+                'customer_name'     => $row['customer_name'] ?: '',
+                'project_id'        => $row['project_id'] ? (int) $row['project_id'] : null,
+                'project_name'      => $row['project_name'] ?: '',
+                'owner_staff_id'    => $ownerStaffId,
+                'owner_name'        => $ownerName,
+                'total'             => (float) $row['total'],
+                'total_formatted'   => function_exists('app_format_money') ? app_format_money($row['total'], $row['currency']) : number_format((float) $row['total'], 2),
+                'currency_symbol'   => $row['currency_symbol'] ?: '',
+                'status'            => $estStatus,
+                'status_label'      => $statusLabel,
+                'expirydate'        => $row['expirydate'] && function_exists('_d') ? _d($row['expirydate']) : ($row['expirydate'] ?: ''),
+                'is_accepted'       => $isAccepted,
+                'score'             => $score,
+                'reason_codes'      => $reasonCodes,
+                'datecreated'       => $row['datecreated'],
+            ];
+        }
+
+        // Sort descending by score, then by datecreated DESC
+        usort($candidates, function ($a, $b) {
+            if ($a['score'] === $b['score']) {
+                return strcmp($b['datecreated'], $a['datecreated']);
+            }
+            return ($b['score'] > $a['score']) ? 1 : -1;
+        });
+
+        $limit = max(1, min(20, (int) $limit));
+        return array_slice($candidates, 0, $limit);
     }
 
     /**
@@ -1450,19 +1802,43 @@ class Sales_pipeline_model extends App_Model
 
         $limit = max(1, min(5000, (int) $limit));
         $group_table = db_prefix() . 'sales_pipeline_estimate_groups';
-        $ids = $this->db
-            ->select('id')
-            ->order_by('COALESCE(datemodified, datecreated)', 'asc', false)
-            ->limit($limit)
-            ->get($group_table)
-            ->result_array();
 
+        // R-02 fix: use last_reconciled_at cursor so every group is eventually
+        // reached even when the total exceeds the batch limit.
+        // Groups never reconciled (NULL) sort first; within the same cursor
+        // value groups are ordered by id to make the scan deterministic.
+        if (!$this->db->field_exists('last_reconciled_at', $group_table)) {
+            // Column not yet added (migration 107 pending); fall back to old order.
+            $ids = $this->db
+                ->select('id')
+                ->order_by('COALESCE(datemodified, datecreated)', 'asc', false)
+                ->limit($limit)
+                ->get($group_table)
+                ->result_array();
+        } else {
+            $ids = $this->db
+                ->select('id')
+                ->order_by('COALESCE(last_reconciled_at, \'1970-01-01\')', 'asc', false)
+                ->order_by('id', 'asc')
+                ->limit($limit)
+                ->get($group_table)
+                ->result_array();
+        }
+
+        $now = date('Y-m-d H:i:s');
         foreach ($ids as $row) {
-            $this->sync_estimate_group((int) $row['id'], 'reconciliation');
+            $group_id = (int) $row['id'];
+            $this->sync_estimate_group($group_id, 'reconciliation');
+            // Always stamp last_reconciled_at even when outcome did not change
+            // so the group moves to the back of the queue for the next sweep.
+            if ($this->db->field_exists('last_reconciled_at', $group_table)) {
+                $this->db->where('id', $group_id)->update($group_table, ['last_reconciled_at' => $now]);
+            }
         }
 
         return count($ids);
     }
+
 
     /**
      * Remove an estimate revision before Perfex deletes the estimate record.
@@ -1574,15 +1950,18 @@ class Sales_pipeline_model extends App_Model
         $group_table = db_prefix() . 'sales_pipeline_estimate_groups';
         $version_table = db_prefix() . 'sales_pipeline_estimate_versions';
         $estimate_table = db_prefix() . 'estimates';
-        $estimate_owner = 'COALESCE(NULLIF(e.sale_agent, 0), e.addedfrom)';
+        // R-01 fix: count Estimate Groups (one logical quote), not individual revisions.
+        // A group is "valid" when it has at least one non-draft revision (status IN 2,3,4,5).
         $estimate_rows = $this->db
-            ->select($estimate_owner . ' as staff_id, COUNT(ev.estimate_id) as estimate_count', false)
-            ->from($version_table . ' ev')
-            ->join($estimate_table . ' e', 'e.id = ev.estimate_id')
-            ->where_in($estimate_owner, $staff_ids, false)
-            ->where('e.datecreated >=', $period_start)
-            ->where('e.datecreated <', $period_end_exclusive)
-            ->group_by($estimate_owner, false)
+            ->select('grp.owner_staff_id as staff_id, COUNT(grp.id) as estimate_count', false)
+            ->from($group_table . ' grp')
+            ->where_in('grp.owner_staff_id', $staff_ids)
+            ->where('grp.datecreated >=', $period_start)
+            ->where('grp.datecreated <', $period_end_exclusive)
+            ->where('EXISTS (SELECT 1 FROM ' . $version_table . ' ev'
+                . ' JOIN ' . $estimate_table . ' e ON e.id = ev.estimate_id'
+                . ' WHERE ev.estimate_group_id = grp.id AND e.status IN (2, 3, 4, 5))', null, false)
+            ->group_by('grp.owner_staff_id')
             ->get()
             ->result_array();
 
@@ -2090,7 +2469,7 @@ class Sales_pipeline_model extends App_Model
         }
     }
 
-    private function sync_estimate_group($group_id, $source, $effective_at = null)
+    public function sync_estimate_group($group_id, $source = 'sync', $effective_at = null)
     {
         $group_table = db_prefix() . 'sales_pipeline_estimate_groups';
         $version_table = db_prefix() . 'sales_pipeline_estimate_versions';
@@ -2677,6 +3056,20 @@ class Sales_pipeline_model extends App_Model
             }
             $this->db->where_in('rl.staff_id', $staff_ids);
         }
+        if (!empty($filters['date_from'])) {
+            $date_from_str = trim((string) $filters['date_from']);
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from_str)) {
+                $this->db->where('COALESCE(rl.responded_at, rl.sent_at, rl.created_at) >=', $date_from_str . ' 00:00:00');
+            }
+        }
+        if (!empty($filters['date_to'])) {
+            $date_to_str = trim((string) $filters['date_to']);
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to_str)) {
+                $next_day_exclusive = date('Y-m-d 00:00:00', strtotime($date_to_str . ' +1 day'));
+                $this->db->where('COALESCE(rl.responded_at, rl.sent_at, rl.created_at) <', $next_day_exclusive);
+            }
+        }
+
         if (!empty($filters['month'])) {
             $this->db->where('MONTH(rl.sent_at)', $filters['month']);
         }
@@ -2688,11 +3081,11 @@ class Sales_pipeline_model extends App_Model
         if ($dashboard_tab === 'estimates') {
             $this->db->where_in('rl.entity_type', ['staff_estimate_period', 'estimate']);
         } else {
-            $this->db->where('rl.entity_type', 'deal');
+            $this->db->where_in('rl.entity_type', ['deal', 'staff_deal_period', 'staff_deal_backlog']);
         }
 
         $this->db->order_by('CASE WHEN rl.staff_response IS NULL THEN 0 ELSE 1 END', 'ASC', false);
-        $this->db->order_by('COALESCE(rl.responded_at, rl.sent_at)', 'DESC', false);
+        $this->db->order_by('COALESCE(rl.responded_at, rl.sent_at, rl.created_at)', 'DESC', false);
         $this->db->order_by('rl.id', 'DESC');
         $this->db->limit($limit);
 

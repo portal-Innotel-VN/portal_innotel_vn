@@ -1,5 +1,14 @@
 # Workflow: Plan → Implement → Verify
 
+## 0. Context initialization
+
+- Chạy [`Context Loading Protocol`](../context/context-loading.md).
+- Đọc tài liệu nền tảng, định tuyến tài liệu theo loại task và xác minh vùng
+  Basecode trước khi viết Goal hoặc sửa file.
+- Ghi lại file đã đọc, invariant, vùng ảnh hưởng, trạng thái và khoảng trống.
+- Tiêu chí hoàn tất: context đã được xác lập bằng tài liệu và Basecode; nếu có
+  mâu thuẫn, Plan tạm dừng tại điểm cần xác minh.
+
 ## 1. Intake
 
 - Ghi Goal, phạm vi, non-goals và acceptance criteria.

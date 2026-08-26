@@ -16,6 +16,7 @@ class Reminder_engine
     {
         $this->CI = &get_instance();
         $this->CI->load->model('staff_model');
+        $this->CI->load->library('sales_pipeline/Deal_reminder_rule_evaluator');
     }
 
     public function process()
@@ -27,50 +28,102 @@ class Reminder_engine
         $now = new DateTimeImmutable('now');
         if ($this->isWorkingDay($now)) {
             $this->processEstimatePeriods();
+            $this->processDealPipelineMinimum($now);
+            $this->processDealStaleFollowUps($now);
         }
-        $this->processDeals();
         $this->processEstimateLifecycle();
         $this->dispatchPendingDeliveries();
     }
 
-    private function processDeals()
+    private function processDealPipelineMinimum(DateTimeImmutable $now)
     {
-        if ($this->option('sp_reminder_deal_frequency_enabled') !== '1') {
+        if ($this->option('sp_reminder_deal_pipeline_enabled') !== '1') {
             return;
         }
-        $statuses = $this->CI->db->select('id')->where('is_won', 0)->where('is_lost', 0)
-            ->get(db_prefix() . 'sales_pipeline_statuses')->result_array();
-        $statusIds = array_map('intval', array_column($statuses, 'id'));
-        if (!$statusIds) {
+
+        $statuses = $this->openDealStatusIds();
+        if (!$statuses) {
             return;
         }
-        $this->CI->db->where('reminder_enabled', 1)->where_in('status', $statusIds)->group_start()
-            ->where('last_reminder_sent IS NULL', null, false)
-            ->or_where('DATEDIFF(NOW(), last_reminder_sent) >= reminder_frequency', null, false)->group_end();
-        foreach ($this->CI->db->get(db_prefix() . 'sales_pipeline')->result_array() as $deal) {
-            $staff = $this->activeStaff((int) $deal['staff_id']);
-            if (!$staff) {
+
+        // Start from the active Staff roster so salespeople with zero Deals are
+        // evaluated too. Starting from the Deal table would silently omit them.
+        $staffRows = $this->CI->db->select('staffid')->where('active', 1)->where('admin', 0)
+            ->get(db_prefix() . 'staff')->result_array();
+        foreach ($staffRows as $staffRow) {
+            $staffId = (int) $staffRow['staffid'];
+            if (!staff_can('view', 'sales_pipeline', $staffId) && !staff_can('view_own', 'sales_pipeline', $staffId)) {
                 continue;
             }
-            $status = $this->CI->db->select('name')->where('id', (int) $deal['status'])
-                ->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
-            $event = [
-                'rule_code' => 'DEAL_FREQUENCY_REMINDER', 'entity_type' => 'deal',
-                'entity_id' => (int) $deal['id'], 'pipeline_id' => (int) $deal['id'],
-                'staff_id' => (int) $deal['staff_id'], 'period_key' => date('Y-m-d'),
-                'checkpoint' => 'FREQUENCY', 'severity' => 'warning', 'response_required' => 1,
-                'recipients' => ['staff'], 'channels' => $this->parseChannels('sp_reminder_deal_frequency_channels'),
-                'dedupe_key' => 'DEAL_FREQUENCY_REMINDER:' . (int) $deal['staff_id'] . ':' . (int) $deal['id'] . ':' . date('Y-m-d'),
-                'snapshot' => [
-                    'deal_name' => $deal['deal_name'], 'customer_name' => $deal['customer_name'],
-                    'deal_value' => (float) $deal['deal_value'], 'deal_date' => $deal['deal_date'],
-                    'status_name' => $status['name'] ?? '', 'evaluated_at' => date('Y-m-d H:i:s'),
-                ],
-            ];
-            if ($event['channels']) {
+            $summary = $this->CI->db->select('COUNT(*) open_deal_count, COALESCE(SUM(deal_value),0) open_pipeline_value', false)
+                ->where('staff_id', $staffId)->where_in('status', $statuses)
+                ->get(db_prefix() . 'sales_pipeline')->row_array();
+            $event = $this->CI->deal_reminder_rule_evaluator->evaluatePipelineMinimum([
+                'staff_id' => $staffId,
+                'open_deal_count' => (int) ($summary['open_deal_count'] ?? 0),
+                'open_pipeline_value' => (float) ($summary['open_pipeline_value'] ?? 0),
+            ], $now, [
+                'enabled' => true,
+                'minimum_count' => (int) $this->option('sp_reminder_deal_pipeline_min_count'),
+                'check_time' => $this->option('sp_reminder_deal_pipeline_check_time'),
+                'channels' => $this->parseChannels('sp_reminder_deal_pipeline_channels'),
+            ]);
+            if ($event) {
                 $this->run($event);
             }
         }
+    }
+
+    private function processDealStaleFollowUps(DateTimeImmutable $now)
+    {
+        if ($this->option('sp_reminder_deal_stale_enabled') !== '1') {
+            return;
+        }
+        $statuses = $this->openDealStatusIds();
+        if (!$statuses) {
+            return;
+        }
+
+        $activityTable = db_prefix() . 'sales_pipeline_activity';
+        $dealTable = db_prefix() . 'sales_pipeline';
+        $statusTable = db_prefix() . 'sales_pipeline_statuses';
+        $lastActivitySql = '(SELECT MAX(a.datecreated) FROM `' . $activityTable . '` a'
+            . ' WHERE a.pipeline_id=p.id'
+            . " AND a.description NOT LIKE 'Phản hồi nhắc nhở:%'"
+            . " AND a.description NOT LIKE 'Reminder response:%')";
+        $lastMeaningfulSql = 'GREATEST(COALESCE(' . $lastActivitySql . ", '1000-01-01 00:00:00'),"
+            . " COALESCE(p.datemodified, '1000-01-01 00:00:00'), COALESCE(p.datecreated, '1000-01-01 00:00:00'))";
+        $rows = $this->CI->db->query(
+            'SELECT p.*, ss.name status_name, ' . $lastMeaningfulSql . ' last_meaningful_activity_at'
+            . ' FROM `' . $dealTable . '` p LEFT JOIN `' . $statusTable . '` ss ON ss.id=p.status'
+            . ' WHERE p.reminder_enabled=1 AND p.status IN (' . implode(',', array_map('intval', $statuses)) . ')'
+        )->result_array();
+
+        $eligibleDeals = [];
+        foreach ($rows as $deal) {
+            if (!$this->activeStaff((int) $deal['staff_id'])) {
+                continue;
+            }
+            $eligibleDeals[] = $deal;
+        }
+        $events = $this->CI->deal_reminder_rule_evaluator->evaluateStaleFollowUps($eligibleDeals, $now, [
+            'enabled' => true,
+            'channels' => $this->parseChannels('sp_reminder_deal_stale_channels'),
+            'cutoff_days' => (int) $this->option('sp_reminder_deal_stale_cutoff_days'),
+            'max_per_run' => (int) $this->option('sp_reminder_deal_stale_max_per_run'),
+        ]);
+        foreach ($events as $event) {
+            if ($event) {
+                $this->run($event);
+            }
+        }
+    }
+
+    private function openDealStatusIds()
+    {
+        $statuses = $this->CI->db->select('id')->where('is_won', 0)->where('is_lost', 0)
+            ->get(db_prefix() . 'sales_pipeline_statuses')->result_array();
+        return array_map('intval', array_column($statuses, 'id'));
     }
 
     private function processEstimatePeriods()
@@ -351,8 +404,11 @@ class Reminder_engine
         }
     }
 
-    private function isManagerCCApplicable($severity = 'warning')
+    private function isManagerCCApplicable($severity = 'warning', $eventAllowsCC = null)
     {
+        if ($eventAllowsCC === false) {
+            return false;
+        }
         if ($this->option('sp_reminder_email_cc_manager_enabled') !== '1') {
             return false;
         }
@@ -363,9 +419,9 @@ class Reminder_engine
         return true;
     }
 
-    private function resolveManagerCCEmails($staffId, $severity = 'warning')
+    private function resolveManagerCCEmails($staffId, $severity = 'warning', $eventAllowsCC = null)
     {
-        if (!$this->isManagerCCApplicable($severity)) {
+        if (!$this->isManagerCCApplicable($severity, $eventAllowsCC)) {
             return [];
         }
 
@@ -411,7 +467,9 @@ class Reminder_engine
     private function render(array $event)
     {
         $titles = [
-            'DEAL_FREQUENCY_REMINDER' => 'sales_pipeline_reminder_deal',
+            'DEAL_PIPELINE_MIN_COUNT' => 'sales_pipeline_deal_pipeline_min_title',
+            'DEAL_STALE_FOLLOW_UP' => 'sales_pipeline_deal_stale_title',
+            'DEAL_STALE_BACKLOG' => 'sales_pipeline_deal_stale_backlog_title',
             'ESTIMATE_DAILY_MIN_COUNT' => 'sales_pipeline_estimate_reminder_daily_title',
             'ESTIMATE_MONTHLY_MIN_COUNT' => 'sales_pipeline_estimate_reminder_monthly_title',
             'ESTIMATE_WEEKLY_MIN_REVENUE' => 'sales_pipeline_estimate_reminder_weekly_title',
@@ -424,8 +482,15 @@ class Reminder_engine
         $s = $event['snapshot'];
         if ($event['entity_type'] === 'estimate') {
             $message = _l('sales_pipeline_estimate_lifecycle_message', [$s['estimate_number'], $s['customer_name'], $s['risk_reason']]);
-        } elseif ($event['entity_type'] === 'deal') {
-            $message = _l('sales_pipeline_deal_frequency_message', [$s['deal_name'], $s['customer_name']]);
+        } elseif ($event['rule_code'] === 'DEAL_PIPELINE_MIN_COUNT') {
+            $message = _l('sales_pipeline_deal_pipeline_min_message', [$s['actual_count'], $s['required_count']]);
+        } elseif ($event['rule_code'] === 'DEAL_STALE_BACKLOG') {
+            $message = _l('sales_pipeline_deal_stale_backlog_message', [
+                $s['total_attention_required'], $s['individual_sent'], $s['stale_overflow_count'],
+                $s['long_stale_count'], $s['cutoff_days'],
+            ]);
+        } elseif ($event['rule_code'] === 'DEAL_STALE_FOLLOW_UP') {
+            $message = _l('sales_pipeline_deal_stale_message', [$s['deal_name'], $s['customer_name'], $s['inactive_days']]);
         } elseif ($event['rule_code'] === 'ESTIMATE_WEEKLY_MIN_REVENUE') {
             $message = _l('sales_pipeline_estimate_weekly_message', [number_format($s['accepted_revenue'], 0, ',', '.'), number_format($s['required_revenue'], 0, ',', '.')]);
         } else {
@@ -466,7 +531,7 @@ class Reminder_engine
          * This preserves "pending before failed" for each channel while making
          * CRM delivery independent from an email provider/outbox backlog.
          */
-        $rows = $this->CI->db->query('SELECT d.*, r.title, r.message, r.entity_type, r.entity_id, r.pipeline_id, r.rule_code, r.staff_id, r.severity, r.sent_at AS reminder_sent_at'
+        $rows = $this->CI->db->query('SELECT d.*, r.title, r.message, r.entity_type, r.entity_id, r.pipeline_id, r.rule_code, r.staff_id, r.severity, r.snapshot_json, r.sent_at AS reminder_sent_at'
             . ' FROM `' . db_prefix() . 'sales_pipeline_reminder_deliveries` d JOIN `' . db_prefix() . 'sales_pipeline_reminders_log` r ON r.id=d.reminder_id'
             . " WHERE d.status IN ('pending','failed') AND d.attempt_count<3 AND (d.next_retry_at IS NULL OR d.next_retry_at<=NOW())"
             . " ORDER BY CASE"
@@ -494,14 +559,27 @@ class Reminder_engine
                 $staffId = !empty($row['staff_id']) ? (int) $row['staff_id'] : ($recipient ? (int) $recipient->staffid : 0);
                 $severity = !empty($row['severity']) ? (string) $row['severity'] : 'warning';
                 $body = $this->CI->load->view('sales_pipeline/emails/reminder', [
-                    'staff_name' => $recipient ? trim($recipient->firstname . ' ' . $recipient->lastname) : '',
-                    'title' => $row['title'], 'message' => $row['message'],
-                    'response_url' => admin_url('sales_pipeline/reminder_response/' . $row['reminder_id']),
-                    'entity_url' => $this->entityUrl($row['entity_type'], $row['entity_id']),
+                    'staff_name'        => $recipient ? trim($recipient->firstname . ' ' . $recipient->lastname) : '',
+                    'title'             => $row['title'],
+                    'message'           => $row['message'],
+                    'response_url'      => admin_url('sales_pipeline/reminder_response/' . $row['reminder_id']),
+                    'entity_url'        => $this->entityUrl($row['entity_type'], $row['entity_id']),
+                    'severity'          => $severity,
+                    'rule_code'         => $row['rule_code'] ?? '',
+                    'entity_type'       => $row['entity_type'] ?? '',
+                    'checkpoint'        => $row['checkpoint'] ?? '',
+                    'response_required' => (int) ($row['response_required'] ?? 1),
+                    'snapshot'          => !empty($row['snapshot_json']) ? json_decode((string) $row['snapshot_json'], true) : [],
+                    'recipient_type'    => $row['recipient_type'] ?? 'staff',
                 ], true);
                 $ccList = [];
                 if ($row['recipient_type'] === 'staff') {
-                    $ccList = $this->resolveManagerCCEmails($staffId, $severity);
+                    $eventAllowsCC = null;
+                    if ($row['rule_code'] === 'DEAL_PIPELINE_MIN_COUNT') {
+                        $deliverySnapshot = json_decode((string) ($row['snapshot_json'] ?? ''), true);
+                        $eventAllowsCC = !empty($deliverySnapshot['manager_cc']);
+                    }
+                    $ccList = $this->resolveManagerCCEmails($staffId, $severity, $eventAllowsCC);
                 }
                 $ccString = !empty($ccList) ? implode(', ', $ccList) : null;
                 $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [

@@ -472,7 +472,7 @@ $estimate_reminder_title_keys = [
                 <?php } else { ?>
                     <div class="sp-drawer-panel__empty">
                         <i class="fa fa-comments-o" aria-hidden="true"></i>
-                        <strong><?php echo _l('sales_pipeline_dashboard_no_reminder_responses'); ?></strong>
+                        <strong><?php echo _l('sales_pipeline_dashboard_no_reminder_responses_in_period'); ?></strong>
                     </div>
                 <?php } ?>
             </section>

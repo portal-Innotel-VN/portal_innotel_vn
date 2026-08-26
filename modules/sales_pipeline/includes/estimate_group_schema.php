@@ -147,7 +147,140 @@ if (!function_exists('sales_pipeline_ensure_estimate_group_schema')) {
             ->like('grouping_source', 'legacy', 'after')
             ->update($group_table, ['grouping_source' => 'legacy_import']);
 
+        // R-02 fix: add reconciliation cursor column if missing (idempotent).
+        if (!$field_exists('last_reconciled_at', $group_table)) {
+            $CI->db->query(
+                'ALTER TABLE `' . $group_table . '`'
+                . ' ADD `last_reconciled_at` DATETIME NULL DEFAULT NULL'
+                . ' AFTER `datemodified`'
+            );
+        }
+        $recon_index = $CI->db->query(
+            'SHOW INDEX FROM `' . $group_table . '` WHERE Key_name = "idx_last_reconciled"'
+        )->row_array();
+        if (!$recon_index) {
+            $CI->db->query(
+                'ALTER TABLE `' . $group_table . '`'
+                . ' ADD INDEX `idx_last_reconciled` (`last_reconciled_at`, `id`)'
+            );
+        }
+
+        // Step 3 schema: add parent_estimate_id, link_method, linked_by to version table
+        if (!$field_exists('parent_estimate_id', $version_table)) {
+            $CI->db->query(
+                'ALTER TABLE `' . $version_table . '`'
+                . ' ADD `parent_estimate_id` INT(11) DEFAULT NULL AFTER `estimate_id`,'
+                . ' ADD `link_method` VARCHAR(30) NOT NULL DEFAULT "origin" AFTER `parent_estimate_id`,'
+                . ' ADD `linked_by` INT(11) DEFAULT NULL AFTER `link_method`'
+            );
+        } elseif (!$field_exists('link_method', $version_table)) {
+            $CI->db->query(
+                'ALTER TABLE `' . $version_table . '`'
+                . ' ADD `link_method` VARCHAR(30) NOT NULL DEFAULT "origin" AFTER `parent_estimate_id`,'
+                . ' ADD `linked_by` INT(11) DEFAULT NULL AFTER `link_method`'
+            );
+        } elseif (!$field_exists('linked_by', $version_table)) {
+            $CI->db->query(
+                'ALTER TABLE `' . $version_table . '`'
+                . ' ADD `linked_by` INT(11) DEFAULT NULL AFTER `link_method`'
+            );
+        }
+
+        $parent_index = $CI->db->query(
+            'SHOW INDEX FROM `' . $version_table . '` WHERE Key_name = "idx_parent_estimate"'
+        )->row_array();
+        if (!$parent_index && $field_exists('parent_estimate_id', $version_table)) {
+            $CI->db->query(
+                'ALTER TABLE `' . $version_table . '`'
+                . ' ADD INDEX `idx_parent_estimate` (`parent_estimate_id`)'
+            );
+        }
+
+        // Step 3 schema: create audit events table tblsales_pipeline_estimate_group_events
+        $events_table = db_prefix() . 'sales_pipeline_estimate_group_events';
+        if (!$table_exists($events_table)) {
+            $CI->db->query('CREATE TABLE `' . $events_table . "` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `event_type` varchar(30) NOT NULL,
+                `estimate_id` int(11) DEFAULT NULL,
+                `source_estimate_id` int(11) DEFAULT NULL,
+                `from_group_id` int(11) DEFAULT NULL,
+                `to_group_id` int(11) DEFAULT NULL,
+                `actor_staff_id` int(11) DEFAULT NULL,
+                `reason` varchar(500) DEFAULT NULL,
+                `metadata_json` longtext DEFAULT NULL,
+                `datecreated` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `idx_event_estimate` (`estimate_id`, `datecreated`),
+                KEY `idx_event_from_group` (`from_group_id`, `datecreated`),
+                KEY `idx_event_to_group` (`to_group_id`, `datecreated`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=" . $charset . ';');
+        } else {
+            // Ensure all 3 audit indexes exist
+            $idx_estimate = $CI->db->query('SHOW INDEX FROM `' . $events_table . '` WHERE Key_name = "idx_event_estimate"')->row_array();
+            if (!$idx_estimate) {
+                $CI->db->query('ALTER TABLE `' . $events_table . '` ADD KEY `idx_event_estimate` (`estimate_id`, `datecreated`)');
+            }
+            $idx_from = $CI->db->query('SHOW INDEX FROM `' . $events_table . '` WHERE Key_name = "idx_event_from_group"')->row_array();
+            if (!$idx_from) {
+                $CI->db->query('ALTER TABLE `' . $events_table . '` ADD KEY `idx_event_from_group` (`from_group_id`, `datecreated`)');
+            }
+            $idx_to = $CI->db->query('SHOW INDEX FROM `' . $events_table . '` WHERE Key_name = "idx_event_to_group"')->row_array();
+            if (!$idx_to) {
+                $CI->db->query('ALTER TABLE `' . $events_table . '` ADD KEY `idx_event_to_group` (`to_group_id`, `datecreated`)');
+            }
+        }
+
+        // Deal-Estimate Group Bridge Table
+        $bridge_table = db_prefix() . 'sales_pipeline_deal_estimate_groups';
+        if (!$table_exists($bridge_table)) {
+            $CI->db->query('CREATE TABLE `' . $bridge_table . "` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `pipeline_id` int(11) NOT NULL,
+                `estimate_group_id` int(11) NOT NULL,
+                `is_primary` tinyint(1) NOT NULL DEFAULT 0,
+                `linked_by` int(11) DEFAULT NULL,
+                `datecreated` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uq_estimate_group` (`estimate_group_id`),
+                KEY `idx_pipeline` (`pipeline_id`),
+                KEY `idx_estimate_group` (`estimate_group_id`),
+                KEY `idx_deal_primary` (`pipeline_id`, `is_primary`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=" . $charset . ';');
+        }
+
+        // Manual Lock Columns on tblsales_pipeline
+        $pipeline_table = db_prefix() . 'sales_pipeline';
+        if ($table_exists($pipeline_table)) {
+            if (!$field_exists('is_manual_lock', $pipeline_table)) {
+                $CI->db->query('ALTER TABLE `' . $pipeline_table . '` ADD COLUMN `is_manual_lock` tinyint(1) NOT NULL DEFAULT 0 AFTER `notes`');
+            }
+            if (!$field_exists('manual_lock_by', $pipeline_table)) {
+                $CI->db->query('ALTER TABLE `' . $pipeline_table . '` ADD COLUMN `manual_lock_by` int(11) DEFAULT NULL AFTER `is_manual_lock`');
+            }
+            if (!$field_exists('manual_lock_at', $pipeline_table)) {
+                $CI->db->query('ALTER TABLE `' . $pipeline_table . '` ADD COLUMN `manual_lock_at` datetime DEFAULT NULL AFTER `manual_lock_by`');
+            }
+            if (!$field_exists('manual_lock_reason', $pipeline_table)) {
+                $CI->db->query('ALTER TABLE `' . $pipeline_table . '` ADD COLUMN `manual_lock_reason` text DEFAULT NULL AFTER `manual_lock_at`');
+            }
+            $idx_lock = $CI->db->query('SHOW INDEX FROM `' . $pipeline_table . '` WHERE Key_name = "idx_manual_lock"')->row_array();
+            if (!$idx_lock) {
+                $CI->db->query('ALTER TABLE `' . $pipeline_table . '` ADD INDEX `idx_manual_lock` (`is_manual_lock`)');
+            }
+        }
+
         sales_pipeline_backfill_estimate_groups($CI);
+
+        // Safe backfill for link_method on legacy data
+        $CI->db->query('UPDATE `' . $version_table . '` ev'
+            . ' JOIN `' . $group_table . '` grp ON grp.id = ev.estimate_group_id'
+            . ' SET ev.link_method = "legacy_import"'
+            . ' WHERE grp.grouping_source = "legacy_import" AND ev.revision_no = 1 AND ev.link_method = "origin"');
+        $CI->db->query('UPDATE `' . $version_table . '`'
+            . ' SET link_method = "legacy_revision"'
+            . ' WHERE revision_no > 1 AND link_method = "origin"');
+
         $CI->db->query('UPDATE `' . $group_table . '` grp'
             . ' SET grp.decision_estimate_id = ('
             . ' SELECT ev.estimate_id FROM `' . $version_table . '` ev'

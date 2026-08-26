@@ -2,6 +2,8 @@
 
 ## Điều kiện bắt đầu
 
+- Context initialization đã hoàn tất theo
+  [`Context Loading Protocol`](../context/context-loading.md).
 - Plan đã mô tả đủ scope, basecode evidence và acceptance criteria.
 - Working tree và phạm vi file đã được kiểm tra.
 

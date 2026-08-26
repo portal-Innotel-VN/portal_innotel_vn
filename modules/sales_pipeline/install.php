@@ -228,7 +228,7 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_reminders_log')) {
         `pipeline_id` int(11) DEFAULT NULL COMMENT 'FK tblsales_pipeline; NULL với reminder theo kỳ',
         `staff_id` int(11) NOT NULL COMMENT 'Nhân viên được nhắc',
         `reminder_type` varchar(50) NOT NULL DEFAULT 'email' COMMENT 'email / notification',
-        `rule_code` varchar(80) NOT NULL DEFAULT 'DEAL_FREQUENCY_REMINDER',
+        `rule_code` varchar(80) NOT NULL,
         `entity_type` varchar(40) NOT NULL DEFAULT 'deal',
         `message` text NOT NULL COMMENT 'Nội dung nhắc nhở',
         `snapshot_json` longtext DEFAULT NULL,
