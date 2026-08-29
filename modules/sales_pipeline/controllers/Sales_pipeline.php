@@ -841,6 +841,91 @@ class Sales_pipeline extends AdminController
     }
 
     /**
+     * Lấy danh sách Reminder đang chờ xử lý cho Dropdown Notification Bell.
+     * URL: admin/sales_pipeline/reminder_bell_feed
+     */
+    public function reminder_bell_feed()
+    {
+        if (!$this->reminder_bell_is_enabled()) {
+            return $this->json_response(false, _l('page_not_found'), [], 404);
+        }
+
+        if (!$this->can_access_reminder_bell()) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        $staff_id = (int) get_staff_user_id();
+        $feed = $this->sales_pipeline_model->get_reminder_bell_feed($staff_id, 30);
+
+        return $this->json_response(true, '', $feed, 200);
+    }
+
+    /**
+     * Xác nhận Informational Reminder (Acknowledge) qua AJAX.
+     * URL: admin/sales_pipeline/reminder_bell_acknowledge/{reminder_id}
+     */
+    public function reminder_bell_acknowledge($reminder_id = null)
+    {
+        if (!$this->reminder_bell_is_enabled()) {
+            return $this->json_response(false, _l('page_not_found'), [], 404);
+        }
+
+        if (!$this->can_access_reminder_bell()) {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        if (strtoupper($this->input->method()) !== 'POST' || !$this->input->is_ajax_request()) {
+            return $this->json_response(false, _l('page_not_found'), [], 405);
+        }
+
+        if (!$reminder_id || !is_numeric($reminder_id)) {
+            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
+        }
+
+        $reminder_id = (int) $reminder_id;
+        $staff_id = (int) get_staff_user_id();
+
+        $result = $this->sales_pipeline_model->acknowledge_reminder($reminder_id, $staff_id);
+
+        if ($result['status'] === 'success' || $result['status'] === 'already_acknowledged') {
+            return $this->json_response(true, _l('sales_pipeline_reminder_acknowledged'), $result, 200);
+        }
+
+        if ($result['status'] === 'forbidden') {
+            return $this->json_response(false, _l('access_denied'), [], 403);
+        }
+
+        if ($result['status'] === 'not_found') {
+            return $this->json_response(false, _l('sales_pipeline_reminder_not_found'), [], 404);
+        }
+
+        if ($result['status'] === 'actionable_not_allowed') {
+            return $this->json_response(false, _l('sales_pipeline_reminder_response_required_cannot_dismiss'), [], 422);
+        }
+
+        if ($result['status'] === 'invalid') {
+            return $this->json_response(false, _l('sales_pipeline_missing_id'), [], 400);
+        }
+
+        return $this->json_response(false, _l('sales_pipeline_reminder_acknowledge_failed'), [], 500);
+    }
+
+    /** Keep the rollout switch server-authoritative, including stale browser assets. */
+    protected function reminder_bell_is_enabled()
+    {
+        return (int) get_option('sp_reminder_crm_inbox_enabled') === 1;
+    }
+
+    /** A Reminder Inbox is only useful to Staff allowed to work in Sales Pipeline. */
+    protected function can_access_reminder_bell()
+    {
+        return is_staff_logged_in()
+            && (is_admin()
+                || has_permission('sales_pipeline', '', 'view')
+                || has_permission('sales_pipeline', '', 'view_own'));
+    }
+
+    /**
      * Cập nhật giá nhập (cost price) qua AJAX
      * URL: admin/sales_pipeline/update_cost_price
      * POST: pipeline_id, cost_price
@@ -1383,9 +1468,43 @@ class Sales_pipeline extends AdminController
         foreach (sales_pipeline_reminder_rule_default_options() as $key => $default) {
             $data['reminder_options'][$key] = get_option($key) === false ? $default : get_option($key);
         }
+        $this->load->library('sales_pipeline/Reminder_delivery_operations');
+        $data['reminder_delivery_health'] = $this->reminder_delivery_operations->health();
         $data['title'] = _l('sales_pipeline_settings');
 
         $this->load->view('sales_pipeline/settings', $data);
+    }
+
+    public function reminder_delivery_retry($deliveryId)
+    {
+        if (!is_admin()) {
+            access_denied('sales_pipeline_settings');
+        }
+        if ($this->input->method(true) !== 'POST' || !$this->input->is_ajax_request()
+            || config_item('csrf_protection') !== true) {
+            show_error(_l('sales_pipeline_reminder_delivery_method_not_allowed'), 405);
+        }
+        $this->load->library('sales_pipeline/Reminder_delivery_operations');
+        $success = $this->reminder_delivery_operations->retry((int) $deliveryId, get_staff_user_id());
+        $this->json_response($success,
+            _l($success ? 'sales_pipeline_reminder_delivery_retry_success' : 'sales_pipeline_reminder_delivery_retry_unavailable'),
+            [], $success ? 200 : 409);
+    }
+
+    public function reminder_delivery_resume_circuit()
+    {
+        if (!is_admin()) {
+            access_denied('sales_pipeline_settings');
+        }
+        if ($this->input->method(true) !== 'POST' || !$this->input->is_ajax_request()
+            || config_item('csrf_protection') !== true) {
+            show_error(_l('sales_pipeline_reminder_delivery_method_not_allowed'), 405);
+        }
+        $this->load->library('sales_pipeline/Reminder_delivery_operations');
+        $success = $this->reminder_delivery_operations->resumeCircuit(get_staff_user_id());
+        $this->json_response($success,
+            _l($success ? 'sales_pipeline_reminder_delivery_resume_success' : 'sales_pipeline_reminder_delivery_resume_unavailable'),
+            [], $success ? 200 : 409);
     }
 
     public function delete_setting($type, $id)

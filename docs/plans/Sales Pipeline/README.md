@@ -13,6 +13,8 @@
 | `plan_reminder_email_cc.md` | Kế hoạch Reminder Email CC |
 | `plan_reminder_email_cc.implementation.md` | Nhật ký triển khai Reminder Email CC |
 | `plan_reminder_delivery_resilience.md` | Kế hoạch batch, throttle, retry và vận hành Reminder Delivery/SMTP production |
+| `plan_reminder_bell_inbox.md` | Kế hoạch Reminder Inbox trong cùng Notification Bell mà không sửa Core Perfex |
+| `plan_reminder_bell_inbox.implementation.md` | Nhật ký triển khai, kiểm thử và trạng thái rollout Reminder Bell Inbox |
 | `test_tutorial.md` | Hướng dẫn kiểm thử lịch sử |
 
 Nguồn sự thật hiện hành sau khi chuẩn hóa:

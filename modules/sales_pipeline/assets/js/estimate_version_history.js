@@ -47,6 +47,42 @@ function version_history_reason_text(reason) {
     return raw;
 }
 
+function formatDisplayDate(dateStr) {
+    'use strict';
+    if (!dateStr) {
+        return '';
+    }
+    var str = $.trim(String(dateStr));
+    var firstPart = str.split(' ')[0];
+    var parts = firstPart.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+        return parts[2] + '/' + parts[1] + '/' + parts[0];
+    }
+    return str;
+}
+
+function formatDisplayDateTime(dateTimeStr) {
+    'use strict';
+    if (!dateTimeStr) {
+        return '';
+    }
+    var str = $.trim(String(dateTimeStr));
+    var spaceParts = str.split(' ');
+    var firstPart = spaceParts[0];
+    var parts = firstPart.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+        var dateFormatted = parts[2] + '/' + parts[1] + '/' + parts[0];
+        if (spaceParts[1]) {
+            var timeParts = spaceParts[1].split(':');
+            if (timeParts.length >= 2) {
+                return dateFormatted + ' ' + timeParts[0] + ':' + timeParts[1];
+            }
+        }
+        return dateFormatted;
+    }
+    return str;
+}
+
 /**
  * Inject the Version History tab into the existing Perfex estimate view.
  * This keeps the integration module-only: no core estimate view override is required.
@@ -220,7 +256,8 @@ function renderVersionHistoryView($container, data, activeEstimateId) {
         html.push('        </div>');
         html.push('        <div class="sp-vtree-meta text-muted font-size-12 mtop5">');
             html.push('          <span><i class="fa fa-user" aria-hidden="true"></i> ' + escapeHtml(v.creator_name || version_history_text('notAvailable')) + '</span> &bull; ');
-        html.push('          <span><i class="fa fa-calendar"></i> ' + (v.date || v.date_linked) + '</span>');
+        var displayDate = v.date_formatted || formatDisplayDate(v.date || v.date_linked);
+        html.push('          <span><i class="fa fa-calendar"></i> ' + escapeHtml(displayDate) + '</span>');
         if (v.parent_estimate_id) {
             html.push(' &bull; <span>' + escapeHtml(version_history_text('parentLabel')) + ' #' + v.parent_estimate_id + '</span>');
         }
@@ -246,7 +283,8 @@ function renderVersionHistoryView($container, data, activeEstimateId) {
             html.push('        <div class="sp-audit-header">');
             var eventKey = {group_created: 'eventGroupCreated', revision_linked: 'eventRevisionLinked', revision_unlinked: 'eventRevisionUnlinked', accepted_override: 'eventAcceptedOverride', revision_link_failed: 'eventRevisionLinkFailed', revision_fallback_standalone: 'eventRevisionFallbackStandalone'}[ev.event_type] || 'eventUnknown';
             html.push('          <strong>' + escapeHtml(version_history_text(eventKey)) + '</strong>');
-            html.push('          <span class="text-muted font-size-11 pull-right">' + ev.datecreated + '</span>');
+            var displayEventDate = ev.datecreated_formatted || formatDisplayDateTime(ev.datecreated);
+            html.push('          <span class="text-muted font-size-11 pull-right">' + escapeHtml(displayEventDate) + '</span>');
             html.push('        </div>');
             if (ev.actor_name) {
                 html.push('        <div class="sp-audit-actor text-muted font-size-12">' + escapeHtml(version_history_text('actorLabel')) + ': ' + escapeHtml(ev.actor_name) + '</div>');

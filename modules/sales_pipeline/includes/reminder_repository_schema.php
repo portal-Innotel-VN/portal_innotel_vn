@@ -11,6 +11,7 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
     {
         $reminders = db_prefix() . 'sales_pipeline_reminders_log';
         $deliveries = db_prefix() . 'sales_pipeline_reminder_deliveries';
+        $rateBuckets = db_prefix() . 'sales_pipeline_reminder_delivery_rate_buckets';
         $charset = $CI->db->char_set ?: 'utf8';
 
         if (!$CI->db->table_exists($reminders)) {
@@ -27,7 +28,9 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
             'response_required'=> "tinyint(1) NULL DEFAULT 1 AFTER `severity`",
             'title'            => "varchar(255) NULL AFTER `response_required`",
             'snapshot_json'    => "longtext NULL AFTER `message`",
-            'dedupe_key'       => "varchar(191) NULL AFTER `snapshot_json`",
+            'acknowledged_at'  => "datetime NULL AFTER `snapshot_json`",
+            'acknowledged_by'  => "int(11) NULL AFTER `acknowledged_at`",
+            'dedupe_key'       => "varchar(191) NULL AFTER `acknowledged_by`",
             'created_at'       => "datetime NULL AFTER `dedupe_key`",
         ];
         foreach ($columns as $column => $definition) {
@@ -96,6 +99,9 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
         if (!in_array('idx_reminder_rule_period', $indexNames, true)) {
             $CI->db->query('ALTER TABLE `' . $reminders . '` ADD KEY `idx_reminder_rule_period` (`rule_code`,`period_key`)');
         }
+        if (!in_array('idx_reminder_inbox_queue', $indexNames, true)) {
+            $CI->db->query('ALTER TABLE `' . $reminders . '` ADD KEY `idx_reminder_inbox_queue` (`staff_id`,`response_required`,`acknowledged_at`,`staff_response`(100))');
+        }
 
         if (!$CI->db->table_exists($deliveries)) {
             $CI->db->query('CREATE TABLE `' . $deliveries . "` (
@@ -108,9 +114,14 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
                 `cc_recipients` text DEFAULT NULL,
                 `status` varchar(20) NOT NULL DEFAULT 'pending',
                 `attempt_count` int(11) NOT NULL DEFAULT 0,
+                `last_attempt_at` datetime DEFAULT NULL,
                 `provider_message_id` varchar(191) DEFAULT NULL,
                 `last_error` varchar(500) DEFAULT NULL,
+                `last_error_code` varchar(64) DEFAULT NULL,
+                `last_error_class` varchar(32) DEFAULT NULL,
                 `next_retry_at` datetime DEFAULT NULL,
+                `expires_at` datetime DEFAULT NULL,
+                `expired_at` datetime DEFAULT NULL,
                 `sent_at` datetime DEFAULT NULL,
                 `delivered_at` datetime DEFAULT NULL,
                 `read_at` datetime DEFAULT NULL,
@@ -119,6 +130,8 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `uq_reminder_channel_recipient` (`reminder_id`,`channel`,`recipient_type`,`recipient_key`),
                 KEY `idx_delivery_worker` (`status`,`next_retry_at`),
+                KEY `idx_delivery_channel_worker` (`channel`,`status`,`next_retry_at`,`expires_at`,`id`),
+                KEY `idx_delivery_retention` (`status`,`sent_at`,`expired_at`,`id`),
                 KEY `idx_delivery_reminder` (`reminder_id`),
                 KEY `idx_delivery_provider` (`provider_message_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=" . $charset . ';');
@@ -127,11 +140,43 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
         $deliveryColumns = [
             'recipient_staff_id' => 'int(11) DEFAULT NULL AFTER `recipient_type`',
             'cc_recipients'      => 'text DEFAULT NULL AFTER `recipient_key`',
+            'last_attempt_at'    => 'datetime DEFAULT NULL AFTER `attempt_count`',
+            'last_error_code'    => 'varchar(64) DEFAULT NULL AFTER `last_error`',
+            'last_error_class'   => 'varchar(32) DEFAULT NULL AFTER `last_error_code`',
+            'expires_at'         => 'datetime DEFAULT NULL AFTER `next_retry_at`',
+            'expired_at'         => 'datetime DEFAULT NULL AFTER `expires_at`',
         ];
         foreach ($deliveryColumns as $column => $definition) {
             if (!$CI->db->field_exists($column, $deliveries)) {
                 $CI->db->query('ALTER TABLE `' . $deliveries . '` ADD `' . $column . '` ' . $definition);
             }
+        }
+        $CI->db->query('UPDATE `' . $deliveries . '` SET `expires_at`=DATE_ADD('
+            . 'COALESCE(`created_at`,`updated_at`,NOW()), INTERVAL 24 HOUR)'
+            . " WHERE `channel`='email' AND `status` IN ('pending','failed','processing')"
+            . ' AND `expires_at` IS NULL');
+
+        $deliveryIndexes = $CI->db->query('SHOW INDEX FROM `' . $deliveries . '`')->result_array();
+        $deliveryIndexNames = array_unique(array_column($deliveryIndexes, 'Key_name'));
+        if (!in_array('idx_delivery_channel_worker', $deliveryIndexNames, true)) {
+            $CI->db->query('ALTER TABLE `' . $deliveries . '` ADD KEY `idx_delivery_channel_worker`'
+                . ' (`channel`,`status`,`next_retry_at`,`expires_at`,`id`)');
+        }
+        if (!in_array('idx_delivery_retention', $deliveryIndexNames, true)) {
+            $CI->db->query('ALTER TABLE `' . $deliveries . '` ADD KEY `idx_delivery_retention`'
+                . ' (`status`,`sent_at`,`expired_at`,`id`)');
+        }
+
+        if (!$CI->db->table_exists($rateBuckets)) {
+            $CI->db->query('CREATE TABLE `' . $rateBuckets . "` (
+                `scope_key` varchar(40) NOT NULL,
+                `bucket_minute` datetime NOT NULL,
+                `message_attempts` int(10) unsigned NOT NULL DEFAULT 0,
+                `recipient_attempts` int(10) unsigned NOT NULL DEFAULT 0,
+                `updated_at` datetime NOT NULL,
+                UNIQUE KEY `uq_scope_minute` (`scope_key`,`bucket_minute`),
+                KEY `idx_rate_bucket_minute` (`bucket_minute`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=" . $charset . ';');
         }
     }
 }

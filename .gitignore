@@ -101,4 +101,6 @@ tests/
 *.test.ts
 *.spec.js
 *.spec.ts
-
+!modules/sales_pipeline/tests/
+!modules/sales_pipeline/tests/Reminder_delivery_*_test.php
+!modules/sales_pipeline/tests/Reminder_bell_inbox_test.php

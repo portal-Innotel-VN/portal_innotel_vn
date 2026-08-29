@@ -7,9 +7,6 @@ $performance_status = $estimate_dashboard['performance_status'] ?? 'not_configur
 $viewer = $dashboard['viewer'] ?? [];
 $can_view_all = !empty($viewer['can_view_all']);
 $selected_range = $dashboard['selected_period_range'] ?? [];
-$period_label = !empty($selected_range['start']) && !empty($selected_range['end'])
-    ? date('d/m/Y', strtotime($selected_range['start'])) . ' - ' . date('d/m/Y', strtotime($selected_range['end']))
-    : '';
 $missing_revenue_rate_count = (int) ($summary['missing_revenue_rate_count'] ?? 0);
 $base_currency = get_base_currency();
 ?>
@@ -29,9 +26,6 @@ $base_currency = get_base_currency();
                     <i class="fa fa-trophy" aria-hidden="true"></i>
                     <?php echo _l('sales_pipeline_performance_leaderboard'); ?>
                 </h2>
-            </div>
-            <div class="sp-leaderboard-header__right">
-                <span class="sp-leaderboard-period"><?php echo html_escape($period_label); ?></span>
             </div>
         </header>
 

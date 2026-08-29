@@ -17,6 +17,14 @@ class Reminder_engine
         $this->CI = &get_instance();
         $this->CI->load->model('staff_model');
         $this->CI->load->library('sales_pipeline/Deal_reminder_rule_evaluator');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_policy');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_selector');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_throttle');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_rate_limiter');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_lock');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_error_sanitizer');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_error_classifier');
+        $this->CI->load->library('sales_pipeline/Reminder_delivery_backoff');
     }
 
     public function process()
@@ -380,6 +388,9 @@ class Reminder_engine
 
     private function materializeDeliveries($reminderId, array $event)
     {
+        $createdAt = new DateTimeImmutable('now');
+        $createdAtValue = $createdAt->format('Y-m-d H:i:s');
+        $maxValidAgeHours = (int) $this->option('sp_reminder_delivery_default_max_valid_age_hours');
         $recipients = [['type' => 'staff', 'id' => $event['staff_id']]];
         if (in_array('manager', $event['recipients'], true)) {
             foreach ($this->CI->db->select('staffid')->where('active', 1)->where('admin', 1)
@@ -397,9 +408,13 @@ class Reminder_engine
                 }
                 $key = $channel === 'email' ? trim((string) $staff->email) : (string) $recipient['id'];
                 if ($key === '') { continue; }
+                $expiresAt = $channel === 'email'
+                    ? $this->CI->reminder_delivery_policy->expiresAt($createdAt, $maxValidAgeHours)->format('Y-m-d H:i:s')
+                    : null;
                 $this->CI->db->query('INSERT IGNORE INTO `' . db_prefix() . 'sales_pipeline_reminder_deliveries`'
-                    . ' (`reminder_id`,`channel`,`recipient_type`,`recipient_staff_id`,`recipient_key`,`status`,`created_at`) VALUES (?,?,?,?,?,?,?)',
-                    [$reminderId, $channel, $recipient['type'], $recipient['id'], $key, 'pending', date('Y-m-d H:i:s')]);
+                    . ' (`reminder_id`,`channel`,`recipient_type`,`recipient_staff_id`,`recipient_key`,`status`,`expires_at`,`created_at`)'
+                    . ' VALUES (?,?,?,?,?,?,?,?)',
+                    [$reminderId, $channel, $recipient['type'], $recipient['id'], $key, 'pending', $expiresAt, $createdAtValue]);
             }
         }
     }
@@ -507,50 +522,88 @@ class Reminder_engine
     private function dispatchPendingDeliveries()
     {
         $now = new DateTimeImmutable('now');
+        $maxAttempts = max(1, (int) $this->option('sp_reminder_delivery_max_attempts'));
+        $this->CI->reminder_delivery_selector->expireStaleEmails($now);
         if (!$this->isWorkingDay($now) || $this->isQuietHours($now)) {
             $this->CI->db->query('UPDATE `' . db_prefix() . 'sales_pipeline_reminder_deliveries` SET `next_retry_at` = ?'
-                . " WHERE `status` IN ('pending','failed') AND `attempt_count` < 3"
-                . ' AND (`next_retry_at` IS NULL OR `next_retry_at` <= NOW())', [$this->nextAllowedDeliveryAt($now)->format('Y-m-d H:i:s')]);
+                . " WHERE `status` IN ('pending','failed') AND `attempt_count` < ?"
+                . ' AND (`next_retry_at` IS NULL OR `next_retry_at` <= NOW())',
+                [$this->nextAllowedDeliveryAt($now)->format('Y-m-d H:i:s'), $maxAttempts]);
             return 0;
         }
-        $this->CI->db->query('UPDATE `' . db_prefix() . 'sales_pipeline_reminder_deliveries`'
-            . " SET `status`='failed', `last_error`='Stuck in processing state', `updated_at`=NOW()"
-            . " WHERE `status`='processing' AND `updated_at` < DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
-        /*
-         * Keep the CRM notification path ahead of the slower email path.
-         *
-         * A single FIFO order by id causes head-of-line blocking: old failed
-         * email rows can consume the whole batch and leave a newly-created CRM
-         * row pending, so the staff bell never gets populated in that cron run.
-         * The priority is deliberately explicit:
-         *   1. new CRM notifications
-         *   2. retrying CRM notifications
-         *   3. new emails
-         *   4. retrying emails
-         *
-         * This preserves "pending before failed" for each channel while making
-         * CRM delivery independent from an email provider/outbox backlog.
-         */
-        $rows = $this->CI->db->query('SELECT d.*, r.title, r.message, r.entity_type, r.entity_id, r.pipeline_id, r.rule_code, r.staff_id, r.severity, r.snapshot_json, r.sent_at AS reminder_sent_at'
-            . ' FROM `' . db_prefix() . 'sales_pipeline_reminder_deliveries` d JOIN `' . db_prefix() . 'sales_pipeline_reminders_log` r ON r.id=d.reminder_id'
-            . " WHERE d.status IN ('pending','failed') AND d.attempt_count<3 AND (d.next_retry_at IS NULL OR d.next_retry_at<=NOW())"
-            . " ORDER BY CASE"
-            . " WHEN d.channel='crm' AND d.status='pending' THEN 0"
-            . " WHEN d.channel='crm' THEN 1"
-            . " WHEN d.status='pending' THEN 2"
-            . " ELSE 3 END, d.id ASC LIMIT 100")->result_array();
+        $staleRows = $this->CI->db->query('SELECT `id`,`attempt_count` FROM `'
+            . db_prefix() . 'sales_pipeline_reminder_deliveries`'
+            . " WHERE `status`='processing' AND `attempt_count`<?"
+            . ' AND `updated_at` < DATE_SUB(NOW(), INTERVAL 15 MINUTE) ORDER BY `id` ASC LIMIT 100',
+            [$maxAttempts])->result_array();
+        foreach ($staleRows as $staleRow) {
+            $attemptCount = (int) $staleRow['attempt_count'] + 1;
+            $nextRetryAt = $this->CI->reminder_delivery_backoff->nextRetryAt($attemptCount, $now)->format('Y-m-d H:i:s');
+            $this->CI->db->query('UPDATE `' . db_prefix() . 'sales_pipeline_reminder_deliveries`'
+                . " SET `status`='failed', `attempt_count`=?, `last_attempt_at`=?, `next_retry_at`=?,"
+                . " `last_error_code`='stale_processing_recovered', `last_error_class`='transient_transport',"
+                . " `last_error`='Stuck delivery was recovered for retry', `updated_at`=?"
+                . " WHERE `id`=? AND `status`='processing' AND `attempt_count`=?",
+                [$attemptCount, $now->format('Y-m-d H:i:s'), $nextRetryAt, $now->format('Y-m-d H:i:s'),
+                    (int) $staleRow['id'], (int) $staleRow['attempt_count']]);
+        }
+
+        $crmRows = $this->CI->reminder_delivery_selector->due('crm', 100, $maxAttempts, $now);
         $anySent = false;
+        $anySent = $this->dispatchDeliveryRows($crmRows, $maxAttempts) || $anySent;
+
+        if ($this->option('sp_reminder_delivery_email_circuit_state') !== 'closed'
+            || !$this->CI->reminder_delivery_lock->acquire()) {
+            return $anySent;
+        }
+        try {
+            $emailBatchSize = max(1, min(100, (int) $this->option('sp_reminder_delivery_email_batch_size')));
+            $emailRows = $this->CI->reminder_delivery_selector->due('email', $emailBatchSize, $maxAttempts, $now);
+            $anySent = $this->dispatchDeliveryRows($emailRows, $maxAttempts) || $anySent;
+        } finally {
+            $this->CI->reminder_delivery_lock->release();
+        }
+
+        return $anySent;
+    }
+
+    private function dispatchDeliveryRows(array $rows, $maxAttempts)
+    {
+        $anySent = false;
+        $storedLastAttempt = $this->option('sp_reminder_delivery_email_last_attempt_started_at');
+        $lastEmailAttemptStartedAt = is_numeric($storedLastAttempt) ? (float) $storedLastAttempt : null;
         foreach ($rows as $row) {
-            $this->CI->db->query('UPDATE `' . db_prefix() . 'sales_pipeline_reminder_deliveries` SET `status` = ?, `updated_at` = NOW()'
-                . " WHERE `id` = ? AND `status` IN ('pending','failed') AND `attempt_count` < 3", ['processing', $row['id']]);
-            if ($this->CI->db->affected_rows() !== 1) { continue; }
-            $success = false; $error = null;
+            $claimAt = new DateTimeImmutable('now');
+            if (!$this->CI->reminder_delivery_selector->claim(
+                (int) $row['id'], (string) $row['channel'], $maxAttempts, $claimAt
+            )) {
+                continue;
+            }
+            $success = false; $error = null; $classification = null;
             if ($row['channel'] === 'crm') {
-                $success = (bool) add_notification([
-                    'description' => 'sales_pipeline_rule_reminder', 'touserid' => (int) $row['recipient_key'],
-                    'fromuserid' => null, 'link' => 'sales_pipeline/reminder_response/' . $row['reminder_id'],
-                    'additional_data' => serialize([$row['title'], $row['message']]),
-                ]);
+                $inboxEnabled = (int) $this->option('sp_reminder_crm_inbox_enabled', '0');
+                if ($inboxEnabled === 1) {
+                    $recipientStaffId = !empty($row['recipient_staff_id']) ? (int) $row['recipient_staff_id'] : (int) $row['recipient_key'];
+                    $staff = $recipientStaffId > 0 ? $this->CI->db->where('staffid', $recipientStaffId)->get(db_prefix() . 'staff')->row() : null;
+                    $canUseInbox = $staff
+                        && (int) $staff->active === 1
+                        && (is_admin($recipientStaffId)
+                            || has_permission('sales_pipeline', (string) $recipientStaffId, 'view')
+                            || has_permission('sales_pipeline', (string) $recipientStaffId, 'view_own'));
+                    if ($canUseInbox) {
+                        $success = true;
+                    } else {
+                        $success = false;
+                        $error = _l('sales_pipeline_reminder_inbox_recipient_unavailable');
+                        $classification = 'permanent';
+                    }
+                } else {
+                    $success = (bool) add_notification([
+                        'description' => 'sales_pipeline_rule_reminder', 'touserid' => (int) $row['recipient_key'],
+                        'fromuserid' => null, 'link' => 'sales_pipeline/reminder_response/' . $row['reminder_id'],
+                        'additional_data' => serialize([$row['title'], $row['message']]),
+                    ]);
+                }
             } elseif ($row['channel'] === 'email') {
                 $this->CI->load->model('emails_model');
                 $recipient = !empty($row['recipient_staff_id'])
@@ -586,33 +639,184 @@ class Reminder_engine
                     'cc_recipients' => $ccString,
                     'updated_at'    => date('Y-m-d H:i:s'),
                 ]);
+                if (strlen($body) > max(1, (int) $this->option('sp_reminder_delivery_email_max_rendered_bytes'))) {
+                    $this->CI->reminder_delivery_selector->cancel(
+                        (int) $row['id'], 'rendered_message_exceeds_limit', 'Rendered email exceeds the configured size limit'
+                    );
+                    continue;
+                }
+                $reservation = $this->CI->reminder_delivery_rate_limiter->reserve(
+                    $this->emailRecipientCount((string) $row['recipient_key'], $ccList),
+                    new DateTimeImmutable('now'),
+                    [
+                        'hourly_messages' => max(1, (int) $this->option('sp_reminder_delivery_email_hourly_message_limit')),
+                        'hourly_recipients' => max(1, (int) $this->option('sp_reminder_delivery_email_hourly_recipient_limit')),
+                        'daily_messages' => max(1, (int) $this->option('sp_reminder_delivery_email_daily_message_limit')),
+                        'daily_recipients' => max(1, (int) $this->option('sp_reminder_delivery_email_daily_recipient_limit')),
+                        'max_recipients_per_message' => max(1, (int) $this->option('sp_reminder_delivery_email_max_recipients_per_message')),
+                    ]
+                );
+                if (empty($reservation['allowed'])) {
+                    if (!empty($reservation['retryable'])) {
+                        $this->CI->reminder_delivery_selector->defer(
+                            (int) $row['id'], $reservation['next_retry_at'], $reservation['code']
+                        );
+                    } else {
+                        $this->CI->reminder_delivery_selector->cancel(
+                            (int) $row['id'], $reservation['code'], 'Email recipient count exceeds the configured limit'
+                        );
+                    }
+                    continue;
+                }
+                $lastEmailAttemptStartedAt = $this->CI->reminder_delivery_throttle->waitUntilAllowed(
+                    $lastEmailAttemptStartedAt,
+                    max(0, (int) $this->option('sp_reminder_delivery_email_min_interval_ms'))
+                );
+                update_option('sp_reminder_delivery_email_last_attempt_started_at',
+                    number_format($lastEmailAttemptStartedAt, 6, '.', ''));
+                $rawError = null;
                 try {
                     self::$currentEmailCC = $ccString;
                     $success = (bool) $this->CI->emails_model->send_simple_email($row['recipient_key'], $row['title'], $body);
+                } catch (Throwable $exception) {
+                    $success = false;
+                    $rawError = $exception->getMessage();
                 } finally {
                     self::$currentEmailCC = null;
+                }
+                if (!$success) {
+                    if ($rawError === null && isset($this->CI->email) && method_exists($this->CI->email, 'print_debugger')) {
+                        $rawError = (string) $this->CI->email->print_debugger();
+                    }
+                    if ($rawError === null || $rawError === '') {
+                        $rawError = 'SMTP delivery failed without diagnostic details';
+                    }
+                    $classification = $this->CI->reminder_delivery_error_classifier->classify(
+                        $rawError, $this->systemBccRecipients()
+                    );
+                    $error = $classification['safe_error'];
                 }
             } else {
                 $error = 'Channel adapter is not enabled';
             }
-            $now = date('Y-m-d H:i:s');
+            $completedAt = date('Y-m-d H:i:s');
+            $completedDate = new DateTimeImmutable($completedAt);
+            $completedAttemptCount = (int) $row['attempt_count'] + 1;
+            $status = $success ? 'sent' : 'failed';
+            $nextRetryAt = $success ? null : $this->CI->reminder_delivery_backoff->nextRetryAt(
+                $completedAttemptCount, $completedDate
+            )->format('Y-m-d H:i:s');
+            $lastErrorCode = null;
+            $lastErrorClass = null;
+            if ($classification) {
+                $lastErrorCode = $classification['code'];
+                $lastErrorClass = $classification['class'];
+                if (empty($classification['retryable']) && $classification['class'] !== 'authentication_configuration') {
+                    $status = 'cancelled';
+                    $nextRetryAt = null;
+                } elseif ($classification['class'] === 'authentication_configuration') {
+                    $nextRetryAt = null;
+                } elseif ($classification['class'] === 'rate_limited') {
+                    $cooldown = max(60, (int) $this->option('sp_reminder_delivery_rate_limit_cooldown_seconds'));
+                    $nextRetryAt = $completedDate->modify('+'
+                        . ($cooldown + random_int(0, min(900, (int) floor($cooldown * 0.25)))) . ' seconds')->format('Y-m-d H:i:s');
+                }
+            }
             $this->CI->db->where('id', $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
-                'status' => $success ? 'sent' : 'failed', 'attempt_count' => (int) $row['attempt_count'] + 1,
+                'status' => $status,
+                'attempt_count' => (!$success && $classification && empty($classification['retryable']))
+                    ? $maxAttempts : $completedAttemptCount,
+                'last_attempt_at' => $completedAt,
                 'last_error' => $success ? null : ($error ?: 'Delivery provider returned false'),
-                'sent_at' => $success ? $now : null, 'updated_at' => $now,
-                'next_retry_at' => $success ? null : date('Y-m-d H:i:s', strtotime('+1 hour')),
+                'last_error_code' => $lastErrorCode,
+                'last_error_class' => $lastErrorClass,
+                'sent_at' => $success ? $completedAt : null, 'updated_at' => $completedAt,
+                'next_retry_at' => $nextRetryAt,
             ]);
             $anySent = $anySent || $success;
             if ($success && empty($row['reminder_sent_at'])) {
                 $this->CI->db->where('id', $row['reminder_id'])->where('sent_at IS NULL', null, false)
-                    ->update(db_prefix() . 'sales_pipeline_reminders_log', ['sent_at' => $now]);
+                    ->update(db_prefix() . 'sales_pipeline_reminders_log', ['sent_at' => $completedAt]);
                 if ($row['entity_type'] === 'deal' && !empty($row['pipeline_id'])) {
                     $this->CI->db->where('id', (int) $row['pipeline_id'])
-                        ->update(db_prefix() . 'sales_pipeline', ['last_reminder_sent' => $now]);
+                        ->update(db_prefix() . 'sales_pipeline', ['last_reminder_sent' => $completedAt]);
                 }
+            }
+            if ($classification && $classification['class'] === 'rate_limited') {
+                $this->CI->reminder_delivery_selector->deferDueEmails($nextRetryAt, $classification['code']);
+                break;
+            }
+            if ($classification && $classification['class'] === 'authentication_configuration') {
+                $this->openAuthenticationCircuit($classification['code']);
+                break;
+            }
+            if ($classification && $classification['class'] === 'system_bcc_over_quota') {
+                $this->alertSystemBccIncident();
             }
         }
         return $anySent;
+    }
+
+    private function emailRecipientCount($to, array $ccList)
+    {
+        $recipients = array_merge([$to], $ccList, $this->systemBccRecipients());
+        $count = 0;
+        foreach ($recipients as $recipient) {
+            $recipient = strtolower(trim((string) $recipient));
+            if ($recipient !== '' && filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                $count++;
+            }
+        }
+
+        return max(1, $count);
+    }
+
+    private function systemBccRecipients()
+    {
+        return array_values(array_filter(array_map('trim', explode(',', (string) get_option('bcc_emails')))));
+    }
+
+    private function openAuthenticationCircuit($reasonCode)
+    {
+        if ($this->option('sp_reminder_delivery_email_circuit_state') === 'open_authentication') {
+            return;
+        }
+        $openedAt = date('Y-m-d H:i:s');
+        update_option('sp_reminder_delivery_email_circuit_state', 'open_authentication');
+        update_option('sp_reminder_delivery_email_circuit_opened_at', $openedAt);
+        update_option('sp_reminder_delivery_email_circuit_reason', (string) $reasonCode);
+
+        $admins = $this->CI->db->select('staffid')->where('admin', 1)->where('active', 1)
+            ->get(db_prefix() . 'staff')->result_array();
+        foreach ($admins as $admin) {
+            add_notification([
+                'description' => 'sales_pipeline_reminder_email_authentication_alert',
+                'touserid' => (int) $admin['staffid'],
+                'fromuserid' => null,
+                'link' => 'sales_pipeline/settings#reminders',
+                'additional_data' => serialize([]),
+            ]);
+        }
+    }
+
+    private function alertSystemBccIncident()
+    {
+        $lastAlertedAt = (string) $this->option('sp_reminder_delivery_bcc_incident_alerted_at');
+        if ($lastAlertedAt !== '' && strtotime($lastAlertedAt) >= strtotime('-24 hours')) {
+            return;
+        }
+        update_option('sp_reminder_delivery_bcc_incident_alerted_at', date('Y-m-d H:i:s'));
+        $admins = $this->CI->db->select('staffid')->where('admin', 1)->where('active', 1)
+            ->get(db_prefix() . 'staff')->result_array();
+        foreach ($admins as $admin) {
+            add_notification([
+                'description' => 'sales_pipeline_reminder_email_bcc_quota_alert',
+                'touserid' => (int) $admin['staffid'],
+                'fromuserid' => null,
+                'link' => 'sales_pipeline/settings#reminders',
+                'additional_data' => serialize([]),
+            ]);
+        }
     }
 
     private function entityUrl($type, $id)

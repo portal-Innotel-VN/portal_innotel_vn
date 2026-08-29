@@ -19,7 +19,7 @@
         var activeDashboardRequest = null;
         var lastTrigger = null;
         var activeDashboardTab = String(
-            $contentWrapper.find('[data-dashboard-tab][aria-selected="true"]').data('dashboard-tab') || 'deals'
+            $dashboard.find('[data-dashboard-tab][aria-selected="true"]').data('dashboard-tab') || 'deals'
         );
 
         function updateDashboardUrl(period, tab) {
@@ -44,7 +44,7 @@
             }
 
             activeDashboardTab = tab;
-            var $tabs = $contentWrapper.find('[data-dashboard-tab]');
+            var $tabs = $dashboard.find('[data-dashboard-tab]');
             var $panels = $contentWrapper.find('[data-dashboard-panel]');
             $tabs.each(function () {
                 var isActive = String($(this).data('dashboard-tab')) === tab;
@@ -62,12 +62,204 @@
             });
 
             updateDashboardUrl($('#sp-dashboard-time-filter').val() || 'this_month', tab);
+            if (tab === 'deals') {
+                setTimeout(function () {
+                    var $el = $('#sp-revenue-sparkline-chart');
+                    dealsChartInstance = initSparklineChart($el, dealsChartInstance);
+                }, 50);
+            } else if (tab === 'estimates') {
+                setTimeout(function () {
+                    var $el = $('#sp-estimate-revenue-sparkline-chart');
+                    estimatesChartInstance = initSparklineChart($el, estimatesChartInstance);
+                }, 50);
+            }
+        }
+
+        var dealsChartInstance = null;
+        var estimatesChartInstance = null;
+
+        function formatCompactVND(val) {
+            var num = Number(val) || 0;
+            var abs = Math.abs(num);
+            if (abs >= 1000000000) {
+                var bil = (num / 1000000000).toFixed(1).replace(/\.0$/, '').replace('.', ',');
+                return bil + ' tỷ';
+            }
+            if (abs >= 1000000) {
+                var mil = (num / 1000000).toFixed(1).replace(/\.0$/, '').replace('.', ',');
+                return mil + ' tr';
+            }
+            return num.toLocaleString('vi-VN') + ' đ';
+        }
+
+        function formatFullVND(val) {
+            var num = Number(val) || 0;
+            return num.toLocaleString('vi-VN') + ' VNĐ';
+        }
+
+        function createSparklineOptions(series, labels) {
+            var labelCount = (labels || []).length;
+            var tickAmt = undefined;
+            if (labelCount > 20) {
+                tickAmt = 10;
+            } else if (labelCount > 10) {
+                tickAmt = 6;
+            }
+
+            return {
+                series: [
+                    {
+                        name: 'Kỳ này',
+                        data: series.current || []
+                    },
+                    {
+                        name: 'Kỳ trước',
+                        data: series.previous || []
+                    }
+                ],
+                chart: {
+                    type: 'area',
+                    height: 160,
+                    toolbar: { show: false },
+                    zoom: { enabled: false },
+                    sparkline: { enabled: false },
+                    parentHeightOffset: 0,
+                    animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 350
+                    }
+                },
+                colors: ['#0284c7', '#f97316'],
+                stroke: {
+                    curve: 'smooth',
+                    width: [2.5, 1.8],
+                    dashArray: [0, 5]
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.38,
+                        opacityTo: 0.03,
+                        stops: [0, 90, 100]
+                    }
+                },
+                dataLabels: {
+                    enabled: false
+                },
+                legend: {
+                    show: false
+                },
+                xaxis: {
+                    categories: labels || [],
+                    tickAmount: tickAmt,
+                    axisBorder: { show: false },
+                    axisTicks: { show: false },
+                    labels: {
+                        rotate: 0,
+                        hideOverlappingLabels: true,
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            fontFamily: 'inherit'
+                        },
+                        offsetY: -2
+                    },
+                    tooltip: { enabled: false }
+                },
+                yaxis: {
+                    show: true,
+                    labels: {
+                        formatter: function (val) {
+                            return formatCompactVND(val);
+                        },
+                        style: {
+                            colors: '#94a3b8',
+                            fontSize: '10px',
+                            fontWeight: 500,
+                            fontFamily: 'inherit'
+                        },
+                        offsetX: -8
+                    },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                grid: {
+                    show: true,
+                    borderColor: '#f1f5f9',
+                    strokeDashArray: 3,
+                    padding: {
+                        top: 0,
+                        right: 12,
+                        bottom: 0,
+                        left: 10
+                    }
+                },
+                tooltip: {
+                    theme: 'light',
+                    shared: true,
+                    intersect: false,
+                    y: {
+                        formatter: function (val) {
+                            return formatFullVND(val);
+                        }
+                    },
+                    style: {
+                        fontSize: '12px',
+                        fontFamily: 'inherit'
+                    }
+                }
+            };
+        }
+
+        function initSparklineChart($chartEl, currentInstance) {
+            if (!$chartEl.length || typeof ApexCharts === 'undefined') {
+                return null;
+            }
+
+            if (currentInstance) {
+                try {
+                    currentInstance.destroy();
+                } catch (e) {}
+            }
+
+            var kpiData = $chartEl.data('revenue-kpi');
+            if (typeof kpiData === 'string') {
+                try {
+                    kpiData = JSON.parse(kpiData);
+                } catch (e) {
+                    kpiData = null;
+                }
+            }
+
+            if (!kpiData || !kpiData.series) {
+                return null;
+            }
+
+            var options = createSparklineOptions(kpiData.series, kpiData.series.labels);
+            var chart = new ApexCharts($chartEl[0], options);
+            chart.render();
+            return chart;
+        }
+
+        function initAllCharts() {
+            var $dealsChart = $('#sp-revenue-sparkline-chart');
+            if ($dealsChart.length && $dealsChart.is(':visible')) {
+                dealsChartInstance = initSparklineChart($dealsChart, dealsChartInstance);
+            }
+            var $estimatesChart = $('#sp-estimate-revenue-sparkline-chart');
+            if ($estimatesChart.length && $estimatesChart.is(':visible')) {
+                estimatesChartInstance = initSparklineChart($estimatesChart, estimatesChartInstance);
+            }
         }
 
         function initializeDashboardContent() {
             if ($.fn.tooltip) {
                 $contentWrapper.find('[data-toggle="tooltip"]').tooltip();
             }
+            initAllCharts();
         }
 
         function setDashboardLoading(isLoading) {
@@ -198,10 +390,23 @@
             openDrawer(this);
         });
 
-        $dashboard.on('change', '#sp-dashboard-time-filter', function () {
-            var period = $(this).val() || 'this_month';
+        function updateLastUpdatedTimestamp() {
+            var now = new Date();
+            var hours = String(now.getHours());
+            if (hours.length < 2) hours = '0' + hours;
+            var minutes = String(now.getMinutes());
+            if (minutes.length < 2) minutes = '0' + minutes;
+            var day = String(now.getDate());
+            if (day.length < 2) day = '0' + day;
+            var month = String(now.getMonth() + 1);
+            if (month.length < 2) month = '0' + month;
+            var onDateLabel = $dashboard.data('on-date-text') || 'ngày';
+            $dashboard.find('[data-last-updated-time]').text(hours + ':' + minutes + ' ' + onDateLabel + ' ' + day + '/' + month);
+        }
 
+        function fetchDashboardData(period, onComplete) {
             if (!dashboardUrl || !$contentWrapper.length) {
+                if (typeof onComplete === 'function') onComplete(false);
                 return;
             }
 
@@ -210,7 +415,6 @@
             }
 
             updateDashboardUrl(period, activeDashboardTab);
-
             setDashboardLoading(true);
 
             var dashboardRequest = $.ajax({
@@ -225,6 +429,14 @@
                 if (response && response.success && response.data && response.data.html) {
                     $contentWrapper.html(response.data.html);
                     initializeDashboardContent();
+
+                    // Sync period-range badge in filterbar with the new server-rendered dates
+                    var newLabel = $contentWrapper.find('[data-sp-period-label]').attr('data-sp-period-label') || '';
+                    if (newLabel) {
+                        $dashboard.find('[data-period-badge] .sp-filter-period-badge__text').text(newLabel);
+                    }
+                    updateLastUpdatedTimestamp();
+                    if (typeof onComplete === 'function') onComplete(true);
                     return;
                 }
 
@@ -232,6 +444,7 @@
                 if (typeof sp_alert === 'function') {
                     sp_alert('danger', responseMessage);
                 }
+                if (typeof onComplete === 'function') onComplete(false);
             }).fail(function (xhr, status) {
                 if (status === 'abort') {
                     return;
@@ -243,6 +456,7 @@
                 if (typeof sp_alert === 'function') {
                     sp_alert('danger', responseMessage);
                 }
+                if (typeof onComplete === 'function') onComplete(false);
             }).always(function () {
                 if (activeDashboardRequest === dashboardRequest) {
                     activeDashboardRequest = null;
@@ -251,6 +465,25 @@
             });
 
             activeDashboardRequest = dashboardRequest;
+        }
+
+        $dashboard.on('change', '#sp-dashboard-time-filter', function () {
+            var period = $(this).val() || 'this_month';
+            fetchDashboardData(period);
+        });
+
+        $dashboard.on('click', '.js-sp-dashboard-refresh', function (event) {
+            event.preventDefault();
+            var $btn = $(this);
+            var $icon = $btn.find('.fa-refresh');
+            $icon.addClass('fa-spin');
+            $btn.prop('disabled', true);
+
+            var period = $('#sp-dashboard-time-filter').val() || 'this_month';
+            fetchDashboardData(period, function () {
+                $icon.removeClass('fa-spin');
+                $btn.prop('disabled', false);
+            });
         });
 
         $dashboard.on('click', '[data-dashboard-tab]', function (event) {
@@ -278,10 +511,6 @@
 
         $drawer.on('click', '.js-sp-close-drawer', closeDrawer);
 
-        $dashboard.on('click', '.js-sp-dashboard-refresh', function () {
-            window.location.reload();
-        });
-
         $(document).on('keydown.salesPipelineDashboard', function (event) {
             if (event.key === 'Escape') {
                 closeDrawer();
@@ -291,6 +520,7 @@
         if ($.fn.tooltip) {
             $dashboard.find('[data-toggle="tooltip"]').tooltip();
         }
+        updateLastUpdatedTimestamp();
         initializeDashboardContent();
     });
 })(jQuery);

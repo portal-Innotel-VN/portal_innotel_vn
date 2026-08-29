@@ -1229,6 +1229,8 @@ class Estimate_revision_service
             $v['status_label'] = function_exists('format_estimate_status') ? strip_tags(format_estimate_status($v['status'], '', false)) : (string) $v['status'];
             $v['creator_name'] = trim(($v['creator_firstname'] ?? '') . ' ' . ($v['creator_lastname'] ?? ''));
             $v['linked_by_name'] = trim(($v['linked_firstname'] ?? '') . ' ' . ($v['linked_lastname'] ?? ''));
+            $rawDate = !empty($v['date']) ? $v['date'] : (!empty($v['date_linked']) ? $v['date_linked'] : '');
+            $v['date_formatted'] = !empty($rawDate) ? (function_exists('_d') ? _d(explode(' ', $rawDate)[0]) : date('d/m/Y', strtotime($rawDate))) : '';
         }
 
         // Get all audit events for this group
@@ -1247,6 +1249,7 @@ class Estimate_revision_service
             foreach ($events as &$ev) {
                 $ev['actor_name'] = trim(($ev['actor_firstname'] ?? '') . ' ' . ($ev['actor_lastname'] ?? ''));
                 $ev['metadata'] = !empty($ev['metadata_json']) ? json_decode($ev['metadata_json'], true) : [];
+                $ev['datecreated_formatted'] = !empty($ev['datecreated']) ? (function_exists('_dt') ? _dt($ev['datecreated']) : date('d/m/Y H:i', strtotime($ev['datecreated']))) : '';
             }
         }
 

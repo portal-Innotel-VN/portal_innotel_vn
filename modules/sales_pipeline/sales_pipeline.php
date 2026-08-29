@@ -5,7 +5,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /*
 Module Name: Sales Pipeline
 Description: Quản lý Tiến Độ Kinh Doanh - Số hóa quy trình bán hàng, theo dõi deal, nhắc nhở tự động
-Version: 1.0.9
+Version: 1.0.11
 Requires at least: 2.3.*
 Author: Hiệp - Innotel Developer
 */
@@ -23,9 +23,11 @@ hooks()->add_filter('get_dashboard_widgets', 'sales_pipeline_add_dashboard_widge
 hooks()->add_action('app_admin_footer', 'sales_pipeline_load_js');
 hooks()->add_action('app_admin_footer', 'sales_pipeline_load_estimate_revision_js');
 hooks()->add_action('app_admin_footer', 'sales_pipeline_load_version_history_js');
+hooks()->add_action('app_admin_footer', 'sales_pipeline_load_reminder_bell_js');
 hooks()->add_action('app_admin_head', 'sales_pipeline_load_reminder_settings_css');
 hooks()->add_action('app_admin_head', 'sales_pipeline_load_estimate_revision_css');
 hooks()->add_action('app_admin_head', 'sales_pipeline_load_version_history_css');
+hooks()->add_action('app_admin_head', 'sales_pipeline_load_reminder_bell_css');
 hooks()->add_filter('before_estimate_added', 'sales_pipeline_capture_estimate_intent');
 hooks()->add_action('after_estimate_added', 'sales_pipeline_quote_estimate_added');
 hooks()->add_action('after_estimate_updated', 'sales_pipeline_quote_estimate_updated');
@@ -101,6 +103,8 @@ function sales_pipeline_cron_reminder()
     $CI->load->model('sales_pipeline/sales_pipeline_model');
     $CI->sales_pipeline_model->process_reminder_rules();
     $CI->sales_pipeline_model->reconcile_estimate_groups(1000);
+    $CI->load->library('sales_pipeline/Reminder_delivery_maintenance');
+    $CI->reminder_delivery_maintenance->runIfDue();
 }
 
 /**
@@ -273,6 +277,7 @@ function sales_pipeline_reminder_repository_schema_bootstrap()
     $CI = &get_instance();
     $table = db_prefix() . 'sales_pipeline_reminders_log';
     $deliveries = db_prefix() . 'sales_pipeline_reminder_deliveries';
+    $rate_buckets = db_prefix() . 'sales_pipeline_reminder_delivery_rate_buckets';
     if (!$CI->db->table_exists($table)) {
         return;
     }
@@ -280,6 +285,14 @@ function sales_pipeline_reminder_repository_schema_bootstrap()
     $pipeline_column = $CI->db
         ->query('SHOW COLUMNS FROM `' . $table . '` LIKE ' . $CI->db->escape('pipeline_id'))
         ->row_array();
+    $delivery_index_names = [];
+    $reminder_index_names = [];
+    $reminder_indexes = $CI->db->query('SHOW INDEX FROM `' . $table . '`')->result_array();
+    $reminder_index_names = array_unique(array_column($reminder_indexes, 'Key_name'));
+    if ($CI->db->table_exists($deliveries)) {
+        $delivery_indexes = $CI->db->query('SHOW INDEX FROM `' . $deliveries . '`')->result_array();
+        $delivery_index_names = array_unique(array_column($delivery_indexes, 'Key_name'));
+    }
     if ($CI->db->field_exists('entity_type', $table)
         && $CI->db->field_exists('rule_code', $table)
         && $CI->db->field_exists('dedupe_key', $table)
@@ -288,11 +301,26 @@ function sales_pipeline_reminder_repository_schema_bootstrap()
         && $CI->db->field_exists('checkpoint', $table)
         && $CI->db->field_exists('severity', $table)
         && $CI->db->field_exists('response_required', $table)
+        && $CI->db->field_exists('acknowledged_at', $table)
+        && $CI->db->field_exists('acknowledged_by', $table)
         && $CI->db->field_exists('title', $table)
         && $CI->db->field_exists('created_at', $table)
+        && in_array('idx_reminder_inbox_queue', $reminder_index_names, true)
         && $CI->db->table_exists($deliveries)
         && $CI->db->field_exists('recipient_staff_id', $deliveries)
         && $CI->db->field_exists('cc_recipients', $deliveries)
+        && $CI->db->field_exists('last_error_code', $deliveries)
+        && $CI->db->field_exists('last_error_class', $deliveries)
+        && $CI->db->field_exists('last_attempt_at', $deliveries)
+        && $CI->db->field_exists('expires_at', $deliveries)
+        && $CI->db->field_exists('expired_at', $deliveries)
+        && in_array('idx_delivery_channel_worker', $delivery_index_names, true)
+        && in_array('idx_delivery_retention', $delivery_index_names, true)
+        && $CI->db->table_exists($rate_buckets)
+        && $CI->db->field_exists('scope_key', $rate_buckets)
+        && $CI->db->field_exists('bucket_minute', $rate_buckets)
+        && $CI->db->field_exists('message_attempts', $rate_buckets)
+        && $CI->db->field_exists('recipient_attempts', $rate_buckets)
         && $pipeline_column
         && strtoupper((string) $pipeline_column['Null']) === 'YES') {
         return;
@@ -337,7 +365,7 @@ function sales_pipeline_load_reminder_settings_css()
 {
     $CI = &get_instance();
     if ($CI->router->fetch_module() === 'sales_pipeline' && $CI->router->fetch_method() === 'settings') {
-        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/settings_reminder.css') . '?v=1.0.7">';
+        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/settings_reminder.css') . '?v=1.0.10">';
     }
 }
 
@@ -385,7 +413,7 @@ function sales_pipeline_load_estimate_revision_js()
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
 
         echo '<script>window.salesPipelineEstimateRevisionI18n = ' . $translations . ';</script>';
-        echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/estimate_revision.js') . '?v=1.0.12"></script>';
+        echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/estimate_revision.js') . '?v=1.0.14"></script>';
     }
 }
 
@@ -400,7 +428,7 @@ function sales_pipeline_load_estimate_revision_css()
     $id = $CI->uri->segment(4);
 
     if ($class === 'estimates' && $method === 'estimate' && (empty($id) || !is_numeric($id))) {
-        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/estimate_revision.css') . '?v=1.0.12">';
+        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/estimate_revision.css') . '?v=1.0.14">';
     }
 }
 
@@ -539,4 +567,56 @@ function sales_pipeline_inject_reminder_email_cc($cnf)
     }
 
     return $cnf;
+}
+
+/**
+ * Load Reminder Bell Inbox CSS across Admin pages for logged-in staff.
+ */
+function sales_pipeline_load_reminder_bell_css()
+{
+    if (sales_pipeline_can_access_reminder_bell()) {
+        $asset_path = __DIR__ . '/assets/css/reminder_bell.css';
+        $asset_version = is_file($asset_path) ? (string) filemtime($asset_path) : '1.0.0';
+        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/reminder_bell.css') . '?v=' . $asset_version . '">';
+    }
+}
+
+/**
+ * Load Reminder Bell Inbox JS across Admin pages for logged-in staff.
+ */
+function sales_pipeline_load_reminder_bell_js()
+{
+    if (sales_pipeline_can_access_reminder_bell()) {
+        $asset_path = __DIR__ . '/assets/js/reminder_bell.js';
+        $asset_version = is_file($asset_path) ? (string) filemtime($asset_path) : '1.0.0';
+        $translations = json_encode([
+            'inboxError'    => _l('sales_pipeline_reminder_inbox_error'),
+            'ackTooltip'    => _l('sales_pipeline_reminder_inbox_ack_tooltip'),
+            'actionRespond' => _l('sales_pipeline_reminder_inbox_action_respond'),
+            'actionView'    => _l('sales_pipeline_reminder_inbox_action_view'),
+            'severity'      => [
+                'critical' => _l('sales_pipeline_severity_critical'),
+                'warning'  => _l('sales_pipeline_severity_warning'),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+
+        echo '<script>window.salesPipelineReminderBellI18n = ' . $translations . ';</script>';
+        echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/reminder_bell.js') . '?v=' . $asset_version . '"></script>';
+    }
+}
+
+/**
+ * Reminder Inbox assets are rollout-controlled and only available to Staff who
+ * can use the Sales Pipeline module. Keeping this guard module-owned avoids any
+ * change to the Perfex header/Core notification implementation.
+ */
+function sales_pipeline_can_access_reminder_bell()
+{
+    if (!is_staff_logged_in() || (int) get_option('sp_reminder_crm_inbox_enabled') !== 1) {
+        return false;
+    }
+
+    return is_admin()
+        || has_permission('sales_pipeline', '', 'view')
+        || has_permission('sales_pipeline', '', 'view_own');
 }

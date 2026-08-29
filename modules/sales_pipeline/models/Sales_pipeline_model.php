@@ -1299,6 +1299,206 @@ class Sales_pipeline_model extends App_Model
         return $result['status'] === 'success';
     }
 
+    /**
+     * Lấy danh sách Reminder đang chờ xử lý trong Notification Bell cho một Staff cụ thể.
+     * Chỉ lấy các reminder mà CRM delivery tương ứng đã ở trạng thái sent.
+     *
+     * @param int $staff_id
+     * @param int $limit
+     * @return array
+     */
+    public function get_reminder_bell_feed($staff_id, $limit = 30)
+    {
+        $staff_id = (int) $staff_id;
+        $limit = max(1, min(50, (int) $limit));
+
+        $emptyFeed = [
+            'pending_count' => 0,
+            'items'         => [],
+        ];
+
+        if ($staff_id <= 0) {
+            return $emptyFeed;
+        }
+
+        $remindersTable = db_prefix() . 'sales_pipeline_reminders_log';
+        $deliveriesTable = db_prefix() . 'sales_pipeline_reminder_deliveries';
+
+        // Fail closed: without the repository acknowledgement schema and the
+        // delivery audit there is no proof that a CRM reminder was published.
+        if (!$this->db->table_exists($remindersTable)
+            || !$this->db->table_exists($deliveriesTable)
+            || !$this->db->field_exists('acknowledged_at', $remindersTable)
+            || !$this->db->field_exists('acknowledged_by', $remindersTable)) {
+            return $emptyFeed;
+        }
+
+        $this->db->select('COUNT(DISTINCT r.id) AS pending_count', false);
+        $this->applyReminderBellPendingScope($staff_id, $remindersTable, $deliveriesTable);
+        $countRow = $this->db->get()->row_array();
+        $pendingCount = (int) ($countRow['pending_count'] ?? 0);
+
+        $this->db->select('r.id, r.pipeline_id, r.rule_code, r.entity_type, r.entity_id, r.period_key, r.checkpoint, r.severity, r.response_required, r.title, r.message, r.created_at, r.sent_at');
+        $this->applyReminderBellPendingScope($staff_id, $remindersTable, $deliveriesTable);
+        $this->db->group_by('r.id');
+
+        // Sắp xếp theo severity rồi thời gian mới nhất. Không ép Actionable lên
+        // trước vì backlog lớn sẽ làm Informational (có nút acknowledge) bị đói.
+        $this->db->order_by("CASE
+            WHEN r.severity = 'critical' THEN 1
+            WHEN r.severity = 'warning' THEN 2
+            ELSE 3 END", 'ASC', false);
+        $this->db->order_by('r.created_at', 'DESC');
+        $this->db->order_by('r.id', 'DESC');
+        $this->db->limit($limit);
+
+        $rows = $this->db->get()->result_array();
+
+        $items = [];
+        foreach ($rows as $row) {
+            $entity_url = '';
+            if (!empty($row['entity_type']) && !empty($row['entity_id'])) {
+                if (($row['entity_type'] === 'deal' || (!empty($row['pipeline_id']) && $row['entity_type'] !== 'estimate'))
+                    && (is_admin()
+                        || has_permission('sales_pipeline', '', 'view')
+                        || has_permission('sales_pipeline', '', 'view_own'))) {
+                    $entity_url = admin_url('sales_pipeline/deal/' . ($row['entity_id'] ?: $row['pipeline_id']));
+                } elseif ($row['entity_type'] === 'estimate'
+                    && function_exists('user_can_view_estimate')
+                    && user_can_view_estimate((int) $row['entity_id'])) {
+                    $entity_url = admin_url('estimates/list_estimates/' . $row['entity_id']);
+                }
+            } elseif (!empty($row['pipeline_id'])
+                && (is_admin()
+                    || has_permission('sales_pipeline', '', 'view')
+                    || has_permission('sales_pipeline', '', 'view_own'))) {
+                $entity_url = admin_url('sales_pipeline/deal/' . $row['pipeline_id']);
+            }
+
+            $isActionable = (int) ($row['response_required'] ?? 1) === 1;
+
+            $items[] = [
+                'id'                 => (int) $row['id'],
+                'rule_code'          => (string) ($row['rule_code'] ?? ''),
+                'entity_type'        => (string) ($row['entity_type'] ?? 'deal'),
+                'entity_id'          => (int) ($row['entity_id'] ?: ($row['pipeline_id'] ?? 0)),
+                'severity'           => (string) ($row['severity'] ?: 'warning'),
+                'response_required'  => (int) ($row['response_required'] ?? 1),
+                'title'              => (string) ($row['title'] ?: _l('sales_pipeline_rule_reminder')),
+                'message'            => (string) ($row['message'] ?? ''),
+                'created_at'         => (string) ($row['created_at'] ?: $row['sent_at']),
+                'time_ago'           => time_ago($row['created_at'] ?: $row['sent_at']),
+                'quick_response_url' => $isActionable
+                    ? admin_url('sales_pipeline/reminder_response/' . $row['id'])
+                    : null,
+                'entity_url'         => $entity_url,
+            ];
+        }
+
+        return [
+            'pending_count' => $pendingCount,
+            'items'         => $items,
+        ];
+    }
+
+    /** Apply the shared ownership, delivery and pending-state predicates. */
+    private function applyReminderBellPendingScope($staff_id, $remindersTable, $deliveriesTable)
+    {
+        $staffId = (int) $staff_id;
+        $recipientKey = $this->db->escape((string) $staffId);
+
+        $this->db->from($remindersTable . ' r');
+        $this->db->join(
+            $deliveriesTable . ' d',
+            'd.reminder_id = r.id'
+                . " AND d.channel = 'crm'"
+                . " AND d.status = 'sent'"
+                . ' AND (d.recipient_staff_id = ' . $staffId
+                . ' OR (d.recipient_staff_id IS NULL AND d.recipient_key = ' . $recipientKey . '))',
+            'inner'
+        );
+        $this->db->where('r.staff_id', $staffId);
+        $this->db->group_start();
+        $this->db->group_start();
+        $this->db->where('r.response_required', 1);
+        $this->db->where('r.staff_response IS NULL', null, false);
+        $this->db->group_end();
+        $this->db->or_group_start();
+        $this->db->where('r.response_required', 0);
+        $this->db->where('r.acknowledged_at IS NULL', null, false);
+        $this->db->group_end();
+        $this->db->group_end();
+    }
+
+    /**
+     * Xác nhận Informational Reminder (Acknowledge)
+     *
+     * @param int $reminder_id
+     * @param int $staff_id
+     * @return array
+     */
+    public function acknowledge_reminder($reminder_id, $staff_id)
+    {
+        $reminder_id = (int) $reminder_id;
+        $staff_id = (int) $staff_id;
+
+        if ($reminder_id <= 0 || $staff_id <= 0 || $staff_id !== (int) get_staff_user_id()) {
+            return ['status' => 'invalid'];
+        }
+
+        $remindersTable = db_prefix() . 'sales_pipeline_reminders_log';
+
+        $this->db->trans_begin();
+
+        $reminder = $this->db->query(
+            'SELECT * FROM `' . $remindersTable . '` WHERE `id` = ? FOR UPDATE',
+            [$reminder_id]
+        )->row_array();
+
+        if (!$reminder) {
+            $this->db->trans_rollback();
+            return ['status' => 'not_found'];
+        }
+
+        if ((int) $reminder['staff_id'] !== $staff_id) {
+            $this->db->trans_rollback();
+            return ['status' => 'forbidden'];
+        }
+
+        if ((int) ($reminder['response_required'] ?? 1) === 1) {
+            $this->db->trans_rollback();
+            return ['status' => 'actionable_not_allowed'];
+        }
+
+        if (!empty($reminder['acknowledged_at']) && $reminder['acknowledged_at'] !== '0000-00-00 00:00:00') {
+            $this->db->trans_rollback();
+            return [
+                'status'          => 'already_acknowledged',
+                'acknowledged_at' => $reminder['acknowledged_at'],
+            ];
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $this->db->where('id', $reminder_id);
+        $this->db->update($remindersTable, [
+            'acknowledged_at' => $now,
+            'acknowledged_by' => $staff_id,
+        ]);
+
+        if ($this->db->trans_status() === false) {
+            $this->db->trans_rollback();
+            return ['status' => 'error'];
+        }
+
+        $this->db->trans_commit();
+
+        return [
+            'status'          => 'success',
+            'reminder_id'     => $reminder_id,
+            'acknowledged_at' => $now,
+        ];
+    }
+
     // =========================================================================
     // KANBAN VIEW QUERY
     // =========================================================================
@@ -2708,9 +2908,399 @@ class Sales_pipeline_model extends App_Model
                 'start' => $period['start'],
                 'end'   => $period['end'],
             ],
+            'revenue_kpi'          => $this->get_revenue_timeseries($staff_id, $period['key']),
+            'estimate_revenue_kpi' => $this->get_estimate_revenue_timeseries($staff_id, $period['key']),
         ];
 
         return $dashboard;
+    }
+
+    /**
+     * Xác định các mốc thời gian (buckets) cho Sparkline Area Chart theo kỳ.
+     *
+     * @param string $period_key
+     * @return array
+     */
+    private function resolve_revenue_timeseries_buckets($period_key = 'this_month')
+    {
+        $period = $this->resolve_dashboard_period($period_key);
+        $key = $period['key'];
+
+        $buckets = [];
+        $current_range = ['start' => $period['start'], 'end' => $period['end']];
+        $previous_range = [];
+
+        if ($key === 'this_week') {
+            $cur_start = $period['start']; // Thứ Hai tuần này
+            $prev_start = date('Y-m-d', strtotime('-7 days', strtotime($cur_start)));
+            $prev_end   = date('Y-m-d', strtotime('-1 day', strtotime($cur_start)));
+            $previous_range = ['start' => $prev_start, 'end' => $prev_end];
+
+            $day_labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+            for ($i = 0; $i < 7; $i++) {
+                $c_date = date('Y-m-d', strtotime("+$i days", strtotime($cur_start)));
+                $p_date = date('Y-m-d', strtotime("+$i days", strtotime($prev_start)));
+                $buckets[] = [
+                    'label'          => $day_labels[$i] ?? ('D' . ($i + 1)),
+                    'current_start'  => $c_date,
+                    'current_end'    => $c_date,
+                    'previous_start' => $p_date,
+                    'previous_end'   => $p_date,
+                ];
+            }
+        } elseif ($key === 'this_quarter') {
+            $cur_start = $period['start'];
+            $cur_end   = $period['end'];
+            $month = (int) date('n', strtotime($cur_start));
+            $quarter = (int) ceil($month / 3);
+
+            $prev_quarter = $quarter === 1 ? 4 : $quarter - 1;
+            $prev_year = $quarter === 1 ? ((int) date('Y', strtotime($cur_start)) - 1) : (int) date('Y', strtotime($cur_start));
+            $prev_start_month = (($prev_quarter - 1) * 3) + 1;
+            $prev_start = date("$prev_year-" . str_pad((string) $prev_start_month, 2, '0', STR_PAD_LEFT) . "-01");
+            $prev_end   = date('Y-m-t', strtotime($prev_start . ' +2 months'));
+            $previous_range = ['start' => $prev_start, 'end' => $prev_end];
+
+            // Chia Quý thành 12–13 tuần (mỗi tuần 1 mốc)
+            $w_cur_start = strtotime($cur_start);
+            $w_cur_final = strtotime($cur_end);
+            $w_prev_start = strtotime($prev_start);
+            $w_prev_final = strtotime($prev_end);
+
+            $week_idx = 1;
+            while ($w_cur_start <= $w_cur_final) {
+                $w_cur_end_ts = min(strtotime('+6 days', $w_cur_start), $w_cur_final);
+                $w_prev_end_ts = min(strtotime('+6 days', $w_prev_start), $w_prev_final);
+
+                $c_start_d = date('Y-m-d', $w_cur_start);
+                $c_end_d   = date('Y-m-d', $w_cur_end_ts);
+                $p_start_d = date('Y-m-d', $w_prev_start);
+                $p_end_d   = date('Y-m-d', $w_prev_end_ts);
+
+                $buckets[] = [
+                    'label'          => 'T' . $week_idx,
+                    'current_start'  => $c_start_d,
+                    'current_end'    => $c_end_d,
+                    'previous_start' => $p_start_d,
+                    'previous_end'   => $p_end_d,
+                ];
+
+                $w_cur_start = strtotime('+1 day', $w_cur_end_ts);
+                $w_prev_start = strtotime('+1 day', $w_prev_end_ts);
+                $week_idx++;
+            }
+        } elseif ($key === 'this_year') {
+            $year = (int) date('Y', strtotime($period['start']));
+            $prev_year = $year - 1;
+            $previous_range = ['start' => "$prev_year-01-01", 'end' => "$prev_year-12-31"];
+
+            for ($i = 1; $i <= 12; $i++) {
+                $m_str = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+                $c_start = "$year-$m_str-01";
+                $c_end   = date('Y-m-t', strtotime($c_start));
+                $p_start = "$prev_year-$m_str-01";
+                $p_end   = date('Y-m-t', strtotime($p_start));
+                $buckets[] = [
+                    'label'          => 'T' . $i,
+                    'current_start'  => $c_start,
+                    'current_end'    => $c_end,
+                    'previous_start' => $p_start,
+                    'previous_end'   => $p_end,
+                ];
+            }
+        } else {
+            // this_month (toàn bộ 28–31 ngày, mỗi ngày 1 mốc)
+            $cur_start = $period['start'];
+            $cur_end   = $period['end'];
+            $cur_days  = (int) date('t', strtotime($cur_start));
+
+            $prev_month_ts = strtotime('-1 month', strtotime($cur_start));
+            $prev_start    = date('Y-m-01', $prev_month_ts);
+            $prev_end      = date('Y-m-t', $prev_month_ts);
+            $prev_days     = (int) date('t', strtotime($prev_start));
+            $previous_range = ['start' => $prev_start, 'end' => $prev_end];
+
+            for ($day = 1; $day <= $cur_days; $day++) {
+                $day_str = str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+                $c_date = date('Y-m-', strtotime($cur_start)) . $day_str;
+
+                if ($day <= $prev_days) {
+                    $p_date = date('Y-m-', strtotime($prev_start)) . $day_str;
+                } else {
+                    $p_date = '1970-01-01'; // ngoài phạm vi ngày tháng trước
+                }
+
+                $buckets[] = [
+                    'label'          => $day_str,
+                    'current_start'  => $c_date,
+                    'current_end'    => $c_date,
+                    'previous_start' => $p_date,
+                    'previous_end'   => $p_date,
+                ];
+            }
+        }
+
+        return [
+            'period'         => $period,
+            'buckets'        => $buckets,
+            'current_range'  => $current_range,
+            'previous_range' => $previous_range,
+        ];
+    }
+
+    /**
+     * Lấy chuỗi thời gian doanh thu Deal (kỳ hiện tại vs kỳ trước) phục vụ Sparkline Area Chart.
+     *
+     * @param int|null $staff_id
+     * @param string   $period_key
+     * @return array
+     */
+    public function get_revenue_timeseries($staff_id = null, $period_key = 'this_month')
+    {
+        $resolved = $this->resolve_revenue_timeseries_buckets($period_key);
+        $buckets = $resolved['buckets'];
+        $current_range = $resolved['current_range'];
+        $previous_range = $resolved['previous_range'];
+
+        $staff_members = $this->get_dashboard_staff_members($staff_id);
+        if (empty($staff_members)) {
+            return [
+                'current_total'    => 0,
+                'previous_total'   => 0,
+                'change_pct'       => 0,
+                'change_pct_raw'   => 0,
+                'change_direction' => 'flat',
+                'series'           => [
+                    'current'  => [],
+                    'previous' => [],
+                    'labels'   => [],
+                ],
+                'formatted'        => [
+                    'current_total'  => sales_pipeline_compact_money(0),
+                    'previous_total' => sales_pipeline_compact_money(0),
+                ],
+            ];
+        }
+
+        $staff_ids = array_map(function ($s) {
+            return (int) $s['staffid'];
+        }, $staff_members);
+
+        $overall_start = min($current_range['start'], $previous_range['start']);
+        $overall_end   = max($current_range['end'], $previous_range['end']);
+
+        $pipeline_table = db_prefix() . 'sales_pipeline';
+        $status_table   = db_prefix() . 'sales_pipeline_statuses';
+
+        $this->db->select('sp.deal_date, COALESCE(SUM(sp.deal_value), 0) as daily_revenue', false);
+        $this->db->from($pipeline_table . ' sp');
+        $this->db->join($status_table . ' ss', 'ss.id = sp.status', 'left');
+        $this->db->where('ss.is_won', 1);
+        $this->db->where('sp.deal_date >=', $overall_start);
+        $this->db->where('sp.deal_date <=', $overall_end);
+        $this->db->where_in('sp.staff_id', $staff_ids);
+        $this->db->group_by('sp.deal_date');
+
+        $rows = $this->db->get()->result_array();
+        $daily_map = [];
+        foreach ($rows as $row) {
+            $daily_map[$row['deal_date']] = (float) $row['daily_revenue'];
+        }
+
+        $current_series = [];
+        $previous_series = [];
+        $labels = [];
+
+        foreach ($buckets as $bucket) {
+            $labels[] = $bucket['label'];
+
+            $c_val = 0;
+            $c_curr = strtotime($bucket['current_start']);
+            $c_last = strtotime($bucket['current_end']);
+            while ($c_curr <= $c_last) {
+                $d_str = date('Y-m-d', $c_curr);
+                if (isset($daily_map[$d_str])) {
+                    $c_val += $daily_map[$d_str];
+                }
+                $c_curr = strtotime('+1 day', $c_curr);
+            }
+            $current_series[] = round($c_val, 2);
+
+            $p_val = 0;
+            $p_curr = strtotime($bucket['previous_start']);
+            $p_last = strtotime($bucket['previous_end']);
+            while ($p_curr <= $p_last) {
+                $d_str = date('Y-m-d', $p_curr);
+                if (isset($daily_map[$d_str])) {
+                    $p_val += $daily_map[$d_str];
+                }
+                $p_curr = strtotime('+1 day', $p_curr);
+            }
+            $previous_series[] = round($p_val, 2);
+        }
+
+        $current_total = array_sum($current_series);
+        $previous_total = array_sum($previous_series);
+
+        if ($previous_total > 0) {
+            $change_pct = round((($current_total - $previous_total) / $previous_total) * 100, 1);
+        } else {
+            $change_pct = $current_total > 0 ? 100.0 : 0.0;
+        }
+
+        if ($change_pct > 0) {
+            $change_direction = 'up';
+        } elseif ($change_pct < 0) {
+            $change_direction = 'down';
+        } else {
+            $change_direction = 'flat';
+        }
+
+        return [
+            'current_total'    => $current_total,
+            'previous_total'   => $previous_total,
+            'change_pct'       => abs($change_pct),
+            'change_pct_raw'   => $change_pct,
+            'change_direction' => $change_direction,
+            'series'           => [
+                'current'  => $current_series,
+                'previous' => $previous_series,
+                'labels'   => $labels,
+            ],
+            'formatted'        => [
+                'current_total'  => sales_pipeline_compact_money($current_total),
+                'previous_total' => sales_pipeline_compact_money($previous_total),
+            ],
+        ];
+    }
+
+    /**
+     * Lấy chuỗi thời gian doanh thu Báo giá đã chấp nhận (kỳ hiện tại vs kỳ trước) phục vụ Sparkline Area Chart.
+     *
+     * @param int|null $staff_id
+     * @param string   $period_key
+     * @return array
+     */
+    public function get_estimate_revenue_timeseries($staff_id = null, $period_key = 'this_month')
+    {
+        $resolved = $this->resolve_revenue_timeseries_buckets($period_key);
+        $buckets = $resolved['buckets'];
+        $current_range = $resolved['current_range'];
+        $previous_range = $resolved['previous_range'];
+
+        $staff_members = $this->get_dashboard_staff_members($staff_id);
+        if (empty($staff_members) || !$this->estimate_group_schema_available()) {
+            return [
+                'current_total'    => 0,
+                'previous_total'   => 0,
+                'change_pct'       => 0,
+                'change_pct_raw'   => 0,
+                'change_direction' => 'flat',
+                'series'           => [
+                    'current'  => [],
+                    'previous' => [],
+                    'labels'   => [],
+                ],
+                'formatted'        => [
+                    'current_total'  => sales_pipeline_compact_money(0),
+                    'previous_total' => sales_pipeline_compact_money(0),
+                ],
+            ];
+        }
+
+        $staff_ids = array_map(function ($s) {
+            return (int) $s['staffid'];
+        }, $staff_members);
+
+        $overall_start = min($current_range['start'], $previous_range['start']) . ' 00:00:00';
+        $overall_end   = max($current_range['end'], $previous_range['end']) . ' 23:59:59';
+
+        $group_table = db_prefix() . 'sales_pipeline_estimate_groups';
+        $decision_owner = 'COALESCE(grp.decision_owner_staff_id, grp.owner_staff_id)';
+
+        $this->db->select(
+            'DATE(grp.decision_at) as decision_date, '
+            . 'COALESCE(SUM(grp.decision_value_base), 0) as daily_revenue',
+            false
+        );
+        $this->db->from($group_table . ' grp');
+        $this->db->where('grp.outcome', 'accepted');
+        $this->db->where('grp.decision_at >=', $overall_start);
+        $this->db->where('grp.decision_at <=', $overall_end);
+        $this->db->where_in($decision_owner, $staff_ids, false);
+        $this->db->group_by('DATE(grp.decision_at)');
+
+        $rows = $this->db->get()->result_array();
+        $daily_map = [];
+        foreach ($rows as $row) {
+            $daily_map[$row['decision_date']] = (float) $row['daily_revenue'];
+        }
+
+        $current_series = [];
+        $previous_series = [];
+        $labels = [];
+
+        foreach ($buckets as $bucket) {
+            $labels[] = $bucket['label'];
+
+            $c_val = 0;
+            $c_curr = strtotime($bucket['current_start']);
+            $c_last = strtotime($bucket['current_end']);
+            while ($c_curr <= $c_last) {
+                $d_str = date('Y-m-d', $c_curr);
+                if (isset($daily_map[$d_str])) {
+                    $c_val += $daily_map[$d_str];
+                }
+                $c_curr = strtotime('+1 day', $c_curr);
+            }
+            $current_series[] = round($c_val, 2);
+
+            $p_val = 0;
+            $p_curr = strtotime($bucket['previous_start']);
+            $p_last = strtotime($bucket['previous_end']);
+            while ($p_curr <= $p_last) {
+                $d_str = date('Y-m-d', $p_curr);
+                if (isset($daily_map[$d_str])) {
+                    $p_val += $daily_map[$d_str];
+                }
+                $p_curr = strtotime('+1 day', $p_curr);
+            }
+            $previous_series[] = round($p_val, 2);
+        }
+
+        $current_total = array_sum($current_series);
+        $previous_total = array_sum($previous_series);
+
+        if ($previous_total > 0) {
+            $change_pct = round((($current_total - $previous_total) / $previous_total) * 100, 1);
+        } else {
+            $change_pct = $current_total > 0 ? 100.0 : 0.0;
+        }
+
+        if ($change_pct > 0) {
+            $change_direction = 'up';
+        } elseif ($change_pct < 0) {
+            $change_direction = 'down';
+        } else {
+            $change_direction = 'flat';
+        }
+
+        return [
+            'current_total'    => $current_total,
+            'previous_total'   => $previous_total,
+            'change_pct'       => abs($change_pct),
+            'change_pct_raw'   => $change_pct,
+            'change_direction' => $change_direction,
+            'series'           => [
+                'current'  => $current_series,
+                'previous' => $previous_series,
+                'labels'   => $labels,
+            ],
+            'formatted'        => [
+                'current_total'  => sales_pipeline_compact_money($current_total),
+                'previous_total' => sales_pipeline_compact_money($previous_total),
+            ],
+        ];
     }
 
     /**

@@ -136,11 +136,36 @@
                 '</div>',
 
                 '<div class="sp-source-selection-container" id="sp-source-container" style="display: none;">',
-                    '<label for="sp_revision_source" class="sp-source-label">' + escapeHtml(i18n.selectSource) + '</label>',
-                    '<select id="sp_revision_source" name="sales_pipeline[revision_of_estimate_id]" class="sp-source-select">',
-                        '<option value="">' + escapeHtml(i18n.selectSource) + '</option>',
-                    '</select>',
-                    '<div class="sp-source-empty-hint" id="sp-source-empty" style="display: none;">' + escapeHtml(i18n.noSources) + '</div>',
+                    '<label class="sp-source-label">' + escapeHtml(i18n.selectSource) + '</label>',
+
+                    /* Custom dropdown wrapper */
+                    '<div class="sp-custom-select-wrapper" id="sp-custom-select-wrapper">',
+                        /* Hidden native select for form submission */
+                        '<select id="sp_revision_source" name="sales_pipeline[revision_of_estimate_id]" class="sp-source-select" aria-hidden="true" tabindex="-1">',
+                            '<option value=""></option>',
+                        '</select>',
+
+                        /* Visible trigger button */
+                        '<button type="button" class="sp-custom-select-trigger" id="sp-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="sp-select-panel">',
+                            '<span class="sp-trigger-value is-placeholder" id="sp-trigger-value">' + escapeHtml(i18n.selectSource) + '</span>',
+                            '<i class="fa fa-chevron-down sp-trigger-chevron" aria-hidden="true"></i>',
+                        '</button>',
+
+                        /* Dropdown panel */
+                        '<div class="sp-custom-select-panel" id="sp-select-panel" role="listbox">',
+                            '<div class="sp-select-search-wrap">',
+                                '<div class="sp-select-search-input">',
+                                    '<i class="fa fa-search" aria-hidden="true"></i>',
+                                    '<input type="text" id="sp-select-search" autocomplete="off" placeholder="Tìm kiếm báo giá...">',
+                                '</div>',
+                            '</div>',
+                            '<div class="sp-select-listbox" id="sp-select-listbox" role="presentation">',
+                                '<div class="sp-select-panel-msg">' + escapeHtml(i18n.loadingSources) + '</div>',
+                            '</div>',
+                        '</div>',
+                    '</div>',
+
+                    '<div class="sp-source-empty-hint" id="sp-source-empty" style="display: none;"></div>',
                     '<div class="sp-override-reason-container" id="sp-override-container" style="display: none;">',
                         '<div class="sp-override-warning">',
                             '<i class="fa fa-exclamation-triangle"></i>',
@@ -215,36 +240,73 @@
             }
         });
 
-        // Click or focus on source select when empty
-        $('#sp_revision_source').on('focus click', function () {
-            var currentClient = $('#clientid').val();
-            if (currentClient && state.sources.length === 0) {
-                fetchSources(currentClient);
-            } else if (!currentClient) {
-                $('#sp-source-empty').text(i18n.selectCustomerFirst).show();
+        // ── Custom dropdown: open/close trigger ──────────────────────
+        $(document).on('click', '#sp-select-trigger', function (e) {
+            e.stopPropagation();
+            var isOpen = $(this).hasClass('is-open');
+            closeCustomSelect();
+            if (!isOpen) {
+                openCustomSelect();
             }
         });
 
-        // Source dropdown change
-        $('#sp_revision_source').on('change', function () {
-            var selectedId = $(this).val();
-            state.selectedSourceId = selectedId;
-
-            if (!selectedId) {
-                $('#sp-override-container').hide();
-                $('#sp_override_accepted').val('0');
-                return;
+        // Keyboard navigation on trigger
+        $(document).on('keydown', '#sp-select-trigger', function (e) {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                openCustomSelect();
+            } else if (e.key === 'Escape') {
+                closeCustomSelect();
             }
+        });
 
-            var $selectedOption = $(this).find('option:selected');
-            var isAccepted = $selectedOption.data('accepted') === 1 || $selectedOption.data('accepted') === '1';
+        // Search filter
+        $(document).on('input', '#sp-select-search', function () {
+            var q = $(this).val().toLowerCase().trim();
+            filterCustomOptions(q);
+        });
 
-            if (isAccepted) {
-                $('#sp-override-container').slideDown(150);
-                $('#sp_override_accepted').val('1');
+        // Keyboard navigation in listbox
+        $(document).on('keydown', '#sp-select-search', function (e) {
+            var $focused = $('#sp-select-listbox .sp-select-option.is-focused');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                var $next = $focused.length ? $focused.nextAll('.sp-select-option:not([data-hidden="true"]):first') : $('#sp-select-listbox .sp-select-option:not([data-hidden="true"]):first');
+                if ($next.length) { $focused.removeClass('is-focused'); $next.addClass('is-focused'); $next[0].scrollIntoView({ block: 'nearest' }); }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                var $prev = $focused.prevAll('.sp-select-option:not([data-hidden="true"]):first');
+                if ($prev.length) { $focused.removeClass('is-focused'); $prev.addClass('is-focused'); $prev[0].scrollIntoView({ block: 'nearest' }); }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if ($focused.length && !$focused.hasClass('is-placeholder')) {
+                    selectCustomOption($focused.data('value'), $focused.data('accepted'), $focused.find('.sp-option-number').clone().find('.sp-option-status').remove().end().text().trim());
+                    closeCustomSelect();
+                }
+            } else if (e.key === 'Escape') {
+                closeCustomSelect();
+                $('#sp-select-trigger').focus();
+            }
+        });
+
+        // Click on option in listbox
+        $(document).on('click', '#sp-select-listbox .sp-select-option', function () {
+            var val      = $(this).data('value');
+            var accepted = $(this).data('accepted');
+            var label    = $(this).find('.sp-option-number').clone().find('.sp-option-status').remove().end().text().trim();
+            if ($(this).hasClass('is-placeholder')) {
+                selectCustomOption('', 0, '');
             } else {
-                $('#sp-override-container').slideUp(150);
-                $('#sp_override_accepted').val('0');
+                selectCustomOption(val, accepted, label);
+            }
+            closeCustomSelect();
+            $('#sp-select-trigger').focus();
+        });
+
+        // Close on outside click
+        $(document).on('click.sp-custom-select', function (e) {
+            if (!$(e.target).closest('#sp-custom-select-wrapper').length) {
+                closeCustomSelect();
             }
         });
 
@@ -284,9 +346,10 @@
             return;
         }
 
-        var $select = $('#sp_revision_source');
-        $select.html('<option value="">' + escapeHtml(i18n.loadingSources) + '</option>').prop('disabled', true);
+        // Show loading state on custom trigger
+        setCustomSelectLoading(true);
         $('#sp-source-empty').hide();
+        $('#sp-select-listbox').html('<div class="sp-select-panel-msg"><i class="fa fa-circle-o-notch fa-spin"></i> ' + escapeHtml(i18n.loadingSources) + '</div>');
 
         sourcesDebounceTimer = setTimeout(function () {
             currentSourcesXhr = $.ajax({
@@ -298,57 +361,78 @@
                     if (String(clientId) !== String(state.clientId || $('#clientid').val())) {
                         return;
                     }
-                    $select.prop('disabled', false).empty();
-                    $select.append('<option value="">' + escapeHtml(i18n.selectSource) + '</option>');
+                    setCustomSelectLoading(false);
+
+                    // Reset native select
+                    var $nativeSelect = $('#sp_revision_source');
+                    $nativeSelect.empty().append('<option value=""></option>');
 
                     if (res && res.data && res.data.sources && res.data.sources.length > 0) {
                         state.sources = res.data.sources;
                         state.isManager = res.data.is_manager || false;
 
+                        var listHtml = '';
                         $.each(res.data.sources, function (i, item) {
-                            var textParts = [i18n.sourceEstimate + ' ' + item.estimate_number];
+                            var statusKey = (item.status_label || '').toLowerCase();
+                            var statusClass = getStatusClass(statusKey, item.is_accepted);
+
+                            // Populate native select for form submission
+                            $nativeSelect.append(
+                                $('<option></option>')
+                                    .val(item.estimate_id)
+                                    .attr('data-accepted', item.is_accepted ? '1' : '0')
+                            );
+
+                            // Build custom option HTML
+                            var metaHtml = '';
                             if (item.total_formatted) {
-                                textParts.push(i18n.sourceTotal + ': ' + item.total_formatted);
-                            }
-                            if (item.status_label) {
-                                textParts.push(i18n.sourceStatus + ': ' + item.status_label);
+                                metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-money" aria-hidden="true"></i>' + escapeHtml(item.total_formatted) + '</span>';
                             }
                             if (item.expirydate) {
-                                textParts.push(i18n.sourceExpiry + ': ' + item.expirydate);
+                                metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-calendar" aria-hidden="true"></i>' + escapeHtml(item.expirydate) + '</span>';
                             }
                             if (item.revision_no > 1) {
-                                textParts.push(i18n.sourceRevision + ': ' + item.revision_no);
+                                metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-code-fork" aria-hidden="true"></i>v' + item.revision_no + '</span>';
                             }
-                            var text = textParts.join(' · ');
 
-                            var $opt = $('<option></option>')
-                                .val(item.estimate_id)
-                                .text(text)
-                                .attr('data-accepted', item.is_accepted ? '1' : '0');
-
-                            $select.append($opt);
+                            listHtml += '<div class="sp-select-option"'
+                                + ' role="option"'
+                                + ' data-value="' + escapeHtml(String(item.estimate_id)) + '"'
+                                + ' data-accepted="' + (item.is_accepted ? '1' : '0') + '"'
+                                + ' data-search="' + escapeHtml((item.estimate_number + ' ' + (item.status_label || '')).toLowerCase()) + '"'
+                                + ' tabindex="-1">'
+                                + '<span class="sp-option-icon"><i class="fa fa-file-text-o" aria-hidden="true"></i></span>'
+                                + '<span class="sp-option-body">'
+                                    + '<span class="sp-option-number">'
+                                        + escapeHtml(item.estimate_number)
+                                        + '<span class="sp-option-status sp-option-status--' + statusClass + '">' + escapeHtml(item.status_label || '') + '</span>'
+                                    + '</span>'
+                                    + (metaHtml ? '<span class="sp-option-meta">' + metaHtml + '</span>' : '')
+                                + '</span>'
+                                + '</div>';
                         });
 
-                        if (state.selectedSourceId) {
-                            $select.val(state.selectedSourceId).trigger('change');
-                        }
-
+                        $('#sp-select-listbox').html(listHtml);
                         $('#sp-source-empty').hide();
+
+                        if (state.selectedSourceId) {
+                            var $opt = $('#sp-select-listbox .sp-select-option[data-value="' + state.selectedSourceId + '"]');
+                            if ($opt.length) {
+                                $opt.addClass('is-selected');
+                                selectCustomOption(state.selectedSourceId, $opt.data('accepted'), $opt.find('.sp-option-number').clone().find('.sp-option-status').remove().end().text().trim());
+                            }
+                        }
                     } else {
                         state.sources = [];
-                        $('#sp-source-empty').show();
+                        $('#sp-select-listbox').html('<div class="sp-select-panel-msg">' + escapeHtml(i18n.noSources) + '</div>');
+                        $('#sp-source-empty').hide();
                     }
                 },
                 error: function (xhr, status) {
-                    if (status === 'abort') {
-                        return;
-                    }
-                    if (String(clientId) !== String(state.clientId || $('#clientid').val())) {
-                        return;
-                    }
-                    $select.prop('disabled', false).empty();
-                    $select.append('<option value="">' + escapeHtml(i18n.selectSource) + '</option>');
-                    $('#sp-source-empty').show();
+                    if (status === 'abort') { return; }
+                    if (String(clientId) !== String(state.clientId || $('#clientid').val())) { return; }
+                    setCustomSelectLoading(false);
+                    $('#sp-select-listbox').html('<div class="sp-select-panel-msg">' + escapeHtml(i18n.noSources) + '</div>');
                 },
                 complete: function () {
                     currentSourcesXhr = null;
@@ -431,10 +515,102 @@
     }
 
     function resetSourceDropdown() {
-        $('#sp_revision_source').empty().append('<option value="">' + escapeHtml(i18n.selectSource) + '</option>');
+        // Reset native select
+        $('#sp_revision_source').empty().append('<option value=""></option>');
+        // Reset custom UI
+        $('#sp-trigger-value').text(i18n.selectSource).removeClass('is-selected').addClass('is-placeholder');
+        $('#sp-select-listbox').html('<div class="sp-select-panel-msg">' + escapeHtml(i18n.loadingSources) + '</div>');
+        $('#sp-select-search').val('');
+        state.selectedSourceId = null;
+        closeCustomSelect();
+        setCustomSelectLoading(false);
+        // Reset override
         $('#sp-override-container').hide();
         $('#sp_override_accepted').val('0');
         $('#sp-source-empty').hide();
+    }
+
+    // ── Custom dropdown helpers ───────────────────────────────────────
+    function openCustomSelect() {
+        var $trigger = $('#sp-select-trigger');
+        var $panel   = $('#sp-select-panel');
+        if ($trigger.hasClass('is-loading')) { return; }
+        $trigger.addClass('is-open').attr('aria-expanded', 'true');
+        $panel.addClass('is-open');
+        // Focus search after opening
+        setTimeout(function () { $('#sp-select-search').focus(); }, 50);
+    }
+
+    function closeCustomSelect() {
+        $('#sp-select-trigger').removeClass('is-open').attr('aria-expanded', 'false');
+        $('#sp-select-panel').removeClass('is-open');
+        $('#sp-select-listbox .sp-select-option').removeClass('is-focused');
+        $('#sp-select-search').val('');
+        filterCustomOptions('');
+    }
+
+    function selectCustomOption(val, accepted, label) {
+        state.selectedSourceId = val || null;
+        // Sync native select
+        $('#sp_revision_source').val(val || '');
+        // Update trigger label
+        var $triggerVal = $('#sp-trigger-value');
+        if (val) {
+            $triggerVal.text(label).removeClass('is-placeholder').addClass('is-selected');
+        } else {
+            $triggerVal.text(i18n.selectSource).removeClass('is-selected').addClass('is-placeholder');
+        }
+        // Highlight selected item in listbox
+        $('#sp-select-listbox .sp-select-option').removeClass('is-selected');
+        if (val) {
+            $('#sp-select-listbox .sp-select-option[data-value="' + val + '"]').addClass('is-selected');
+        }
+        // Handle override reason
+        var isAccepted = parseInt(accepted, 10) === 1;
+        if (val && isAccepted) {
+            $('#sp-override-container').slideDown(150);
+            $('#sp_override_accepted').val('1');
+        } else {
+            $('#sp-override-container').slideUp(150);
+            $('#sp_override_accepted').val('0');
+        }
+    }
+
+    function setCustomSelectLoading(loading) {
+        var $trigger = $('#sp-select-trigger');
+        if (loading) {
+            $trigger.addClass('is-loading');
+        } else {
+            $trigger.removeClass('is-loading');
+        }
+    }
+
+    function filterCustomOptions(q) {
+        $('#sp-select-listbox .sp-select-option').each(function () {
+            var searchData = $(this).data('search') || '';
+            var match = !q || searchData.indexOf(q) !== -1;
+            $(this).attr('data-hidden', match ? null : 'true').toggle(match);
+        });
+        var visibleCount = $('#sp-select-listbox .sp-select-option:visible').length;
+        var $noResult = $('#sp-select-listbox .sp-select-no-result');
+        if (!visibleCount && q) {
+            if (!$noResult.length) {
+                $('#sp-select-listbox').append('<div class="sp-select-panel-msg sp-select-no-result">Không tìm thấy kết quả phù hợp.</div>');
+            }
+        } else {
+            $noResult.remove();
+        }
+    }
+
+    function getStatusClass(statusLabel, isAccepted) {
+        if (isAccepted) { return 'accepted'; }
+        var s = statusLabel.toLowerCase();
+        if (s.indexOf('nháp') !== -1 || s.indexOf('draft') !== -1) { return 'draft'; }
+        if (s.indexOf('gửi') !== -1 || s.indexOf('sent') !== -1) { return 'sent'; }
+        if (s.indexOf('chấp nhận') !== -1 || s.indexOf('accepted') !== -1) { return 'accepted'; }
+        if (s.indexOf('hết hạn') !== -1 || s.indexOf('expired') !== -1) { return 'expired'; }
+        if (s.indexOf('từ chối') !== -1 || s.indexOf('declined') !== -1) { return 'declined'; }
+        return 'default';
     }
 
     function promptDetail(label, value) {

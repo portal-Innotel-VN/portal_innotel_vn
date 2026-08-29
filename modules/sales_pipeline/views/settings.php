@@ -105,6 +105,7 @@
 
                             <div role="tabpanel" class="tab-pane" id="reminders">
                                 <?php $ro = $reminder_options; $checked = function ($key) use ($ro) { return (string) $ro[$key] === '1' ? ' checked' : ''; }; ?>
+                                <?php $this->load->view('sales_pipeline/partials/reminder_delivery_health', ['health' => $reminder_delivery_health]); ?>
                                 <?php echo form_open(admin_url('sales_pipeline/settings'), ['id' => 'sp-reminder-settings-form', 'class' => 'sp-reminder-settings']); ?>
                                 <input type="hidden" name="setting_type" value="reminder">
                                 <div class="sp-reminder-section sp-reminder-section--global">
@@ -231,6 +232,32 @@
         $('#sp_reminder_global_enabled').on('change', function () { $('.sp-reminder-section--rule').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('.sp-reminder-rule-toggle input').on('change', function () { $(this).closest('.sp-reminder-rule-row').find('.sp-reminder-channels,.sp-rule-fields').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('#sp-reminder-settings-form').on('submit', function () { $('.sp-reminder-section--dimmed').removeClass('sp-reminder-section--dimmed'); });
+
+        function postDeliveryAction(url, $button) {
+            var data = {};
+            if (typeof csrfData !== 'undefined' && csrfData.token_name) {
+                data[csrfData.token_name] = csrfData.hash;
+            }
+            $button.prop('disabled', true);
+            $.post(url, data).done(function (response) {
+                alert_float('success', response.message);
+                window.location.reload();
+            }).fail(function (xhr) {
+                var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : <?php echo json_encode(_l('sales_pipeline_reminder_delivery_request_failed'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+                alert_float('danger', message);
+                $button.prop('disabled', false);
+            });
+        }
+        $('.sp-delivery-retry').on('click', function () {
+            if (window.confirm(<?php echo json_encode(_l('sales_pipeline_reminder_delivery_retry_confirm'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>)) {
+                postDeliveryAction($(this).data('url'), $(this));
+            }
+        });
+        $('.sp-delivery-resume').on('click', function () {
+            if (window.confirm(<?php echo json_encode(_l('sales_pipeline_reminder_delivery_resume_confirm'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>)) {
+                postDeliveryAction($(this).data('url'), $(this));
+            }
+        });
     });
 
     function reset_status_modal() {

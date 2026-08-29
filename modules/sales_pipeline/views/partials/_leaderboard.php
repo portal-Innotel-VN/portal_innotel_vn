@@ -14,9 +14,6 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
                 <?php echo _l('sales_pipeline_dashboard_leaderboard'); ?>
             </h2>
         </div>
-        <div class="sp-leaderboard-header__right">
-            <span class="sp-leaderboard-period"><?php echo html_escape($period_label); ?></span>
-        </div>
     </header>
 
     <?php if (!empty($staff_metrics)) { ?>
@@ -42,12 +39,12 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
                         $win_rate_status = $win_rate >= 50 ? 'success' : ($win_rate >= 20 ? 'warning' : 'danger');
                         ?>
                         <tr>
-                            <td class="sp-column-rank">
+                            <td class="sp-column-rank" data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_rank')); ?>">
                                 <span class="sp-rank sp-rank--<?php echo $rank <= 3 ? $rank : 'standard'; ?>">
                                     <?php echo $rank; ?>
                                 </span>
                             </td>
-                            <td class="sp-column-staff">
+                            <td class="sp-column-staff" data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_staff')); ?>">
                                 <button type="button"
                                         class="sp-staff-trigger js-sp-open-staff"
                                         data-staff-id="<?php echo (int) $metric['staff_id']; ?>"
@@ -68,29 +65,27 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
                                 </button>
                             </td>
 
-                            <td>
-                                <div class="sp-table-kpi">
-                                    <div class="sp-table-kpi__line">
-                                        <strong><?php echo number_format((int) ($metric['period_deals'] ?? 0), 0, ',', '.'); ?></strong>
-                                    </div>
-                                </div>
+                            <td data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_period_deals')); ?>">
+                                <strong class="sp-quote-estimate-total">
+                                    <?php echo number_format((int) ($metric['period_deals'] ?? 0), 0, ',', '.'); ?>
+                                </strong>
                             </td>
-                            <td>
-                                <div class="sp-table-kpi" title="<?php echo html_escape($period_revenue_full); ?>">
-                                    <div class="sp-table-kpi__line">
-                                        <strong><?php echo html_escape($period_revenue_formatted); ?></strong>
-                                    </div>
-                                </div>
+                            <td data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_period_revenue')); ?>"
+                                title="<?php echo html_escape($period_revenue_full); ?>">
+                                <strong class="sp-quote-revenue">
+                                    <?php echo html_escape($period_revenue_formatted); ?>
+                                </strong>
                             </td>
-                            <td>
-                                <div class="sp-table-kpi">
-                                    <div class="sp-table-kpi__line">
-                                        <span class="label label-<?php echo $win_rate_status; ?> sp-win-rate-badge">
-                                            <?php echo number_format($win_rate, 1, '.', ''); ?>%
-                                        </span>
-                                        <small class="text-muted">(<?php echo (int) ($metric['period_won_deals'] ?? 0); ?> / <?php echo (int) ($metric['period_deals'] ?? 0); ?>)</small>
-                                    </div>
-                                </div>
+                            <td data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_win_rate')); ?>">
+                                <span class="sp-quote-rate sp-quote-rate--<?php echo $win_rate_status; ?>">
+                                    <?php echo number_format($win_rate, 1, ',', ''); ?>%
+                                </span>
+                                <small class="sp-quote-rate-detail">
+                                    <?php echo _l('sales_pipeline_quote_rate_fraction', [
+                                        (int) ($metric['period_won_deals'] ?? 0),
+                                        (int) ($metric['period_deals'] ?? 0),
+                                    ]); ?>
+                                </small>
                             </td>
                         </tr>
                     <?php } ?>

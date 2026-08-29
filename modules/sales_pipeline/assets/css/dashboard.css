@@ -78,9 +78,9 @@
 .sp-dashboard-filterbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 12px;
-    padding: 12px 24px;
+    padding: 10px 24px;
     background: var(--sp-surface-soft);
     border-bottom: 1px solid var(--sp-border);
 }
@@ -121,6 +121,26 @@
     gap: 10px;
 }
 
+/* Period-range badge — appears right after the filter dropdown */
+.sp-filter-period-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 0 0 12px;
+    border-left: 1px solid var(--sp-border);
+    color: var(--sp-muted);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.sp-filter-period-badge i {
+    color: var(--sp-blue-dark);
+    font-size: 12px;
+    opacity: 0.75;
+}
+
 .sp-dashboard-filter-control label {
     margin: 0;
     color: #323a45;
@@ -141,15 +161,16 @@
 }
 
 .sp-dashboard-filter-control .bootstrap-select > .dropdown-toggle {
-    min-height: 36px;
+    min-height: 42px;
+    min-width: 140px;
     border: 1px solid #d6d6d6;
     border-radius: 6px;
     background: #ffffff;
     color: #323a45;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-    padding: 6px 12px;
+    padding: 8px 20px;
     text-align: center !important;
 }
 
@@ -209,7 +230,7 @@
     gap: 8px;
     padding: 8px 13px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -242,6 +263,45 @@
     color: #ffffff;
 }
 
+.sp-dashboard-refresh-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sp-dashboard-refresh-action:hover,
+.sp-dashboard-refresh-action:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.45);
+    color: #ffffff;
+}
+
+.sp-dashboard-refresh-action__clock {
+    color: #38bdf8;
+    font-size: 13px;
+}
+
+.sp-dashboard-refresh-action__spin {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    margin: 0 2px 0 3px;
+}
+
+.sp-dashboard-refresh-action strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+
 .sp-dashboard-primary-action {
     background: #ffffff;
     color: var(--sp-header);
@@ -263,6 +323,155 @@
     margin-top: 18px;
 }
 
+/* Revenue Headline KPI Card */
+.sp-revenue-kpi-card {
+    margin-top: 18px;
+    border: 1px solid var(--sp-border);
+    border-radius: 8px;
+    background: var(--sp-surface);
+    box-shadow: var(--sp-shadow-card);
+    padding: 18px 22px 10px;
+    overflow: hidden;
+}
+
+.sp-revenue-kpi-card__header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.sp-revenue-kpi-card__title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.sp-revenue-kpi-card__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--sp-ink);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.sp-revenue-kpi-card__tag i {
+    color: var(--sp-brand);
+    font-size: 14px;
+}
+
+.sp-revenue-kpi-card__legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--sp-muted);
+}
+
+.sp-kpi-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-kpi-legend-bullet {
+    display: inline-block;
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.sp-kpi-legend-item--current .sp-kpi-legend-bullet {
+    background: #0284c7;
+}
+
+.sp-kpi-legend-item--previous .sp-kpi-legend-bullet {
+    background: #f97316;
+    border-top: 1px dashed #ea580c;
+}
+
+.sp-revenue-kpi-card__value-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.sp-revenue-kpi-card__number {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--sp-ink);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+}
+
+.sp-revenue-kpi-card__comparison {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sp-kpi-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.sp-kpi-badge--up {
+    background: #eefdf3;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
+
+.sp-kpi-badge--down {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.sp-kpi-badge--flat {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.sp-revenue-kpi-card__vs-label {
+    color: var(--sp-muted);
+    font-size: 12px;
+}
+
+.sp-revenue-kpi-card__vs-label strong {
+    color: var(--sp-ink);
+    font-weight: 600;
+}
+
+.sp-revenue-kpi-card__chart-wrap {
+    width: 100%;
+    min-height: 160px;
+    margin-top: 4px;
+}
+
+.sp-revenue-sparkline-chart {
+    width: 100%;
+    min-height: 160px;
+}
+
+.sp-revenue-sparkline-chart .apexcharts-canvas {
+    margin: 0 auto;
+}
+
 .sp-dashboard-segments {
     display: inline-flex;
     align-items: center;
@@ -273,6 +482,16 @@
     border-radius: 8px;
     background: var(--sp-surface-soft);
     box-shadow: var(--sp-shadow-card);
+}
+
+/* When segments live inside the filterbar: reset standalone margin-top and shadow */
+.sp-dashboard-segments--inline {
+    margin-top: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    gap: 2px;
 }
 
 .sp-dashboard-segment {
@@ -287,7 +506,7 @@
     border-radius: 6px;
     background: transparent;
     color: var(--sp-muted);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
