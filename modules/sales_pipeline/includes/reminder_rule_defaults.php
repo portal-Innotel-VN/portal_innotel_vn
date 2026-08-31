@@ -10,6 +10,7 @@ function sales_pipeline_reminder_rule_default_options()
 {
     return array_merge([
         'sp_reminder_global_enabled'          => '1',
+        'sp_reminder_sla_hours'               => '24',
         'sp_reminder_skip_weekends'           => '1',
         'sp_reminder_holiday_dates'           => '',
         'sp_reminder_quiet_hours_start'       => '',

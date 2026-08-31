@@ -11,10 +11,14 @@
         var $drawerPanel = $drawer.find('.sp-dashboard-drawer__panel');
         var $drawerContent = $drawer.find('[data-dashboard-drawer-content]');
         var $contentWrapper = $dashboard.find('[data-dashboard-content-wrapper]');
+        var $historyPicker = $dashboard.find('[data-history-picker]');
+        var $historyToggle = $dashboard.find('.js-sp-history-picker-toggle');
+        var $periodAnchorInput = $('#sp-dashboard-period-anchor');
+        var $periodAnchorDisplay = $('#sp-dashboard-period-anchor-display');
         var staffUrl = String($dashboard.data('staff-url') || '').replace(/\/$/, '');
         var dashboardUrl = String($dashboard.data('dashboard-url') || '');
-        var loadingMessage = String($dashboard.data('loading-message') || 'Loading...');
-        var errorMessage = String($dashboard.data('error-message') || 'Unable to load data.');
+        var loadingMessage = String($dashboard.data('loading-message') || (window.salesPipelineI18n && window.salesPipelineI18n.loading) || '');
+        var errorMessage = String($dashboard.data('error-message') || (window.salesPipelineI18n && window.salesPipelineI18n.error) || '');
         var activeRequest = null;
         var activeDashboardRequest = null;
         var lastTrigger = null;
@@ -22,7 +26,49 @@
             $dashboard.find('[data-dashboard-tab][aria-selected="true"]').data('dashboard-tab') || 'deals'
         );
 
-        function updateDashboardUrl(period, tab) {
+        function todayIso() {
+            var today = new Date();
+            var month = String(today.getMonth() + 1);
+            var day = String(today.getDate());
+            return today.getFullYear() + '-' + (month.length < 2 ? '0' + month : month)
+                + '-' + (day.length < 2 ? '0' + day : day);
+        }
+
+        function selectedPeriodAnchor() {
+            var displayValue = $.trim(String($periodAnchorDisplay.val() || ''));
+            var normalizedValue = '';
+            if (displayValue && typeof unformat_date === 'function') {
+                try {
+                    normalizedValue = String(unformat_date(displayValue) || '');
+                } catch (ignore) {
+                    normalizedValue = '';
+                }
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+                $periodAnchorInput.val(normalizedValue);
+                return normalizedValue;
+            }
+            $periodAnchorInput.val('');
+            return '';
+        }
+
+        function formatIsoDateForProject(isoDate) {
+            var parts = String(isoDate || '').split('-');
+            if (parts.length !== 3) {
+                return '';
+            }
+            var format = String((window.app && app.options && app.options.date_format) || 'd/m/Y');
+            var separator = format.indexOf('.') > -1 ? '.' : (format.indexOf('-') > -1 ? '-' : '/');
+            if (format.charAt(0) === 'Y') {
+                return [parts[0], parts[1], parts[2]].join(separator);
+            }
+            if (format.charAt(0) === 'm') {
+                return [parts[1], parts[2], parts[0]].join(separator);
+            }
+            return [parts[2], parts[1], parts[0]].join(separator);
+        }
+
+        function updateDashboardUrl(period, tab, periodAnchor) {
             var urlParams = new URLSearchParams(window.location.search);
             if (period && period !== 'this_month') {
                 urlParams.set('period', period);
@@ -33,6 +79,11 @@
                 urlParams.set('dashboard_tab', tab);
             } else {
                 urlParams.delete('dashboard_tab');
+            }
+            if (periodAnchor && periodAnchor !== todayIso()) {
+                urlParams.set('period_anchor', periodAnchor);
+            } else {
+                urlParams.delete('period_anchor');
             }
             var nextQuery = urlParams.toString();
             window.history.replaceState({}, '', window.location.pathname + (nextQuery ? '?' + nextQuery : ''));
@@ -61,7 +112,11 @@
                 $(this).toggleClass('is-active', isActive).prop('hidden', !isActive);
             });
 
-            updateDashboardUrl($('#sp-dashboard-time-filter').val() || 'this_month', tab);
+            updateDashboardUrl(
+                $('#sp-dashboard-time-filter').val() || 'this_month',
+                tab,
+                selectedPeriodAnchor()
+            );
             if (tab === 'deals') {
                 setTimeout(function () {
                     var $el = $('#sp-revenue-sparkline-chart');
@@ -338,7 +393,8 @@
                 dataType: 'json',
                 data: {
                     dashboard_tab: activeDashboardTab,
-                    period: period
+                    period: period,
+                    period_anchor: selectedPeriodAnchor()
                 }
             }).done(function (response) {
                 if (response && response.success && response.data
@@ -400,11 +456,11 @@
             if (day.length < 2) day = '0' + day;
             var month = String(now.getMonth() + 1);
             if (month.length < 2) month = '0' + month;
-            var onDateLabel = $dashboard.data('on-date-text') || 'ngày';
-            $dashboard.find('[data-last-updated-time]').text(hours + ':' + minutes + ' ' + onDateLabel + ' ' + day + '/' + month);
+            var onDateLabel = String($dashboard.data('on-date-text') || (window.salesPipelineI18n && window.salesPipelineI18n.onDate) || '');
+            $dashboard.find('[data-last-updated-time]').text(hours + ':' + minutes + (onDateLabel ? ' ' + onDateLabel + ' ' : ' ') + day + '/' + month);
         }
 
-        function fetchDashboardData(period, onComplete) {
+        function fetchDashboardData(period, periodAnchor, onComplete) {
             if (!dashboardUrl || !$contentWrapper.length) {
                 if (typeof onComplete === 'function') onComplete(false);
                 return;
@@ -414,7 +470,8 @@
                 activeDashboardRequest.abort();
             }
 
-            updateDashboardUrl(period, activeDashboardTab);
+            periodAnchor = periodAnchor || todayIso();
+            updateDashboardUrl(period, activeDashboardTab, periodAnchor);
             setDashboardLoading(true);
 
             var dashboardRequest = $.ajax({
@@ -423,6 +480,7 @@
                 dataType: 'json',
                 data: {
                     period: period,
+                    period_anchor: periodAnchor,
                     dashboard_tab: activeDashboardTab
                 }
             }).done(function (response) {
@@ -431,10 +489,26 @@
                     initializeDashboardContent();
 
                     // Sync period-range badge in filterbar with the new server-rendered dates
-                    var newLabel = $contentWrapper.find('[data-sp-period-label]').attr('data-sp-period-label') || '';
+                    var $periodMetadata = $contentWrapper.find('[data-sp-period-label]');
+                    var newLabel = $periodMetadata.attr('data-sp-period-label') || '';
+                    var newAnchor = $periodMetadata.attr('data-sp-period-anchor') || periodAnchor;
+                    var newAnchorDisplay = $periodMetadata.attr('data-sp-period-anchor-display') || formatIsoDateForProject(newAnchor);
+                    var newPeriod = $periodMetadata.attr('data-sp-period-key') || period;
                     if (newLabel) {
                         $dashboard.find('[data-period-badge] .sp-filter-period-badge__text').text(newLabel);
                     }
+                    $dashboard.attr('data-period-anchor', newAnchor);
+                    $periodAnchorInput.val(newAnchor);
+                    $periodAnchorDisplay.val(newAnchorDisplay).get(0).setCustomValidity('');
+                    updateDashboardUrl(newPeriod, activeDashboardTab, newAnchor);
+                    $('#sp-dashboard-time-filter').val(newPeriod);
+                    if ($.fn.selectpicker) {
+                        $('#sp-dashboard-time-filter').selectpicker('refresh');
+                    }
+                    $dashboard.find('[data-history-period]').each(function () {
+                        var isActive = String($(this).data('history-period')) === newPeriod;
+                        $(this).toggleClass('is-active', isActive).attr('aria-pressed', isActive ? 'true' : 'false');
+                    });
                     updateLastUpdatedTimestamp();
                     if (typeof onComplete === 'function') onComplete(true);
                     return;
@@ -469,7 +543,7 @@
 
         $dashboard.on('change', '#sp-dashboard-time-filter', function () {
             var period = $(this).val() || 'this_month';
-            fetchDashboardData(period);
+            fetchDashboardData(period, selectedPeriodAnchor());
         });
 
         $dashboard.on('click', '.js-sp-dashboard-refresh', function (event) {
@@ -480,10 +554,80 @@
             $btn.prop('disabled', true);
 
             var period = $('#sp-dashboard-time-filter').val() || 'this_month';
-            fetchDashboardData(period, function () {
+            fetchDashboardData(period, selectedPeriodAnchor(), function () {
                 $icon.removeClass('fa-spin');
                 $btn.prop('disabled', false);
             });
+        });
+
+        function closeHistoryPicker(returnFocus) {
+            if ($historyPicker.prop('hidden')) {
+                return;
+            }
+            $periodAnchorDisplay.trigger('close.xdsoft');
+            $historyPicker.prop('hidden', true);
+            $historyToggle.attr('aria-expanded', 'false');
+            if (returnFocus) {
+                $historyToggle.trigger('focus');
+            }
+        }
+
+        $dashboard.on('click', '.js-sp-history-picker-toggle', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            var willOpen = $historyPicker.prop('hidden');
+            $historyPicker.prop('hidden', !willOpen);
+            $historyToggle.attr('aria-expanded', willOpen ? 'true' : 'false');
+            if (willOpen) {
+                window.setTimeout(function () {
+                    $historyPicker.find('[data-history-period].is-active').trigger('focus');
+                }, 0);
+            }
+        });
+
+        $dashboard.on('click', '.js-sp-history-picker-close', function () {
+            closeHistoryPicker(true);
+        });
+
+        $dashboard.on('click', '[data-history-period]', function () {
+            var period = String($(this).data('history-period') || 'this_month');
+            $dashboard.find('[data-history-period]')
+                .removeClass('is-active')
+                .attr('aria-pressed', 'false');
+            $(this).addClass('is-active').attr('aria-pressed', 'true');
+            $('#sp-dashboard-time-filter').val(period);
+            if ($.fn.selectpicker) {
+                $('#sp-dashboard-time-filter').selectpicker('refresh');
+            }
+        });
+
+        $dashboard.on('click', '.js-sp-history-picker-apply', function () {
+            var period = $('#sp-dashboard-time-filter').val() || 'this_month';
+            var anchor = selectedPeriodAnchor();
+            var invalidDateMessage = String($dashboard.data('invalid-date-message') || (window.salesPipelineI18n && window.salesPipelineI18n.invalidDate) || '');
+            $periodAnchorDisplay.get(0).setCustomValidity(anchor ? '' : invalidDateMessage);
+            if (!$periodAnchorDisplay[0].checkValidity()) {
+                $periodAnchorDisplay[0].reportValidity();
+                return;
+            }
+            closeHistoryPicker(false);
+            fetchDashboardData(period, anchor);
+        });
+
+        $dashboard.on('click', '.js-sp-history-picker-current', function () {
+            var period = $('#sp-dashboard-time-filter').val() || 'this_month';
+            var anchor = todayIso();
+            $periodAnchorInput.val(anchor);
+            $periodAnchorDisplay.val(formatIsoDateForProject(anchor)).get(0).setCustomValidity('');
+            closeHistoryPicker(false);
+            fetchDashboardData(period, anchor);
+        });
+
+        $(document).on('click.salesPipelineHistoryPicker', function (event) {
+            if (!$historyPicker.prop('hidden')
+                && !$(event.target).closest('[data-history-picker], .js-sp-history-picker-toggle, .xdsoft_datetimepicker').length) {
+                closeHistoryPicker(false);
+            }
         });
 
         $dashboard.on('click', '[data-dashboard-tab]', function (event) {
@@ -513,12 +657,19 @@
 
         $(document).on('keydown.salesPipelineDashboard', function (event) {
             if (event.key === 'Escape') {
-                closeDrawer();
+                if (!$historyPicker.prop('hidden')) {
+                    closeHistoryPicker(true);
+                } else {
+                    closeDrawer();
+                }
             }
         });
 
         if ($.fn.tooltip) {
             $dashboard.find('[data-toggle="tooltip"]').tooltip();
+        }
+        if (typeof init_datepicker === 'function' && !$periodAnchorDisplay.data('xdsoft_datetimepicker')) {
+            init_datepicker($periodAnchorDisplay);
         }
         updateLastUpdatedTimestamp();
         initializeDashboardContent();

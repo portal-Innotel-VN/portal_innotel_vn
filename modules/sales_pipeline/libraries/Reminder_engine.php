@@ -361,13 +361,16 @@ class Reminder_engine
 
     private function createRecord(array $event, array $content)
     {
+        $responseRequired = (int) ($event['response_required'] ?? 1);
+        $slaHours = $responseRequired === 1 ? max(1, min(720, (int) $this->option('sp_reminder_sla_hours', '24'))) : null;
         $data = [
             'pipeline_id' => $event['pipeline_id'], 'staff_id' => $event['staff_id'], 'reminder_type' => 'multi',
             'rule_code' => $event['rule_code'], 'entity_type' => $event['entity_type'], 'entity_id' => $event['entity_id'],
             'period_key' => $event['period_key'], 'checkpoint' => $event['checkpoint'], 'severity' => $event['severity'],
-            'response_required' => $event['response_required'], 'title' => $content['title'], 'message' => $content['message'],
+            'response_required' => $responseRequired, 'response_sla_hours' => $slaHours,
+            'title' => $content['title'], 'message' => $content['message'],
             'snapshot_json' => json_encode($event['snapshot'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'dedupe_key' => $event['dedupe_key'], 'created_at' => date('Y-m-d H:i:s'), 'sent_at' => null,
+            'dedupe_key' => $event['dedupe_key'], 'created_at' => date('Y-m-d H:i:s'), 'sent_at' => null, 'response_due_at' => null,
         ];
         $columns = array_map(function ($v) { return '`' . $v . '`'; }, array_keys($data));
         $this->CI->db->trans_begin();
@@ -722,6 +725,8 @@ class Reminder_engine
                         . ($cooldown + random_int(0, min(900, (int) floor($cooldown * 0.25)))) . ' seconds')->format('Y-m-d H:i:s');
                 }
             }
+            $this->CI->db->trans_begin();
+
             $this->CI->db->where('id', $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
                 'status' => $status,
                 'attempt_count' => (!$success && $classification && empty($classification['retryable']))
@@ -733,15 +738,41 @@ class Reminder_engine
                 'sent_at' => $success ? $completedAt : null, 'updated_at' => $completedAt,
                 'next_retry_at' => $nextRetryAt,
             ]);
-            $anySent = $anySent || $success;
-            if ($success && empty($row['reminder_sent_at'])) {
-                $this->CI->db->where('id', $row['reminder_id'])->where('sent_at IS NULL', null, false)
-                    ->update(db_prefix() . 'sales_pipeline_reminders_log', ['sent_at' => $completedAt]);
+
+            $isStaffRecipient = ($row['recipient_type'] === 'staff')
+                && ((int) ($row['recipient_staff_id'] ?? 0) === (int) $row['staff_id']);
+
+            if ($success && $isStaffRecipient) {
+                // Conditional update on reminders_log: only the first successful staff delivery triggers SLA deadline
+                $this->CI->db->query(
+                    'UPDATE `' . db_prefix() . 'sales_pipeline_reminders_log` '
+                    . 'SET `sent_at` = ?, `response_due_at` = DATE_ADD(?, INTERVAL `response_sla_hours` HOUR) '
+                    . 'WHERE `id` = ? AND `response_required` = 1 AND `response_sla_hours` IS NOT NULL AND `sent_at` IS NULL AND `response_due_at` IS NULL',
+                    [$completedAt, $completedAt, (int) $row['reminder_id']]
+                );
+
                 if ($row['entity_type'] === 'deal' && !empty($row['pipeline_id'])) {
                     $this->CI->db->where('id', (int) $row['pipeline_id'])
                         ->update(db_prefix() . 'sales_pipeline', ['last_reminder_sent' => $completedAt]);
                 }
+            } elseif ($success && empty($row['reminder_sent_at']) && empty($row['response_required'])) {
+                $this->CI->db->where('id', (int) $row['reminder_id'])->where('sent_at IS NULL', null, false)
+                    ->update(db_prefix() . 'sales_pipeline_reminders_log', ['sent_at' => $completedAt]);
             }
+
+            if ($this->CI->db->trans_status() === false) {
+                $this->CI->db->trans_rollback();
+            } else {
+                $committed = (bool) $this->CI->db->trans_commit();
+                if ($committed) {
+                    if ($success) {
+                        $anySent = true;
+                    }
+                } else {
+                    $this->CI->db->trans_rollback();
+                }
+            }
+
             if ($classification && $classification['class'] === 'rate_limited') {
                 $this->CI->reminder_delivery_selector->deferDueEmails($nextRetryAt, $classification['code']);
                 break;
@@ -755,6 +786,76 @@ class Reminder_engine
             }
         }
         return $anySent;
+    }
+
+    /**
+     * Self-healing reconciliation for any actionable reminders with delivered staff
+     * messages that missed their response_due_at calculation.
+     *
+     * @param int $limit
+     * @return int Number of reconciled reminders
+     */
+    public function reconcile_missing_response_due_at($limit = 100)
+    {
+        $this->CI->load->library('sales_pipeline/Reminder_sla_reconcile_lock');
+        if (!$this->CI->reminder_sla_reconcile_lock->acquire(0)) {
+            return 0;
+        }
+
+        $limit = max(1, min(500, (int) $limit));
+        $reconciledCount = 0;
+
+        try {
+            $sql = 'SELECT rl.id, rl.response_sla_hours, MIN(d.sent_at) as first_staff_sent_at '
+                . 'FROM `' . db_prefix() . 'sales_pipeline_reminders_log` rl '
+                . 'JOIN `' . db_prefix() . 'sales_pipeline_reminder_deliveries` d '
+                . '  ON d.reminder_id = rl.id '
+                . " AND d.recipient_type = 'staff' "
+                . ' AND d.recipient_staff_id = rl.staff_id '
+                . " AND d.status = 'sent' "
+                . ' AND d.sent_at IS NOT NULL '
+                . 'WHERE rl.response_required = 1 '
+                . '  AND rl.response_sla_hours IS NOT NULL '
+                . '  AND rl.response_due_at IS NULL '
+                . 'GROUP BY rl.id, rl.response_sla_hours '
+                . 'LIMIT ' . $limit;
+
+            $candidates = $this->CI->db->query($sql)->result_array();
+            if (empty($candidates)) {
+                $this->CI->reminder_sla_reconcile_lock->release();
+                return 0;
+            }
+
+            foreach ($candidates as $cand) {
+                $firstSentAt = $cand['first_staff_sent_at'];
+                if (empty($firstSentAt)) {
+                    continue;
+                }
+
+                $this->CI->db->query(
+                    'UPDATE `' . db_prefix() . 'sales_pipeline_reminders_log` '
+                    . 'SET `sent_at` = COALESCE(`sent_at`, ?), '
+                    . '    `response_due_at` = DATE_ADD(?, INTERVAL `response_sla_hours` HOUR) '
+                    . 'WHERE `id` = ? '
+                    . '  AND `response_required` = 1 '
+                    . '  AND `response_sla_hours` IS NOT NULL '
+                    . '  AND `response_due_at` IS NULL',
+                    [$firstSentAt, $firstSentAt, (int) $cand['id']]
+                );
+
+                if ($this->CI->db->affected_rows() > 0) {
+                    $reconciledCount++;
+                }
+            }
+        } finally {
+            $this->CI->reminder_sla_reconcile_lock->release();
+        }
+
+        if ($reconciledCount > 0) {
+            log_activity('Reminder SLA response deadlines reconciled [count: ' . $reconciledCount . ']');
+        }
+
+        return $reconciledCount;
     }
 
     private function emailRecipientCount($to, array $ccList)

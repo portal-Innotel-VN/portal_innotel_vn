@@ -220,6 +220,9 @@ response_score = CLAMP(
 4. Mỗi reminder chỉ được tính một lần.
 5. Khi `eligible_reminder_count = 0`, thành phần ở trạng thái `not_applicable` đối với nhân viên đó và công thức phải chuẩn hóa lại trên các trọng số áp dụng, thay vì tự động cho `0` hoặc `100`.
 
+> [!NOTE]
+> **Cập nhật kích hoạt:** Thành phần này đã được kích hoạt động trong `performance_score_v1` theo kế hoạch [`analysis_reminder_response_score.md`](file:///Users/dieterhoang/Developer/portal_18/docs/plans/Sales%20Pipeline/analysis_reminder_response_score.md). Quy tắc cũ yêu cầu tạo formula version mới đã được thay thế bằng cơ chế chuyển trạng thái component per-staff (`active` khi có nhắc nhở đến hạn / `not_applicable` trên mẫu số 85 khi không có).
+
 ---
 
 ## 6. Công thức tổng

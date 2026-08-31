@@ -18,6 +18,14 @@
   vững cho Informational, feed theo CRM delivery/recipient, Actionable Quick
   Response, Pulse Dot/MutationObserver và rollback feature flag. Flag mặc định
   vẫn là `0`; chưa bật production.
+- Kích hoạt Điểm Phản hồi Nhắc nhở (`response_score`) migration 112 và module version 1.0.12:
+  snapshot `response_sla_hours` cho actionable reminder, conditional update
+  `response_due_at` sau provider delivery trong DB transaction, self-healing
+  reconciler trong Cron hook `sales_pipeline_cron_reminder()` với lock riêng
+  `db_prefix() . ':sales_pipeline:reconciler:sla'`, dynamic denominator per-staff
+  (100 khi `eligible > 0` / 85 khi `eligible == 0`), cờ `insufficient_reminder_sample`
+  kèm badge "Tạm tính (Mẫu nhỏ)" khi `0 < eligible < 3`, cấu hình Settings tab
+  Performance (`#performance`) cô lập form.
 
 ## Mức xác minh
 

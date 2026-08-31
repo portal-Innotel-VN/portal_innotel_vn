@@ -5,7 +5,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /*
 Module Name: Sales Pipeline
 Description: Quản lý Tiến Độ Kinh Doanh - Số hóa quy trình bán hàng, theo dõi deal, nhắc nhở tự động
-Version: 1.0.11
+Version: 1.0.12
 Requires at least: 2.3.*
 Author: Hiệp - Innotel Developer
 */
@@ -105,6 +105,8 @@ function sales_pipeline_cron_reminder()
     $CI->sales_pipeline_model->reconcile_estimate_groups(1000);
     $CI->load->library('sales_pipeline/Reminder_delivery_maintenance');
     $CI->reminder_delivery_maintenance->runIfDue();
+    $CI->load->library('sales_pipeline/Reminder_engine');
+    $CI->reminder_engine->reconcile_missing_response_due_at(100);
 }
 
 /**
@@ -301,11 +303,14 @@ function sales_pipeline_reminder_repository_schema_bootstrap()
         && $CI->db->field_exists('checkpoint', $table)
         && $CI->db->field_exists('severity', $table)
         && $CI->db->field_exists('response_required', $table)
+        && $CI->db->field_exists('response_sla_hours', $table)
+        && $CI->db->field_exists('response_due_at', $table)
         && $CI->db->field_exists('acknowledged_at', $table)
         && $CI->db->field_exists('acknowledged_by', $table)
         && $CI->db->field_exists('title', $table)
         && $CI->db->field_exists('created_at', $table)
         && in_array('idx_reminder_inbox_queue', $reminder_index_names, true)
+        && in_array('idx_reminder_sla_eval', $reminder_index_names, true)
         && $CI->db->table_exists($deliveries)
         && $CI->db->field_exists('recipient_staff_id', $deliveries)
         && $CI->db->field_exists('cc_recipients', $deliveries)
@@ -354,7 +359,11 @@ function sales_pipeline_load_js()
     $CI = &get_instance();
     if ($CI->router->fetch_module() == 'sales_pipeline') {
         $translations = json_encode([
-            'pleaseWait' => _l('please_wait'),
+            'pleaseWait'  => _l('please_wait'),
+            'loading'     => _l('sales_pipeline_dashboard_loading'),
+            'error'       => _l('sales_pipeline_dashboard_load_failed'),
+            'onDate'      => _l('sales_pipeline_dashboard_on_date'),
+            'invalidDate' => _l('sales_pipeline_dashboard_history_invalid_date'),
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
         echo '<script>window.salesPipelineI18n=' . $translations . ';</script>';
         echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/sales_pipeline.js') . '?v=' . time() . '"></script>';

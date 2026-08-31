@@ -26,8 +26,10 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
             'checkpoint'       => "varchar(20) NULL AFTER `period_key`",
             'severity'         => "varchar(20) NULL AFTER `checkpoint`",
             'response_required'=> "tinyint(1) NULL DEFAULT 1 AFTER `severity`",
-            'title'            => "varchar(255) NULL AFTER `response_required`",
+            'response_sla_hours'=> "smallint(5) unsigned NULL AFTER `response_required`",
+            'title'            => "varchar(255) NULL AFTER `response_sla_hours`",
             'snapshot_json'    => "longtext NULL AFTER `message`",
+            'response_due_at'  => "datetime NULL AFTER `sent_at`",
             'acknowledged_at'  => "datetime NULL AFTER `snapshot_json`",
             'acknowledged_by'  => "int(11) NULL AFTER `acknowledged_at`",
             'dedupe_key'       => "varchar(191) NULL AFTER `acknowledged_by`",
@@ -101,6 +103,9 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
         }
         if (!in_array('idx_reminder_inbox_queue', $indexNames, true)) {
             $CI->db->query('ALTER TABLE `' . $reminders . '` ADD KEY `idx_reminder_inbox_queue` (`staff_id`,`response_required`,`acknowledged_at`,`staff_response`(100))');
+        }
+        if (!in_array('idx_reminder_sla_eval', $indexNames, true)) {
+            $CI->db->query('ALTER TABLE `' . $reminders . '` ADD KEY `idx_reminder_sla_eval` (`staff_id`,`entity_type`,`response_required`,`response_due_at`,`responded_at`)');
         }
 
         if (!$CI->db->table_exists($deliveries)) {

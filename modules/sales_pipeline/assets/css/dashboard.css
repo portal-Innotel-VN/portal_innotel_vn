@@ -119,6 +119,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    position: relative;
 }
 
 /* Period-range badge — appears right after the filter dropdown */
@@ -126,19 +127,199 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0 0 0 12px;
+    min-height: 38px;
+    padding: 6px 8px 6px 12px;
+    border: 0;
     border-left: 1px solid var(--sp-border);
+    background: transparent;
     color: var(--sp-muted);
     font-size: 13px;
     font-weight: 600;
     white-space: nowrap;
-    user-select: none;
+    cursor: pointer;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.sp-filter-period-badge:hover,
+.sp-filter-period-badge:focus,
+.sp-filter-period-badge[aria-expanded="true"] {
+    color: var(--sp-ink);
+    background: var(--sp-info-soft);
+    outline: none;
+}
+
+.sp-filter-period-badge:focus-visible {
+    box-shadow: var(--sp-focus-ring);
 }
 
 .sp-filter-period-badge i {
     color: var(--sp-blue-dark);
     font-size: 12px;
     opacity: 0.75;
+}
+
+.sp-history-picker {
+    position: absolute;
+    z-index: 1050;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(380px, calc(100vw - 40px));
+    padding: 16px;
+    border: 1px solid var(--sp-border);
+    border-radius: 8px;
+    background: var(--sp-surface);
+    box-shadow: 0 8px 24px rgba(50, 58, 69, 0.18);
+}
+
+.sp-history-picker[hidden] {
+    display: none;
+}
+
+.sp-history-picker__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.sp-history-picker__header strong,
+.sp-history-picker__header span {
+    display: block;
+}
+
+.sp-history-picker__header strong {
+    color: var(--sp-ink);
+    font-size: 15px;
+    line-height: 1.35;
+}
+
+.sp-history-picker__header span {
+    margin-top: 3px;
+    color: var(--sp-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.sp-history-picker__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sp-muted);
+}
+
+.sp-history-picker__periods {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 6px;
+    background: var(--sp-surface-soft);
+}
+
+.sp-history-picker__period {
+    min-height: 38px;
+    padding: 7px 5px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sp-muted);
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s ease-in-out;
+}
+
+.sp-history-picker__period:hover,
+.sp-history-picker__period:focus,
+.sp-history-picker__period.is-active {
+    border-color: var(--sp-info);
+    background: var(--sp-surface);
+    color: var(--sp-blue-dark);
+    outline: none;
+}
+
+.sp-history-picker__date-label {
+    display: block;
+    margin: 14px 0 7px;
+    color: var(--sp-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.sp-history-picker__date-field {
+    margin: 0;
+}
+
+.sp-history-picker__date-field .input-group {
+    width: 100%;
+}
+
+.sp-history-picker__date {
+    width: 100%;
+    min-height: 40px;
+    padding: 7px 10px;
+    border: 1px solid var(--sp-border);
+    border-radius: 6px;
+    background: var(--sp-surface);
+    color: var(--sp-ink);
+    font-size: 14px;
+}
+
+.sp-history-picker__calendar-addon {
+    min-width: 40px;
+    border-color: var(--sp-border);
+    background: var(--sp-surface-soft);
+    color: var(--sp-blue-dark);
+    cursor: pointer;
+}
+
+.sp-history-picker__date:focus,
+.sp-history-picker__close:focus,
+.sp-history-picker__current:focus,
+.sp-history-picker__apply:focus {
+    border-color: var(--sp-blue);
+    outline: none;
+    box-shadow: var(--sp-focus-ring);
+}
+
+.sp-history-picker__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.sp-history-picker__current,
+.sp-history-picker__apply {
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sp-history-picker__current {
+    border: 1px solid var(--sp-border);
+    background: var(--sp-surface);
+    color: var(--sp-ink);
+}
+
+.sp-history-picker__apply {
+    border: 1px solid var(--sp-info);
+    background: var(--sp-info);
+    color: var(--sp-surface);
+}
+
+.sp-history-picker__apply:hover {
+    border-color: var(--sp-primary-hover);
+    background: var(--sp-primary-hover);
 }
 
 .sp-dashboard-filter-control label {
@@ -2179,6 +2360,12 @@ body.sp-dashboard-drawer-open {
 }
 
 @media (max-width: 767px) {
+    .sp-dashboard-filterbar {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 10px 16px;
+    }
+
     .sp-dashboard-commandbar {
         gap: 18px;
         padding: 18px 16px;
@@ -2201,6 +2388,12 @@ body.sp-dashboard-drawer-open {
     .sp-dashboard-filter-control {
         width: 100%;
         justify-content: space-between;
+    }
+
+    .sp-history-picker {
+        right: 0;
+        left: 0;
+        width: 100%;
     }
 
     .sp-leaderboard-header {
@@ -2324,6 +2517,16 @@ body.sp-dashboard-drawer-open {
 }
 
 @media (max-width: 420px) {
+
+    .sp-filter-period-badge__text {
+        max-width: 142px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .sp-history-picker__periods {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 
     .sp-dashboard-secondary-action span,
     .sp-dashboard-primary-action span {

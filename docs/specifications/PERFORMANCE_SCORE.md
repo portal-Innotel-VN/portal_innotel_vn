@@ -22,22 +22,38 @@ Phiên bản công thức hiện tại là `performance_score_v1`. Mô hình d�
 | Số Báo giá logic | `quote_score` | 20% | Đang hoạt động |
 | Doanh thu Accepted | `accepted_revenue_score` | 40% | Đang hoạt động |
 | Tỷ lệ chấp nhận | `acceptance_score` | 25% | Đang hoạt động |
-| Phản hồi nhắc nhở đúng hạn | `response_score` | 15% | Chưa kích hoạt trong calculator |
+| Phản hồi nhắc nhở đúng hạn | `response_score` | 15% | Hoạt động linh hoạt (`active` khi có nhắc nhở đến hạn / `not_applicable` khi không có) |
 
-Khi `reminder_response` chưa hoạt động, hệ thống chuẩn hóa trên tổng trọng số `85`:
+Cơ chế phân bổ mẫu số động theo nhân viên trong cohort:
+1. **Khi nhân viên CÓ nhắc nhở đến hạn trong kỳ (`eligible_reminders > 0`):**
+   Thành phần `reminder_response` ở trạng thái `active`, áp dụng công thức đầy đủ 4 thành phần trên mẫu số tổng trọng số **100**:
+   ```text
+   performance_score_raw =
+       (quote_score × 20
+      + accepted_revenue_score × 40
+      + acceptance_score × 25
+      + response_score × 15) / 100
+   ```
+   Trọng số hiệu dụng là `20%`, `40%`, `25%` và `15%`.
 
-```text
-performance_score_raw =
-    (quote_score × 20
-   + accepted_revenue_score × 40
-   + acceptance_score × 25) / 85
-```
+2. **Khi nhân viên KHÔNG CÓ nhắc nhở đến hạn trong kỳ (`eligible_reminders == 0`):**
+   Thành phần `reminder_response` tự động chuyển sang trạng thái `not_applicable`, `response_score = null`, chuẩn hóa trên mẫu số tổng trọng số **85**:
+   ```text
+   performance_score_raw =
+       (quote_score × 20
+      + accepted_revenue_score × 40
+      + acceptance_score × 25) / 85
+   ```
+   Trọng số hiệu dụng tương ứng là `23,5294%`, `47,0588%` và `29,4118%`.
 
-Trọng số hiệu dụng tương ứng là `23,5294%`, `47,0588%` và `29,4118%`.
+3. **Cờ cảnh báo mẫu nhỏ (`insufficient_reminder_sample`):**
+   Nếu `0 < eligible_reminders < 3`, hệ thống vẫn tính điểm trên mẫu số 100 nhưng bổ sung cờ `insufficient_reminder_sample` vào `data_quality_flags` và đặt `is_provisional = true`. Drawer hiển thị badge "Tạm tính (Mẫu nhỏ)".
 
 ## 3. Kỳ và target
 
 Basecode hỗ trợ `this_week`, `this_month`, `this_quarter` và `this_year`. Kỳ không hợp lệ được chuyển về `this_month`.
+
+Mỗi loại kỳ có thể được neo vào một ngày trong lịch sử bằng `period_anchor` (`YYYY-MM-DD`). Hệ thống luôn chuẩn hóa ngày neo thành trọn tuần (Thứ Hai–Chủ Nhật), tháng, quý hoặc năm tương ứng; target vẫn lấy theo loại kỳ. Ngày neo sai định dạng hoặc nằm trong tương lai được đưa về ngày hiện tại, vì Dashboard không dự báo KPI tương lai.
 
 | Kỳ | Target Báo giá | Target doanh thu Accepted |
 |---|---:|---:|
@@ -46,12 +62,15 @@ Basecode hỗ trợ `this_week`, `this_month`, `this_quarter` và `this_year`. K
 | `this_quarter` | 60 | 3.000.000.000 |
 | `this_year` | 240 | 12.000.000.000 |
 
+Target phản hồi nhắc nhở: `performance_response_target_percent` (mặc định 90%).
+
 Các option được dùng:
 
 ```text
 performance_quote_target_{period}
 performance_revenue_target_{period}
 performance_acceptance_target_percent
+performance_response_target_percent
 performance_component_cap
 performance_min_closed_quotes
 ```
@@ -135,37 +154,43 @@ acceptance_score = CLAMP(
 
 Estimate chưa có quyết định cuối không nằm trong mẫu số. Nếu `closed_count < performance_min_closed_quotes`, hệ thống vẫn tính điểm nhưng thêm `insufficient_closed_quotes` và `is_provisional = true`.
 
-### 6.4. Phản hồi nhắc nhở
+### 6.4. Phản hồi nhắc nhở đúng hạn
 
-Calculator hiện trả:
+Điều kiện nhắc nhở hợp lệ (`eligible_reminders`):
+- Thuộc phạm vi Báo giá: `entity_type IN ('estimate', 'staff_estimate_period')`
+- Bắt buộc phản hồi: `response_required = 1`
+- Đã có deadline: `response_due_at IS NOT NULL`
+- Thuộc kỳ đánh giá: `response_due_at >= period_start` và `response_due_at < period_end_exclusive`
+- Đã đến hạn tính đến thời điểm tính toán: `response_due_at <= calculated_at`
 
+Điều kiện đúng hạn (`on_time_reminders`):
+- Là nhắc nhở hợp lệ (`eligible_reminders`)
+- Đã được phản hồi: `responded_at IS NOT NULL`
+- Thời gian phản hồi trong hạn: `responded_at <= response_due_at`
+
+Công thức:
 ```text
-response_score = null
-component_status.reminder_response = inactive
-```
-
-Khi SLA đủ tin cậy, công thức dự kiến:
-
-```text
-on_time_response_rate = on_time_response_count / eligible_reminder_count × 100
+on_time_rate = on_time_reminders / eligible_reminders × 100
 response_score = CLAMP(
-    on_time_response_rate / response_target_percent × 100,
+    on_time_rate / performance_response_target_percent × 100,
     0,
     component_cap
 )
 ```
 
-Chỉ reminder có `response_required = 1` và đã đến hạn mới nằm trong mẫu số.
+Target mặc định là 90%. Đạt 90% đúng hạn nhận 100 điểm; đạt 100% đúng hạn nhận 111,1 điểm thưởng (tối đa 120 theo `component_cap`). Nếu `eligible_reminders == 0`, thành phần chuyển sang `not_applicable` và không tham gia mẫu số.
 
 ## 7. Ví dụ tính điểm
 
-Giả sử target tháng là 20 Báo giá, 1.000.000.000 doanh thu và acceptance target 50%. Raw metrics:
+Giả sử target tháng là 20 Báo giá, 1.000.000.000 doanh thu, acceptance target 50%, response target 90%. Raw metrics của Nhân viên A:
 
 ```text
 estimate_count = 15
 accepted_revenue = 800.000.000
 accepted_count = 6
 declined_count = 4
+eligible_reminders = 10
+on_time_reminders = 9
 ```
 
 Kết quả:
@@ -175,14 +200,17 @@ quote_score = 75
 accepted_revenue_score = 80
 acceptance_rate = 6 / (6 + 4) × 100 = 60%
 acceptance_score = 60 / 50 × 100 = 120
+on_time_rate = 9 / 10 × 100 = 90%
+response_score = 90 / 90 × 100 = 100
 ```
 
-Vì response inactive:
+Vì có nhắc nhở đến hạn (`eligible_reminders = 10 > 0`), điểm được tính trên mẫu số 100:
 
 ```text
-performance_score_raw = (75 × 20 + 80 × 40 + 120 × 25) / 85
-                       = 91,7647
-ranking_score = ROUND(91,7647, 1) = 91,8
+performance_score_raw = (75 × 20 + 80 × 40 + 120 × 25 + 100 × 15) / 100
+                       = (1500 + 3200 + 3000 + 1500) / 100
+                       = 92,0
+ranking_score = ROUND(92,0, 1) = 92,0
 ```
 
 `performance_score_raw` phục vụ audit; `performance_score`/`ranking_score` phục vụ hiển thị và xếp hạng.

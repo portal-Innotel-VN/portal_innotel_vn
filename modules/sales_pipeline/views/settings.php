@@ -34,6 +34,11 @@
                                             <i class="fa fa-bell-o" aria-hidden="true"></i> <?php echo _l('sales_pipeline_settings_reminders'); ?>
                                         </a>
                                     </li>
+                                    <li role="presentation">
+                                        <a href="#performance" aria-controls="performance" role="tab" data-toggle="tab">
+                                            <i class="fa fa-line-chart" aria-hidden="true"></i> <?php echo _l('sales_pipeline_settings_performance'); ?>
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </div>
@@ -112,6 +117,11 @@
                                     <h5><i class="fa fa-power-off" aria-hidden="true"></i> <?php echo _l('sp_reminder_global_switch'); ?></h5>
                                     <div class="checkbox checkbox-primary"><input id="sp_reminder_global_enabled" name="sp_reminder_global_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_global_enabled'); ?>><label for="sp_reminder_global_enabled"><?php echo _l('sp_reminder_global_switch'); ?></label></div>
                                     <div class="checkbox checkbox-primary"><input id="sp_reminder_skip_weekends" name="sp_reminder_skip_weekends" type="checkbox" value="1"<?php echo $checked('sp_reminder_skip_weekends'); ?>><label for="sp_reminder_skip_weekends"><?php echo _l('sp_reminder_skip_weekends_label'); ?></label></div>
+                                    <div class="row mtop10">
+                                        <div class="col-md-6">
+                                            <?php echo render_input('sp_reminder_sla_hours', _l('sp_reminder_sla_hours_label'), $ro['sp_reminder_sla_hours'], 'number', ['min' => 1, 'max' => 720]); ?>
+                                        </div>
+                                    </div>
                                     <div class="row"><div class="col-md-6"><label for="sp_reminder_holiday_dates"><?php echo _l('sp_reminder_holiday_dates_label'); ?></label><textarea class="form-control" rows="3" id="sp_reminder_holiday_dates" name="sp_reminder_holiday_dates" placeholder="2026-01-01"><?php echo html_escape($ro['sp_reminder_holiday_dates']); ?></textarea></div><div class="col-md-3"><?php echo render_input('sp_reminder_quiet_hours_start', _l('sp_reminder_quiet_hours_label') . ' (' . _l('sp_reminder_start') . ')', $ro['sp_reminder_quiet_hours_start'], 'time'); ?></div><div class="col-md-3"><?php echo render_input('sp_reminder_quiet_hours_end', _l('sp_reminder_quiet_hours_label') . ' (' . _l('sp_reminder_end') . ')', $ro['sp_reminder_quiet_hours_end'], 'time'); ?></div></div>
                                 </div>
                                 <div class="sp-reminder-section sp-reminder-section--cc">
@@ -157,6 +167,37 @@
                                     <?php } ?></div>
                                 <?php } ?>
                                 <div class="text-right"><button type="submit" class="btn btn-info"><i class="fa fa-save" aria-hidden="true"></i> <?php echo _l('sp_reminder_save_changes'); ?></button></div>
+                                <?php echo form_close(); ?>
+                            </div>
+
+                            <!-- TAB ĐIỂM HIỆU SUẤT (PERFORMANCE SCORE) -->
+                            <div role="tabpanel" class="tab-pane" id="performance">
+                                <?php echo form_open(admin_url('sales_pipeline/settings'), ['id' => 'sp-performance-settings-form']); ?>
+                                <input type="hidden" name="setting_type" value="performance">
+                                <div class="panel_s">
+                                    <div class="panel-body">
+                                        <h5 class="bold"><i class="fa fa-line-chart" aria-hidden="true"></i> <?php echo _l('sales_pipeline_settings_performance_heading'); ?></h5>
+                                        <p class="text-muted"><?php echo _l('sales_pipeline_settings_performance_help'); ?></p>
+                                        <hr />
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <?php echo render_input(
+                                                    'performance_response_target_percent',
+                                                    _l('performance_response_target_percent_label'),
+                                                    $performance_options['performance_response_target_percent'] ?? '90',
+                                                    'number',
+                                                    ['min' => 1, 'max' => 100, 'step' => 'any', 'required' => 'true']
+                                                ); ?>
+                                                <p class="text-muted small"><?php echo _l('performance_response_target_percent_help'); ?></p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <button type="submit" class="btn btn-info">
+                                                <i class="fa fa-save" aria-hidden="true"></i> <?php echo _l('sales_pipeline_save_settings'); ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <?php echo form_close(); ?>
                             </div>
                         </div>
@@ -228,7 +269,11 @@
 <script>
     $(function(){
         initDataTable('.dt-table');
-        if (window.location.hash === '#reminders') { $('.nav-tabs a[href="#reminders"]').tab('show'); }
+        if (window.location.hash === '#reminders') {
+            $('.nav-tabs a[href="#reminders"]').tab('show');
+        } else if (window.location.hash === '#performance') {
+            $('.nav-tabs a[href="#performance"]').tab('show');
+        }
         $('#sp_reminder_global_enabled').on('change', function () { $('.sp-reminder-section--rule').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('.sp-reminder-rule-toggle input').on('change', function () { $(this).closest('.sp-reminder-rule-row').find('.sp-reminder-channels,.sp-rule-fields').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('#sp-reminder-settings-form').on('submit', function () { $('.sp-reminder-section--dimmed').removeClass('sp-reminder-section--dimmed'); });

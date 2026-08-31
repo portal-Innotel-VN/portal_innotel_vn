@@ -10,12 +10,22 @@ class Performance_score_calculator
 {
     const FORMULA_VERSION = 'performance_score_v1';
 
-    private $standard_weights = [
+    protected $standard_weights = [
         'quote_score'            => 20.0,
         'accepted_revenue_score' => 40.0,
         'acceptance_score'       => 25.0,
         'reminder_response'      => 15.0,
     ];
+
+    public function get_standard_weights()
+    {
+        return $this->standard_weights;
+    }
+
+    public function set_standard_weights(array $weights)
+    {
+        $this->standard_weights = $weights;
+    }
 
     /**
      * Calculate and rank an already-aggregated cohort.
@@ -28,6 +38,7 @@ class Performance_score_calculator
     {
         $configuration_errors = $this->validate_config($config);
         $total_ranked_staff = count($metrics);
+        $calculated_at = isset($config['calculated_at']) ? $config['calculated_at'] : date('Y-m-d H:i:s');
 
         if ($configuration_errors) {
             $rows = [];
@@ -46,6 +57,7 @@ class Performance_score_calculator
 
             return [
                 'formula_version'     => isset($config['formula_version']) ? $config['formula_version'] : self::FORMULA_VERSION,
+                'calculated_at'        => $calculated_at,
                 'status'              => 'not_configured',
                 'configuration_errors'=> $configuration_errors,
                 'leaderboard'         => $rows,
@@ -53,14 +65,6 @@ class Performance_score_calculator
         }
 
         $cap = (float) $config['component_cap'];
-        $active_weight_total = $this->standard_weights['quote_score']
-            + $this->standard_weights['accepted_revenue_score']
-            + $this->standard_weights['acceptance_score'];
-        $effective_weights = [
-            'quote_score'            => round(($this->standard_weights['quote_score'] / $active_weight_total) * 100, 4),
-            'accepted_revenue_score' => round(($this->standard_weights['accepted_revenue_score'] / $active_weight_total) * 100, 4),
-            'acceptance_score'       => round(($this->standard_weights['acceptance_score'] / $active_weight_total) * 100, 4),
-        ];
 
         $rows = [];
         foreach ($metrics as $metric) {
@@ -85,11 +89,59 @@ class Performance_score_calculator
                 $cap
             );
 
-            $performance_score_raw = (
-                ($quote_score * $this->standard_weights['quote_score'])
-                + ($accepted_revenue_score * $this->standard_weights['accepted_revenue_score'])
-                + ($acceptance_score * $this->standard_weights['acceptance_score'])
-            ) / $active_weight_total;
+            // Determine reminder_response component status and score
+            $eligible_reminders = isset($metric['eligible_reminders']) && $metric['eligible_reminders'] !== null
+                ? (int) $metric['eligible_reminders']
+                : null;
+            $on_time_reminders = isset($metric['on_time_reminders']) && $metric['on_time_reminders'] !== null
+                ? (int) $metric['on_time_reminders']
+                : null;
+
+            $on_time_rate = null;
+            $response_score = null;
+
+            if ($eligible_reminders === null) {
+                $reminder_status = 'inactive';
+            } elseif ($eligible_reminders === 0) {
+                $reminder_status = 'not_applicable';
+            } else {
+                $reminder_status = 'active';
+                $on_time_rate = ($on_time_reminders / $eligible_reminders) * 100;
+                $response_score = $this->component_score(
+                    $on_time_rate,
+                    $config['response_target'],
+                    $cap
+                );
+            }
+
+            $active_components = [
+                'quote_score'            => $quote_score,
+                'accepted_revenue_score' => $accepted_revenue_score,
+                'acceptance_score'       => $acceptance_score,
+            ];
+            if ($reminder_status === 'active') {
+                $active_components['reminder_response'] = $response_score;
+            }
+
+            $active_weight_total = 0.0;
+            foreach ($active_components as $comp_key => $comp_val) {
+                $active_weight_total += (float) ($this->standard_weights[$comp_key] ?? 0.0);
+            }
+
+            $effective_weights = [];
+            foreach ($this->standard_weights as $comp_key => $weight) {
+                if (isset($active_components[$comp_key]) && $active_weight_total > 0) {
+                    $effective_weights[$comp_key] = round(($weight / $active_weight_total) * 100, 4);
+                } else {
+                    $effective_weights[$comp_key] = 0.0;
+                }
+            }
+
+            $weighted_sum = 0.0;
+            foreach ($active_components as $comp_key => $comp_val) {
+                $weighted_sum += ((float) $comp_val * (float) ($this->standard_weights[$comp_key] ?? 0.0));
+            }
+            $performance_score_raw = $active_weight_total > 0 ? ($weighted_sum / $active_weight_total) : 0.0;
 
             $data_quality_flags = [];
             if (!empty($metric['missing_revenue_rate_count'])) {
@@ -98,14 +150,20 @@ class Performance_score_calculator
             if ($closed_count < (int) $config['min_closed_quotes']) {
                 $data_quality_flags[] = 'insufficient_closed_quotes';
             }
+            if ($reminder_status === 'active' && $eligible_reminders < 3) {
+                $data_quality_flags[] = 'insufficient_reminder_sample';
+            }
 
             $metric['closed_count'] = $closed_count;
             $metric['acceptance_rate'] = $closed_count > 0 ? round($acceptance_rate, 1) : null;
             $metric['quote_score'] = round($quote_score, 4);
             $metric['accepted_revenue_score'] = round($accepted_revenue_score, 4);
             $metric['acceptance_score'] = round($acceptance_score, 4);
-            $metric['response_score'] = null;
-            $metric['component_status'] = ['reminder_response' => 'inactive'];
+            $metric['eligible_reminders'] = $eligible_reminders;
+            $metric['on_time_reminders'] = $on_time_reminders;
+            $metric['on_time_rate'] = $on_time_rate !== null ? round($on_time_rate, 1) : null;
+            $metric['response_score'] = $response_score !== null ? round($response_score, 4) : null;
+            $metric['component_status'] = ['reminder_response' => $reminder_status];
             $metric['effective_weights'] = $effective_weights;
             $metric['performance_score_raw'] = round($performance_score_raw, 4);
             $metric['performance_score'] = round($performance_score_raw, 1);
@@ -134,6 +192,7 @@ class Performance_score_calculator
 
         return [
             'formula_version'      => isset($config['formula_version']) ? $config['formula_version'] : self::FORMULA_VERSION,
+            'calculated_at'        => $calculated_at,
             'status'               => 'ready',
             'configuration_errors' => [],
             'leaderboard'          => $rows,
@@ -203,10 +262,16 @@ class Performance_score_calculator
     private function validate_config($config)
     {
         $errors = [];
-        foreach (['quote_target', 'revenue_target', 'acceptance_target', 'component_cap'] as $key) {
+        foreach (['quote_target', 'revenue_target', 'component_cap'] as $key) {
             if (!isset($config[$key]) || !is_numeric($config[$key]) || (float) $config[$key] <= 0) {
                 $errors[] = $key;
             }
+        }
+        if (!isset($config['acceptance_target']) || !is_numeric($config['acceptance_target']) || (float) $config['acceptance_target'] <= 0 || (float) $config['acceptance_target'] > 100) {
+            $errors[] = 'acceptance_target';
+        }
+        if (!isset($config['response_target']) || !is_numeric($config['response_target']) || (float) $config['response_target'] <= 0 || (float) $config['response_target'] > 100) {
+            $errors[] = 'response_target';
         }
         if (!isset($config['min_closed_quotes']) || !is_numeric($config['min_closed_quotes']) || (int) $config['min_closed_quotes'] < 0) {
             $errors[] = 'min_closed_quotes';

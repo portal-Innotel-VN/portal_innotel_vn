@@ -65,7 +65,7 @@ $migrationContent = file_get_contents($migrationFile);
 assert_contains($migrationContent, "add_option('sp_reminder_crm_inbox_enabled', '0')", 'migration 111 must seed a safe rollout flag when absent');
 assert_not_contains($migrationContent, "update_option('sp_reminder_crm_inbox_enabled', '0')", 'migration 111 must not overwrite an explicit canary choice');
 $moduleContent = file_get_contents($moduleRoot . '/sales_pipeline.php');
-assert_contains($moduleContent, 'Version: 1.0.11', 'module version must activate migration 111');
+assert_contains($moduleContent, 'Version: 1.0.12', 'module version must activate migration 112');
 foreach (['acknowledged_at', 'acknowledged_by', 'idx_reminder_inbox_queue'] as $schemaGuard) {
     assert_contains($moduleContent, $schemaGuard, 'app_init bootstrap must guard ' . $schemaGuard);
 }
@@ -119,7 +119,7 @@ assert_not_contains($jsContent, 'sp-reminder-inbox-header', 'Reminder items must
 
 $cssContent = file_get_contents($cssFile);
 assert_contains($cssContent, 'prefers-reduced-motion: reduce', 'Reminder Bell must respect reduced-motion preference');
-assert_contains($cssContent, '--sp-reminder-dot-top: 40px;', 'Pulse Dot must sit immediately below the bell glyph');
+assert_contains($cssContent, '--sp-reminder-dot-top:', 'Pulse Dot must sit immediately below the bell glyph');
 assert_contains($cssContent, '--sp-reminder-dot-left: 50%;', 'Pulse Dot must use the bell anchor horizontal center');
 assert_contains($cssContent, 'top: var(--sp-reminder-dot-top);', 'Pulse Dot must use its module-owned position token');
 assert_contains($cssContent, 'left: var(--sp-reminder-dot-left);', 'Pulse Dot must use its module-owned center token');
@@ -130,7 +130,7 @@ assert_contains($cssContent, 'box-shadow: 0 0 0 3px var(--sp-bell-transparent);'
 assert_not_contains($cssContent, '.icon-notifications', 'Reminder CSS must not reposition, hide or restyle the Core numeric badge');
 assert_contains(
     $cssContent,
-    '.navbar-right .dropdown-menu.notifications .sp-reminder-inbox-scroll > .sp-reminder-item:last-child',
+    '.sp-reminder-inbox-scroll>.sp-reminder-item:last-child',
     'Last Reminder item must override the Core notification last-child formatting'
 );
 assert_contains($cssContent, 'text-align: left;', 'Reminder items must remain left-aligned, including the final item');

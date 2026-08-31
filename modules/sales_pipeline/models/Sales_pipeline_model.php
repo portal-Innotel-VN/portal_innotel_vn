@@ -2,6 +2,8 @@
 
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once dirname(__DIR__) . '/includes/dashboard_period.php';
+
 class Sales_pipeline_model extends App_Model
 {
     private $estimate_copy_source_id;
@@ -2268,10 +2270,13 @@ class Sales_pipeline_model extends App_Model
             ? $period
             : $this->resolve_dashboard_period($period);
         $config = $this->get_performance_score_config($period['key']);
+        $calculated_at = date('Y-m-d H:i:s');
+        $config['calculated_at'] = $calculated_at;
 
         if (!$this->estimate_group_schema_available()) {
             return [
                 'formula_version'      => 'performance_score_v1',
+                'calculated_at'        => $calculated_at,
                 'status'               => 'not_configured',
                 'configuration_errors' => ['estimate_group_schema'],
                 'leaderboard'          => [],
@@ -2280,6 +2285,7 @@ class Sales_pipeline_model extends App_Model
 
         $this->reconcile_estimate_groups(1000);
 
+        $reminder_sla_available = $this->reminder_sla_schema_available();
         $staff_members = $this->get_dashboard_staff_members(null);
         $metrics = [];
         $staff_ids = [];
@@ -2296,6 +2302,8 @@ class Sales_pipeline_model extends App_Model
                 'accepted_count'             => 0,
                 'declined_count'             => 0,
                 'missing_revenue_rate_count' => 0,
+                'eligible_reminders'         => $reminder_sla_available ? 0 : null,
+                'on_time_reminders'          => $reminder_sla_available ? 0 : null,
             ];
         }
 
@@ -2354,11 +2362,43 @@ class Sales_pipeline_model extends App_Model
             $metrics[$staff_id]['missing_revenue_rate_count'] = (int) $row['missing_revenue_rate_count'];
         }
 
+        // Aggregate reminder response SLA metrics if schema is available
+        if ($reminder_sla_available) {
+            $reminder_table = db_prefix() . 'sales_pipeline_reminders_log';
+            $reminder_rows = $this->db
+                ->select(
+                    'staff_id, '
+                    . 'COUNT(id) as eligible_reminders, '
+                    . 'SUM(CASE WHEN responded_at IS NOT NULL AND responded_at <= response_due_at THEN 1 ELSE 0 END) as on_time_reminders',
+                    false
+                )
+                ->from($reminder_table)
+                ->where_in('staff_id', $staff_ids)
+                ->where_in('entity_type', ['estimate', 'staff_estimate_period'])
+                ->where('response_required', 1)
+                ->where('response_due_at IS NOT NULL', null, false)
+                ->where('response_due_at >=', $period_start)
+                ->where('response_due_at <', $period_end_exclusive)
+                ->where('response_due_at <=', $calculated_at)
+                ->group_by('staff_id')
+                ->get()
+                ->result_array();
+
+            foreach ($reminder_rows as $r_row) {
+                $s_id = (int) $r_row['staff_id'];
+                if (isset($metrics[$s_id])) {
+                    $metrics[$s_id]['eligible_reminders'] = (int) $r_row['eligible_reminders'];
+                    $metrics[$s_id]['on_time_reminders'] = (int) $r_row['on_time_reminders'];
+                }
+            }
+        }
+
         $cohort = [];
         foreach ($metrics as $metric) {
             $has_activity = $metric['estimate_count'] > 0
                 || $metric['accepted_count'] > 0
-                || $metric['declined_count'] > 0;
+                || $metric['declined_count'] > 0
+                || (!empty($metric['eligible_reminders']) && $metric['eligible_reminders'] > 0);
             if ($metric['is_admin'] && !$has_activity) {
                 continue;
             }
@@ -2417,6 +2457,7 @@ class Sales_pipeline_model extends App_Model
 
         $quote_target = get_option('performance_quote_target_' . $period_key);
         $revenue_target = get_option('performance_revenue_target_' . $period_key);
+        $response_target = get_option('performance_response_target_percent');
 
         return [
             'formula_version'   => 'performance_score_v1',
@@ -2429,6 +2470,9 @@ class Sales_pipeline_model extends App_Model
             'acceptance_target' => (is_numeric(get_option('performance_acceptance_target_percent')) && (float) get_option('performance_acceptance_target_percent') > 0)
                                     ? get_option('performance_acceptance_target_percent')
                                     : 50,
+            'response_target'   => (is_numeric($response_target) && (float) $response_target > 0)
+                                    ? $response_target
+                                    : 90,
             'component_cap'     => (is_numeric(get_option('performance_component_cap')) && (float) get_option('performance_component_cap') > 0)
                                     ? get_option('performance_component_cap')
                                     : 120,
@@ -2436,6 +2480,15 @@ class Sales_pipeline_model extends App_Model
                                     ? get_option('performance_min_closed_quotes')
                                     : 3,
         ];
+    }
+
+    public function reminder_sla_schema_available()
+    {
+        $table = db_prefix() . 'sales_pipeline_reminders_log';
+
+        return $this->db->table_exists($table)
+            && $this->db->field_exists('response_due_at', $table)
+            && $this->db->field_exists('response_sla_hours', $table);
     }
 
     private function estimate_group_schema_available()
@@ -2830,11 +2883,15 @@ class Sales_pipeline_model extends App_Model
      * Dữ liệu tổng hợp cho Executive Dashboard.
      *
      * @param int|null $staff_id Giới hạn dashboard theo một nhân viên
+     * @param string|array $period Loại kỳ hoặc phạm vi đã chuẩn hóa
+     * @param string|null $period_anchor Ngày thuộc kỳ lịch sử (Y-m-d)
      * @return array
      */
-    public function get_executive_dashboard($staff_id = null, $period = 'this_month')
+    public function get_executive_dashboard($staff_id = null, $period = 'this_month', $period_anchor = null)
     {
-        $period = $this->resolve_dashboard_period($period);
+        $period = is_array($period) && isset($period['key'], $period['start'], $period['end'])
+            ? $period
+            : $this->resolve_dashboard_period($period, $period_anchor);
         $this->reconcile_estimate_groups(1000);
         $staff_metrics = $this->get_staff_kpi_metrics($staff_id, $period);
         $quote_metrics = $this->get_estimate_dashboard_metrics($staff_id, $period);
@@ -2907,9 +2964,10 @@ class Sales_pipeline_model extends App_Model
             'selected_period_range' => [
                 'start' => $period['start'],
                 'end'   => $period['end'],
+                'anchor' => $period['anchor'] ?? date('Y-m-d'),
             ],
-            'revenue_kpi'          => $this->get_revenue_timeseries($staff_id, $period['key']),
-            'estimate_revenue_kpi' => $this->get_estimate_revenue_timeseries($staff_id, $period['key']),
+            'revenue_kpi'          => $this->get_revenue_timeseries($staff_id, $period),
+            'estimate_revenue_kpi' => $this->get_estimate_revenue_timeseries($staff_id, $period),
         ];
 
         return $dashboard;
@@ -2923,7 +2981,9 @@ class Sales_pipeline_model extends App_Model
      */
     private function resolve_revenue_timeseries_buckets($period_key = 'this_month')
     {
-        $period = $this->resolve_dashboard_period($period_key);
+        $period = is_array($period_key) && isset($period_key['key'], $period_key['start'], $period_key['end'])
+            ? $period_key
+            : $this->resolve_dashboard_period($period_key);
         $key = $period['key'];
 
         $buckets = [];
@@ -3307,52 +3367,12 @@ class Sales_pipeline_model extends App_Model
      * Resolve dashboard leaderboard period.
      *
      * @param string|null $period
+     * @param string|null $anchor
      * @return array
      */
-    public function resolve_dashboard_period($period)
+    public function resolve_dashboard_period($period, $anchor = null)
     {
-        $today = date('Y-m-d');
-        $period = is_string($period) ? trim($period) : '';
-        $allowed = ['this_week', 'this_month', 'this_quarter', 'this_year'];
-        if (!in_array($period, $allowed, true)) {
-            $period = 'this_month';
-        }
-
-        if ($period === 'this_week') {
-            return [
-                'key'   => $period,
-                'start' => date('Y-m-d', strtotime('monday this week', strtotime($today))),
-                'end'   => date('Y-m-d', strtotime('sunday this week', strtotime($today))),
-            ];
-        }
-
-        if ($period === 'this_quarter') {
-            $month = (int) date('n', strtotime($today));
-            $quarter = (int) ceil($month / 3);
-            $start_month = (($quarter - 1) * 3) + 1;
-            $start = date('Y-' . str_pad((string) $start_month, 2, '0', STR_PAD_LEFT) . '-01', strtotime($today));
-            $end = date('Y-m-t', strtotime($start . ' +2 months'));
-
-            return [
-                'key'   => $period,
-                'start' => $start,
-                'end'   => $end,
-            ];
-        }
-
-        if ($period === 'this_year') {
-            return [
-                'key'   => $period,
-                'start' => date('Y-01-01', strtotime($today)),
-                'end'   => date('Y-12-31', strtotime($today)),
-            ];
-        }
-
-        return [
-            'key'   => $period,
-            'start' => date('Y-m-01', strtotime($today)),
-            'end'   => date('Y-m-t', strtotime($today)),
-        ];
+        return sales_pipeline_resolve_dashboard_period($period, $anchor);
     }
 
     /**

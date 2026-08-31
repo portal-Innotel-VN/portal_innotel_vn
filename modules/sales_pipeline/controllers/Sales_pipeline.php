@@ -136,10 +136,15 @@ class Sales_pipeline extends AdminController
         $can_view_all = $this->can_view_dashboard_all();
         $staff_id = $can_view_all ? null : get_staff_user_id();
         $period = $this->input->get('period') ?: 'this_month';
+        $period_anchor = $this->input->get('period_anchor');
         $active_tab = $this->resolve_dashboard_tab($this->input->get('dashboard_tab'));
 
-        $data['dashboard'] = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period);
-        $this->attach_estimate_performance_ranking($data['dashboard'], $period, $can_view_all);
+        $data['dashboard'] = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period, $period_anchor);
+        $resolved_period = array_merge(
+            ['key' => $data['dashboard']['selected_period']],
+            $data['dashboard']['selected_period_range']
+        );
+        $this->attach_estimate_performance_ranking($data['dashboard'], $resolved_period, $can_view_all);
         $data['dashboard']['selected_dashboard_tab'] = $active_tab;
         $data['can_view_all'] = $can_view_all;
         $data['title'] = _l('sales_pipeline_dashboard_title');
@@ -163,9 +168,14 @@ class Sales_pipeline extends AdminController
         $can_view_all = $this->can_view_dashboard_all();
         $staff_id = $can_view_all ? null : get_staff_user_id();
         $period = $this->input->get('period') ?: 'this_month';
+        $period_anchor = $this->input->get('period_anchor');
         $active_tab = $this->resolve_dashboard_tab($this->input->get('dashboard_tab'));
-        $dashboard = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period);
-        $this->attach_estimate_performance_ranking($dashboard, $period, $can_view_all);
+        $dashboard = $this->sales_pipeline_model->get_executive_dashboard($staff_id, $period, $period_anchor);
+        $resolved_period = array_merge(
+            ['key' => $dashboard['selected_period']],
+            $dashboard['selected_period_range']
+        );
+        $this->attach_estimate_performance_ranking($dashboard, $resolved_period, $can_view_all);
         $dashboard['selected_dashboard_tab'] = $active_tab;
 
         $html = $this->load->view('sales_pipeline/partials/_dashboard_content', [
@@ -460,7 +470,9 @@ class Sales_pipeline extends AdminController
 
         $dashboard_tab = $this->resolve_dashboard_tab($this->input->get('dashboard_tab'));
         $period = $this->input->get('period') ?: 'this_month';
-        $metrics = $this->sales_pipeline_model->get_staff_kpi_metrics($staff_id, ['period' => $period]);
+        $period_anchor = $this->input->get('period_anchor');
+        $period_range = $this->sales_pipeline_model->resolve_dashboard_period($period, $period_anchor);
+        $metrics = $this->sales_pipeline_model->get_staff_kpi_metrics($staff_id, $period_range);
         $open_deals = $dashboard_tab === 'deals'
             ? $this->sales_pipeline_model->get_staff_open_deals($staff_id, 10)
             : ['deals' => [], 'total' => 0];
@@ -469,7 +481,7 @@ class Sales_pipeline extends AdminController
             : [];
         $performance_metric = null;
         if ($dashboard_tab === 'estimates') {
-            $performance_ranking = $this->sales_pipeline_model->get_estimate_performance_ranking($period);
+            $performance_ranking = $this->sales_pipeline_model->get_estimate_performance_ranking($period_range);
             foreach ($performance_ranking['leaderboard'] as $ranking_row) {
                 if ((int) $ranking_row['staff_id'] === $staff_id) {
                     $performance_metric = $ranking_row;
@@ -478,7 +490,6 @@ class Sales_pipeline extends AdminController
             }
         }
 
-        $period_range = $this->sales_pipeline_model->resolve_dashboard_period($period);
         $actionable_feed = $this->sales_pipeline_model->get_reminder_response_stats([
             'staff_id'      => $staff_id,
             'dashboard_tab' => $dashboard_tab,
@@ -1417,12 +1428,13 @@ class Sales_pipeline extends AdminController
                 }
                 $normalized['sp_reminder_manager_fallback_emails'] = implode(',', array_unique($validFallbackEmails));
                 $numbers = [
-                    'sp_reminder_deal_pipeline_min_count'=>[1,1000],
-                    'sp_reminder_deal_stale_cutoff_days'=>[1,3650], 'sp_reminder_deal_stale_max_per_run'=>[1,1000],
-                    'sp_reminder_est_daily_threshold'=>[1,100], 'sp_reminder_est_monthly_d10'=>[1,100],
-                    'sp_reminder_est_monthly_d20'=>[1,200], 'sp_reminder_est_monthly_final'=>[1,500],
-                    'sp_reminder_est_weekly_target'=>[1,100000000000], 'sp_reminder_lc_draft_days'=>[1,90],
-                    'sp_reminder_lc_sent_days'=>[1,90], 'sp_reminder_lc_sent_expiry_days'=>[1,30], 'sp_reminder_lc_declined_days'=>[1,90],
+                    'sp_reminder_sla_hours'              => [1, 720],
+                    'sp_reminder_deal_pipeline_min_count'=> [1, 1000],
+                    'sp_reminder_deal_stale_cutoff_days' => [1, 3650], 'sp_reminder_deal_stale_max_per_run' => [1, 1000],
+                    'sp_reminder_est_daily_threshold'    => [1, 100],  'sp_reminder_est_monthly_d10'         => [1, 100],
+                    'sp_reminder_est_monthly_d20'        => [1, 200],  'sp_reminder_est_monthly_final'       => [1, 500],
+                    'sp_reminder_est_weekly_target'      => [1, 100000000000], 'sp_reminder_lc_draft_days'  => [1, 90],
+                    'sp_reminder_lc_sent_days'           => [1, 90],   'sp_reminder_lc_sent_expiry_days'     => [1, 30], 'sp_reminder_lc_declined_days' => [1, 90],
                 ];
                 foreach ($numbers as $key => $limits) {
                     $raw = trim((string) ($data[$key] ?? ''));
@@ -1458,6 +1470,46 @@ class Sales_pipeline extends AdminController
                 if ($this->db->trans_status() === false) { $this->db->trans_rollback(); set_alert('danger', _l('problem_updating')); }
                 else { $this->db->trans_commit(); if ($changed) { log_activity('Sales Pipeline reminder settings updated by Staff #' . get_staff_user_id() . ': ' . implode(', ', $changed)); } set_alert('success', _l('updated_successfully', _l('sales_pipeline_settings_reminders'))); }
                 redirect(admin_url('sales_pipeline/settings#reminders'));
+            } elseif ($type == 'performance') {
+                $errors = [];
+                $normalized = [];
+
+                $rawResponseTarget = trim((string) ($data['performance_response_target_percent'] ?? ''));
+                if (!preg_match('/^\d+(\.\d+)?$/', $rawResponseTarget)) {
+                    $errors[] = _l('performance_score_error_invalid_response_target');
+                } else {
+                    $val = (float) $rawResponseTarget;
+                    if ($val < 1.0 || $val > 100.0) {
+                        $errors[] = _l('performance_score_error_invalid_response_target');
+                    } else {
+                        $normalized['performance_response_target_percent'] = (string) $val;
+                    }
+                }
+
+                if ($errors) {
+                    set_alert('warning', implode('<br>', $errors));
+                    redirect(admin_url('sales_pipeline/settings#performance'));
+                }
+
+                $changed = [];
+                $this->db->trans_begin();
+                foreach ($normalized as $key => $value) {
+                    if ((string) get_option($key) !== $value) {
+                        $changed[] = $key;
+                        update_option($key, $value);
+                    }
+                }
+                if ($this->db->trans_status() === false) {
+                    $this->db->trans_rollback();
+                    set_alert('danger', _l('problem_updating'));
+                } else {
+                    $this->db->trans_commit();
+                    if ($changed) {
+                        log_activity('Sales Pipeline performance score settings updated by Staff #' . get_staff_user_id() . ': ' . implode(', ', $changed));
+                    }
+                    set_alert('success', _l('updated_successfully', _l('sales_pipeline_settings_performance')));
+                }
+                redirect(admin_url('sales_pipeline/settings#performance'));
             }
             redirect(admin_url('sales_pipeline/settings'));
         }
@@ -1467,6 +1519,10 @@ class Sales_pipeline extends AdminController
         $data['reminder_options'] = [];
         foreach (sales_pipeline_reminder_rule_default_options() as $key => $default) {
             $data['reminder_options'][$key] = get_option($key) === false ? $default : get_option($key);
+        }
+        $data['performance_options'] = [];
+        foreach (sales_pipeline_performance_score_default_options() as $key => $default) {
+            $data['performance_options'][$key] = get_option($key) === false ? $default : get_option($key);
         }
         $this->load->library('sales_pipeline/Reminder_delivery_operations');
         $data['reminder_delivery_health'] = $this->reminder_delivery_operations->health();

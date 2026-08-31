@@ -22,6 +22,7 @@ function sales_pipeline_performance_score_default_options()
         'performance_quote_target_this_year'       => '240',
         'performance_revenue_target_this_year'     => '12000000000',
         'performance_acceptance_target_percent'    => '50',
+        'performance_response_target_percent'      => '90',
         'performance_component_cap'                => '120',
         'performance_min_closed_quotes'            => '3',
     ];

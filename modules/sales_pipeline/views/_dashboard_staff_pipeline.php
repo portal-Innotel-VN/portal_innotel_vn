@@ -110,7 +110,13 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
                 <?php if (!empty($performance_metric['is_provisional'])) { ?>
                     <span class="sp-performance-badge sp-performance-badge--provisional" role="status">
                         <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-                        <?php echo _l('sales_pipeline_performance_provisional'); ?>
+                        <?php
+                        if (in_array('insufficient_reminder_sample', $performance_metric['data_quality_flags'] ?? [], true)) {
+                            echo _l('sales_pipeline_performance_provisional_small_sample');
+                        } else {
+                            echo _l('sales_pipeline_performance_provisional');
+                        }
+                        ?>
                     </span>
                 <?php } ?>
             </div>
@@ -154,20 +160,58 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
                     </div>
                 </div>
             <?php } ?>
-            <div class="sp-score-breakdown__item sp-score-breakdown__item--inactive">
-                <div class="sp-score-breakdown__item-top">
-                    <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
-                    <span class="sp-score-breakdown__item-label"><?php echo _l('sales_pipeline_performance_reminder_component'); ?></span>
+            <?php
+            $reminder_status = $performance_metric['component_status']['reminder_response'] ?? 'inactive';
+            $reminder_weight = $performance_metric['effective_weights']['reminder_response'] ?? 0.0;
+            $reminder_score = $performance_metric['response_score'] ?? null;
+            ?>
+            <?php if ($reminder_status === 'active') { ?>
+                <div class="sp-score-breakdown__item">
+                    <div class="sp-score-breakdown__item-top">
+                        <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
+                        <span class="sp-score-breakdown__item-label"><?php echo _l('sales_pipeline_performance_reminder_component'); ?></span>
+                    </div>
+                    <div class="sp-score-breakdown__item-value">
+                        <strong><?php echo number_format((float) $reminder_score, 1, ',', '.'); ?></strong>
+                        <span class="sp-score-breakdown__item-unit"><?php echo _l('sales_pipeline_performance_points'); ?></span>
+                    </div>
+                    <div class="sp-score-breakdown__item-bottom">
+                        <span class="sp-score-breakdown__weight-tag">
+                            <?php echo _l('sales_pipeline_performance_effective_weight', [number_format((float) $reminder_weight, 2, ',', '.')]); ?>
+                        </span>
+                    </div>
                 </div>
-                <div class="sp-score-breakdown__item-value">
-                    <strong>—</strong>
+            <?php } elseif ($reminder_status === 'not_applicable') { ?>
+                <div class="sp-score-breakdown__item sp-score-breakdown__item--not-applicable">
+                    <div class="sp-score-breakdown__item-top">
+                        <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
+                        <span class="sp-score-breakdown__item-label"><?php echo _l('sales_pipeline_performance_reminder_component'); ?></span>
+                    </div>
+                    <div class="sp-score-breakdown__item-value">
+                        <strong>—</strong>
+                    </div>
+                    <div class="sp-score-breakdown__item-bottom">
+                        <span class="sp-score-breakdown__weight-tag sp-score-breakdown__weight-tag--not-applicable">
+                            <?php echo _l('sales_pipeline_performance_not_applicable'); ?>
+                        </span>
+                    </div>
                 </div>
-                <div class="sp-score-breakdown__item-bottom">
-                    <span class="sp-score-breakdown__weight-tag sp-score-breakdown__weight-tag--inactive">
-                        <?php echo _l('sales_pipeline_performance_inactive'); ?>
-                    </span>
+            <?php } else { ?>
+                <div class="sp-score-breakdown__item sp-score-breakdown__item--inactive">
+                    <div class="sp-score-breakdown__item-top">
+                        <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
+                        <span class="sp-score-breakdown__item-label"><?php echo _l('sales_pipeline_performance_reminder_component'); ?></span>
+                    </div>
+                    <div class="sp-score-breakdown__item-value">
+                        <strong>—</strong>
+                    </div>
+                    <div class="sp-score-breakdown__item-bottom">
+                        <span class="sp-score-breakdown__weight-tag sp-score-breakdown__weight-tag--inactive">
+                            <?php echo _l('sales_pipeline_performance_inactive'); ?>
+                        </span>
+                    </div>
                 </div>
-            </div>
+            <?php } ?>
         </div>
     </section>
 <?php } ?>

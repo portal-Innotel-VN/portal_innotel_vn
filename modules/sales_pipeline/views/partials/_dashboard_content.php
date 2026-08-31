@@ -3,10 +3,14 @@
 $active_tab = $dashboard['selected_dashboard_tab'] ?? 'deals';
 $sp_range   = $dashboard['selected_period_range'] ?? [];
 $sp_period_label = (!empty($sp_range['start']) && !empty($sp_range['end']))
-    ? date('d/m', strtotime($sp_range['start'])) . ' – ' . date('d/m', strtotime($sp_range['end']))
+    ? date('d/m/Y', strtotime($sp_range['start'])) . ' – ' . date('d/m/Y', strtotime($sp_range['end']))
     : '';
 ?>
-<span data-sp-period-label="<?php echo html_escape($sp_period_label); ?>" hidden aria-hidden="true"></span>
+<span data-sp-period-label="<?php echo html_escape($sp_period_label); ?>"
+      data-sp-period-anchor="<?php echo html_escape($sp_range['anchor'] ?? date('Y-m-d')); ?>"
+      data-sp-period-anchor-display="<?php echo html_escape(_d($sp_range['anchor'] ?? date('Y-m-d'))); ?>"
+      data-sp-period-key="<?php echo html_escape($dashboard['selected_period'] ?? 'this_month'); ?>"
+      hidden aria-hidden="true"></span>
 
 <div id="sp-dashboard-panel-deals"
      class="sp-dashboard-tab-panel<?php echo $active_tab === 'deals' ? ' is-active' : ''; ?>"

@@ -91,7 +91,7 @@ foreach (['Migration_Version_110', 'sales_pipeline_ensure_reminder_repository_sc
 
 $module = file_get_contents($moduleRoot . '/sales_pipeline.php');
 foreach ([
-    'Version: 1.0.11',
+    'Version: 1.0.12',
     "field_exists('last_error_code', \$deliveries)",
     "field_exists('expires_at', \$deliveries)",
     "table_exists(\$rate_buckets)",
