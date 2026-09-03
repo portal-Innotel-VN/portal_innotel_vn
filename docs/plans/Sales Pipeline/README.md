@@ -16,6 +16,7 @@
 | `plan_reminder_bell_inbox.md` | Kế hoạch Reminder Inbox trong cùng Notification Bell mà không sửa Core Perfex |
 | `plan_reminder_bell_inbox.implementation.md` | Nhật ký triển khai, kiểm thử và trạng thái rollout Reminder Bell Inbox |
 | `test_tutorial.md` | Hướng dẫn kiểm thử lịch sử |
+| `fix_quote_count_first_sent_dashboard_plan.md` | Kế hoạch vá lỗi Báo giá Đã gửi không cập nhật Quote Count trên leaderboard và Drawer |
 
 Nguồn sự thật hiện hành sau khi chuẩn hóa:
 

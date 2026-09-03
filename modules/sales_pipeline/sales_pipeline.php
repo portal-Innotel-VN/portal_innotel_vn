@@ -5,7 +5,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /*
 Module Name: Sales Pipeline
 Description: Quản lý Tiến Độ Kinh Doanh - Số hóa quy trình bán hàng, theo dõi deal, nhắc nhở tự động
-Version: 1.0.12
+Version: 1.0.14
 Requires at least: 2.3.*
 Author: Hiệp - Innotel Developer
 */
@@ -33,8 +33,13 @@ hooks()->add_action('after_estimate_added', 'sales_pipeline_quote_estimate_added
 hooks()->add_action('after_estimate_updated', 'sales_pipeline_quote_estimate_updated');
 hooks()->add_action('estimate_accepted', 'sales_pipeline_quote_estimate_accepted');
 hooks()->add_action('estimate_declined', 'sales_pipeline_quote_estimate_declined');
+hooks()->add_action('estimate_converted_to_invoice', 'sales_pipeline_quote_estimate_converted_to_invoice');
 hooks()->add_action('before_estimate_deleted', 'sales_pipeline_quote_estimate_deleted');
 hooks()->add_filter('before_send_simple_email', 'sales_pipeline_inject_reminder_email_cc');
+hooks()->add_action('estimate_sent', 'sales_pipeline_handle_estimate_sent');
+
+require_once(__DIR__ . '/libraries/Authoritative_exchange_rate_provider.php');
+hooks()->add_filter('sales_pipeline_quote_exchange_rate', 'sales_pipeline_resolve_quote_exchange_rate_hook', 10, 5);
 
 /**
  * Đăng ký quyền truy cập module
@@ -51,6 +56,7 @@ function sales_pipeline_permissions()
         'delete'                    => _l('permission_delete'),
         'view_deal_details'         => _l('sales_pipeline_permission_view_deal_details'),
         'manage_estimate_revisions' => _l('sales_pipeline_permission_manage_revisions'),
+        'manage_finance_lock'       => _l('sales_pipeline_permission_manage_finance_lock'),
     ];
 
     register_staff_capabilities('sales_pipeline', $capabilities, _l('sales_pipeline'));
@@ -155,6 +161,10 @@ function sales_pipeline_quote_estimate_added($estimate_id)
     }
 
     $CI->estimate_revision_service->handle_estimate_added((int) $estimate_id, $context);
+
+    // Capture first-sent evidence if estimate was created directly in a sent state
+    $CI->load->library('sales_pipeline/Quote_first_sent_service');
+    $CI->quote_first_sent_service->captureFromCurrentEstimate((int) $estimate_id, 'estimate_datesend');
 }
 
 function sales_pipeline_quote_estimate_updated($estimate_id)
@@ -162,6 +172,10 @@ function sales_pipeline_quote_estimate_updated($estimate_id)
     $CI = &get_instance();
     $CI->load->model('sales_pipeline/sales_pipeline_model');
     $CI->sales_pipeline_model->sync_estimate_group_by_estimate((int) $estimate_id, 'after_estimate_updated');
+
+    // Capture first-sent evidence when estimate transitions to sent or updates datesend
+    $CI->load->library('sales_pipeline/Quote_first_sent_service');
+    $CI->quote_first_sent_service->captureFromCurrentEstimate((int) $estimate_id, 'estimate_datesend');
 }
 
 function sales_pipeline_quote_estimate_accepted($estimate_id)
@@ -173,6 +187,9 @@ function sales_pipeline_quote_estimate_accepted($estimate_id)
         'estimate_accepted',
         date('Y-m-d H:i:s')
     );
+
+    $CI->load->library('sales_pipeline/Quote_first_sent_service');
+    $CI->quote_first_sent_service->captureFromCurrentEstimate((int) $estimate_id);
 }
 
 function sales_pipeline_quote_estimate_declined($estimate_id)
@@ -184,6 +201,26 @@ function sales_pipeline_quote_estimate_declined($estimate_id)
         'estimate_declined',
         date('Y-m-d H:i:s')
     );
+
+    $CI->load->library('sales_pipeline/Quote_first_sent_service');
+    $CI->quote_first_sent_service->captureFromCurrentEstimate((int) $estimate_id);
+}
+
+function sales_pipeline_quote_estimate_converted_to_invoice($data)
+{
+    $estimate_id = is_array($data) ? (int) ($data['estimate_id'] ?? 0) : (int) $data;
+    if ($estimate_id > 0) {
+        $CI = &get_instance();
+        $CI->load->model('sales_pipeline/sales_pipeline_model');
+        $CI->sales_pipeline_model->sync_estimate_group_by_estimate(
+            $estimate_id,
+            'estimate_converted_to_invoice',
+            date('Y-m-d H:i:s')
+        );
+
+        $CI->load->library('sales_pipeline/Quote_first_sent_service');
+        $CI->quote_first_sent_service->captureFromCurrentEstimate($estimate_id);
+    }
 }
 
 function sales_pipeline_quote_estimate_deleted($estimate_id)
@@ -628,4 +665,27 @@ function sales_pipeline_can_access_reminder_bell()
     return is_admin()
         || has_permission('sales_pipeline', '', 'view')
         || has_permission('sales_pipeline', '', 'view_own');
+}
+
+/**
+ * Capture earliest successful estimate sent event for Canonical Quote Count.
+ * Atomic update guarantees concurrent deliveries never overwrite an earlier timestamp.
+ *
+ * @param int $estimate_id
+ * @return void
+ */
+function sales_pipeline_handle_estimate_sent($estimate_id)
+{
+    $CI = &get_instance();
+    if (!$CI || empty($CI->db)) {
+        return;
+    }
+
+    $estimateId = (int) $estimate_id;
+    if ($estimateId <= 0) {
+        return;
+    }
+
+    $CI->load->library('sales_pipeline/Quote_first_sent_service');
+    $CI->quote_first_sent_service->captureFromCurrentEstimate($estimateId, 'activity_email_sent');
 }

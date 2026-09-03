@@ -116,19 +116,42 @@ class TestDbMock
     public function count_all_results($table = '') { return 1; }
 }
 
+class TestLoaderMock
+{
+    private $ci;
+
+    public function __construct($ci)
+    {
+        $this->ci = $ci;
+    }
+
+    public function model($model) {}
+
+    public function library($library)
+    {
+        $name = strtolower(basename($library));
+        if ($name === 'quote_currency_resolver') {
+            require_once dirname(__DIR__) . '/libraries/Quote_currency_resolver.php';
+            $this->ci->quote_currency_resolver = new Quote_currency_resolver();
+        } elseif ($name === 'deal_bridge_calculator') {
+            require_once dirname(__DIR__) . '/libraries/Deal_bridge_calculator.php';
+            $this->ci->deal_bridge_calculator = new Deal_bridge_calculator();
+        }
+    }
+}
+
 class TestCiMock
 {
     public $db;
     public $load;
     public $sales_pipeline_model;
+    public $quote_currency_resolver;
+    public $deal_bridge_calculator;
 
     public function __construct()
     {
         $this->db = new TestDbMock();
-        $this->load = new class {
-            public function model($m) {}
-            public function library($l) {}
-        };
+        $this->load = new TestLoaderMock($this);
         $this->sales_pipeline_model = new class {
             public function sync_estimate_group($id) { return true; }
             public function get_customer_estimate_revision_sources($c, $s) { return []; }
@@ -162,6 +185,16 @@ function get_staff_user_id()
 function is_admin($id = null)
 {
     return true;
+}
+
+function hooks()
+{
+    return new class {
+        public function apply_filters($name, $value, ...$args)
+        {
+            return $value;
+        }
+    };
 }
 
 function _l($key, $arg1 = null, $arg2 = null)
@@ -301,7 +334,7 @@ assert_true(strpos($mig108, 'estimate_group_schema.php') !== false, 'Test 8: Mig
 // Test 9: Model query logical quote verification (no COUNT(ev.estimate_id) query)
 $modelContent = file_get_contents($moduleRoot . '/models/Sales_pipeline_model.php');
 assert_true(strpos($modelContent, 'COUNT(ev.estimate_id)') === false, 'Test 9: model must NOT count ev.estimate_id');
-assert_true(strpos($modelContent, 'COUNT(grp.id) as estimate_count') !== false, 'Test 9: model must count grp.id');
+assert_true(strpos($modelContent, 'Quote_count_repository') !== false || strpos($modelContent, 'COUNT(grp.id) as estimate_count') !== false, 'Test 9: model must count logical groups via canonical repository');
 assert_true(strpos($modelContent, 'get_customer_estimate_revision_sources') !== false, 'Test 9: helper get_customer_estimate_revision_sources exists');
 
 // Test 10: Controller endpoint verification

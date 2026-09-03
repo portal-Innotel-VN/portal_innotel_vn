@@ -2,6 +2,7 @@
 <?php
 $responseRequired = (int) ($reminder['response_required'] ?? 1) === 1;
 $responded = $reminder['staff_response'] !== null;
+$deliveryReady = !empty($reminder['sent_at']) && !empty($reminder['response_due_at']);
 $canRespond = (int) $reminder['staff_id'] === (int) get_staff_user_id();
 $isDeal = $reminder['entity_type'] === 'deal';
 $isEstimateRisk = $reminder['entity_type'] === 'estimate'
@@ -34,7 +35,9 @@ $targetSummary = html_entity_decode(
                                 <i class="fa <?php echo !$responseRequired ? 'fa-info-circle' : ($responded ? 'fa-check-circle' : 'fa-clock-o'); ?>" aria-hidden="true"></i>
                                 <?php echo _l(!$responseRequired
                                     ? 'sales_pipeline_reminder_informational'
-                                    : ($responded ? 'sales_pipeline_dashboard_reminder_responded' : 'sales_pipeline_dashboard_reminder_pending')); ?>
+                                    : ($responded
+                                        ? 'sales_pipeline_dashboard_reminder_responded'
+                                        : ($deliveryReady ? 'sales_pipeline_dashboard_reminder_pending' : 'sales_pipeline_reminder_waiting_delivery'))); ?>
                             </span>
                         </header>
 
@@ -88,6 +91,11 @@ $targetSummary = html_entity_decode(
                                 <div class="alert alert-success sp-reminder-response__success" role="status"><i class="fa fa-check" aria-hidden="true"></i> <?php echo _l('sales_pipeline_response_sent'); ?></div>
                                 <p class="help-block mbot0"><?php echo _l('sales_pipeline_response_locked_help'); ?></p>
                             </section>
+                        <?php } elseif (!$deliveryReady) { ?>
+                            <div class="alert alert-warning sp-reminder-supervisor-banner" role="status">
+                                <i class="fa fa-clock-o" aria-hidden="true" style="margin-right: 6px;"></i>
+                                <?php echo _l('sales_pipeline_reminder_delivery_pending'); ?>
+                            </div>
                         <?php } elseif ($canRespond) { ?>
                             <?php echo form_open(admin_url('sales_pipeline/respond_reminder/' . $reminder['id']), ['id' => 'reminder-response-form', 'class' => 'disable-on-submit']); ?>
                                 <div class="form-group">

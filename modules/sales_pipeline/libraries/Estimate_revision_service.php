@@ -480,7 +480,7 @@ class Estimate_revision_service
                 'exchange_rate_to_base' => $snapshot['exchange_rate'],
                 'base_currency_id'      => (int) $snapshot['base_currency_id'],
                 'base_total'            => $snapshot['base_total'],
-                'rate_captured_at'      => $now,
+                'rate_captured_at'      => $snapshot['exchange_rate'] === null ? null : $now,
                 'date_linked'           => $now,
             ];
             $this->CI->db->insert($versionTable, $versionData);
@@ -565,7 +565,7 @@ class Estimate_revision_service
             'exchange_rate_to_base' => $snapshot['exchange_rate'],
             'base_currency_id'      => (int) $snapshot['base_currency_id'],
             'base_total'            => $snapshot['base_total'],
-            'rate_captured_at'      => $now,
+            'rate_captured_at'      => $snapshot['exchange_rate'] === null ? null : $now,
             'date_linked'           => $now,
         ];
         $this->CI->db->insert($versionTable, $versionData);
@@ -658,7 +658,7 @@ class Estimate_revision_service
             'exchange_rate_to_base' => $snapshot['exchange_rate'],
             'base_currency_id'      => (int) $snapshot['base_currency_id'],
             'base_total'            => $snapshot['base_total'],
-            'rate_captured_at'      => $now,
+            'rate_captured_at'      => $snapshot['exchange_rate'] === null ? null : $now,
             'date_linked'           => $now,
         ];
         $this->CI->db->insert($versionTable, $versionData);
@@ -1416,11 +1416,6 @@ class Estimate_revision_service
             return false;
         }
 
-        // Manual Lock Hard Guard: If deal is manually locked, do not overwrite status or value
-        if (!empty($deal['is_manual_lock'])) {
-            return true;
-        }
-
         // Query all groups linked to this Deal
         $this->CI->db->select('bg.is_primary, grp.*');
         $this->CI->db->from($bridgeTable . ' bg');
@@ -1428,52 +1423,65 @@ class Estimate_revision_service
         $this->CI->db->where('bg.pipeline_id', $dealId);
         $groups = $this->CI->db->get()->result_array();
 
+        $primaryGroup = null;
+        foreach ($groups as $group) {
+            if ((int) ($group['is_primary'] ?? 0) === 1) {
+                $primaryGroup = $group;
+                break;
+            }
+        }
+        if (!$primaryGroup && !empty($groups)) {
+            $primaryGroup = $groups[0];
+        }
+
+        $primaryBaseTotal = null;
+        if ($primaryGroup) {
+            $version = $this->CI->db
+                ->select('base_total')
+                ->where('estimate_group_id', (int) $primaryGroup['id'])
+                ->where('estimate_id', (int) $primaryGroup['current_estimate_id'])
+                ->get(db_prefix() . 'sales_pipeline_estimate_versions')
+                ->row_array();
+            $primaryBaseTotal = $version ? $version['base_total'] : null;
+        }
+
+        $this->CI->load->library('sales_pipeline/Deal_bridge_calculator');
+        $result = $this->CI->deal_bridge_calculator->calculate(
+            $groups,
+            $primaryBaseTotal,
+            !empty($deal['is_manual_lock']),
+            !empty($deal['is_finance_locked'])
+        );
+
+        if ($result['action'] === 'preserve') {
+            if (in_array($result['reason'] ?? null, ['manual_lock', 'finance_locked'], true)) {
+                return true;
+            }
+            log_message('error', 'Sales Pipeline Deal bridge preserved Deal #' . $dealId . ': ' . $result['reason']);
+            return false;
+        }
+        if ($result['action'] === 'fail') {
+            log_message('error', 'Sales Pipeline Deal bridge blocked for Deal #' . $dealId . ': ' . $result['reason']);
+            return false;
+        }
+
         $updateData = [];
+        if (array_key_exists('deal_value', $result)) {
+            $updateData['deal_value'] = $result['deal_value'];
+        }
+        if (array_key_exists('estimate_id', $result)) {
+            $updateData['estimate_id'] = $result['estimate_id'];
+        }
 
-        if (empty($groups)) {
-            // Deal has no linked estimate groups -> clear estimate link
-            $updateData['estimate_id'] = null;
-        } else {
-            $acceptedGroups = array_filter($groups, function ($g) { return $g['outcome'] === 'accepted'; });
-            $allDeclined = count($groups) > 0 && count(array_filter($groups, function ($g) { return $g['outcome'] === 'declined'; })) === count($groups);
-
-            if (!empty($acceptedGroups)) {
-                // Value is sum of accepted decision values
-                $acceptedTotal = 0;
-                foreach ($acceptedGroups as $ag) {
-                    $acceptedTotal += (float) ($ag['decision_value_base'] ?? 0);
-                }
-                $updateData['deal_value'] = $acceptedTotal;
-
-                // Find Won status
-                $wonStatus = $this->CI->db->select('id')->where('is_won', 1)->order_by('order', 'asc')->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
-                if ($wonStatus) {
-                    $updateData['status'] = (int) $wonStatus['id'];
-                }
-            } elseif ($allDeclined) {
-                // Find Lost status
-                $lostStatus = $this->CI->db->select('id')->where('is_lost', 1)->order_by('order', 'asc')->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
-                if ($lostStatus) {
-                    $updateData['status'] = (int) $lostStatus['id'];
-                }
-            } else {
-                // Pending -> value taken from Primary group's current estimate
-                $primaryGroup = null;
-                foreach ($groups as $g) {
-                    if ((int) $g['is_primary'] === 1) {
-                        $primaryGroup = $g;
-                        break;
-                    }
-                }
-                if (!$primaryGroup) {
-                    $primaryGroup = $groups[0];
-                }
-
-                $currentEst = $this->CI->db->select('total')->where('id', (int) $primaryGroup['current_estimate_id'])->get(db_prefix() . 'estimates')->row_array();
-                if ($currentEst) {
-                    $updateData['deal_value'] = (float) $currentEst['total'];
-                    $updateData['estimate_id'] = (int) $primaryGroup['current_estimate_id'];
-                }
+        if (($result['status_intent'] ?? null) === 'won') {
+            $status = $this->CI->db->select('id')->where('is_won', 1)->order_by('order', 'asc')->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
+            if ($status) {
+                $updateData['status'] = (int) $status['id'];
+            }
+        } elseif (($result['status_intent'] ?? null) === 'lost') {
+            $status = $this->CI->db->select('id')->where('is_lost', 1)->order_by('order', 'asc')->get(db_prefix() . 'sales_pipeline_statuses')->row_array();
+            if ($status) {
+                $updateData['status'] = (int) $status['id'];
             }
         }
 
@@ -1540,20 +1548,27 @@ class Estimate_revision_service
 
         $currencyTable = db_prefix() . 'currencies';
         $baseCurrency = $this->CI->db->select('id')->where('isdefault', 1)->get($currencyTable)->row_array();
-        $baseCurrencyId = $baseCurrency ? (int) $baseCurrency['id'] : (int) $estimate['currency'];
+        $baseCurrencyId = $baseCurrency ? (int) $baseCurrency['id'] : 0;
 
         $sourceCurrencyId = (int) $estimate['currency'];
         $total = (float) $estimate['total'];
-        $exchangeRate = 1.0;
-
-        if ($sourceCurrencyId !== $baseCurrencyId && function_exists('get_currency_rate')) {
-            $rate = get_currency_rate($sourceCurrencyId);
-            if ($rate && (float) $rate > 0) {
-                $exchangeRate = (float) $rate;
-            }
+        $this->CI->load->library('sales_pipeline/Quote_currency_resolver');
+        $candidateRate = null;
+        if ($sourceCurrencyId !== $baseCurrencyId) {
+            $candidateRate = hooks()->apply_filters('sales_pipeline_quote_exchange_rate', null, [
+                'estimate_id'        => (int) $estimate['id'],
+                'source_currency_id' => $sourceCurrencyId,
+                'base_currency_id'   => $baseCurrencyId,
+                'captured_at'        => $estimate['datecreated'],
+                'rate_unit'          => Quote_currency_resolver::RATE_UNIT,
+            ]);
         }
-
-        $baseTotal = $total * $exchangeRate;
+        $currencySnapshot = $this->CI->quote_currency_resolver->resolve(
+            $sourceCurrencyId,
+            $baseCurrencyId,
+            $total,
+            $candidateRate
+        );
         $ownerStaffId = !empty($estimate['sale_agent']) ? (int) $estimate['sale_agent'] : ((int) $estimate['addedfrom'] ?: (get_staff_user_id() ? (int) get_staff_user_id() : 1));
 
         return [
@@ -1564,8 +1579,8 @@ class Estimate_revision_service
             'currency'         => $sourceCurrencyId,
             'base_currency_id' => $baseCurrencyId,
             'total'            => $total,
-            'exchange_rate'    => $exchangeRate,
-            'base_total'       => $baseTotal,
+            'exchange_rate'    => $currencySnapshot['exchange_rate_to_base'],
+            'base_total'       => $currencySnapshot['base_total'],
             'datecreated'      => $estimate['datecreated'],
             'invoiced_date'    => $estimate['invoiced_date'],
         ];

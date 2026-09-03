@@ -834,6 +834,9 @@ class Sales_pipeline extends AdminController
         } elseif ($result['status'] === 'response_not_required') {
             $message_key = 'sales_pipeline_reminder_response_not_required';
             $http_code = 422;
+        } elseif ($result['status'] === 'delivery_pending') {
+            $message_key = 'sales_pipeline_reminder_delivery_pending';
+            $http_code = 409;
         }
 
         if ($is_ajax) {
@@ -1769,5 +1772,68 @@ class Sales_pipeline extends AdminController
         return (int) $reminder['staff_id'] === (int) get_staff_user_id()
             || is_admin()
             || has_permission('sales_pipeline', '', 'edit');
+    }
+
+    /**
+     * Endpoint to lock/unlock financial entities (POST only, CSRF, Permission checked).
+     */
+    public function set_finance_lock()
+    {
+        if (!$this->input->is_ajax_request() && $this->input->method() !== 'post') {
+            show_error('Method Not Allowed', 405);
+        }
+
+        if (!is_admin() && !has_permission('sales_pipeline', '', 'manage_finance_lock')) {
+            access_denied('manage_finance_lock');
+        }
+
+        $entityType = $this->input->post('entity_type');
+        $entityId = (int) $this->input->post('entity_id');
+        $lockAction = $this->input->post('action');
+        $reference = trim((string) $this->input->post('reference'));
+        $reason = trim((string) $this->input->post('reason'));
+
+        if (!in_array($entityType, ['deal', 'estimate_group'], true) || $entityId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid entity parameter']);
+            return;
+        }
+
+        if ($lockAction === 'lock' && (empty($reference) || empty($reason))) {
+            echo json_encode(['success' => false, 'message' => 'Reference and reason are required to lock']);
+            return;
+        }
+
+        $table = $entityType === 'deal'
+            ? db_prefix() . 'sales_pipeline_deals'
+            : db_prefix() . 'sales_pipeline_estimate_groups';
+
+        $now = date('Y-m-d H:i:s');
+        $actorStaffId = get_staff_user_id();
+
+        $updateData = [];
+        if ($lockAction === 'lock') {
+            $updateData = [
+                'is_finance_locked'          => 1,
+                'finance_locked_at'          => $now,
+                'finance_locked_by'          => (int) $actorStaffId,
+                'finance_approval_reference' => $reference,
+            ];
+        } else {
+            $updateData = [
+                'is_finance_locked'          => 0,
+                'finance_locked_at'          => null,
+                'finance_locked_by'          => null,
+                'finance_approval_reference' => null,
+            ];
+        }
+
+        $this->db->where('id', $entityId)->update($table, $updateData);
+
+        echo json_encode([
+            'success'   => true,
+            'status'    => $lockAction === 'lock' ? 'locked' : 'unlocked',
+            'entity_id' => $entityId,
+            'locked_at' => $now,
+        ]);
     }
 }

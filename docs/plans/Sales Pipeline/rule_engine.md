@@ -324,7 +324,7 @@ EXISTS (
 
 Evaluator đếm `grp.id` đúng một lần, không dùng `COUNT(ev.estimate_id)` vì cách đó đếm revision. Không dùng `status != 1` để tránh vô tình tính status rỗng/không hợp lệ hoặc custom status chưa được phê duyệt nghiệp vụ.
 
-Không xây thêm `first_sent_at` hoặc lịch sử trạng thái chỉ để phục vụ Rule V1. Nếu sau này nghiệp vụ yêu cầu đo đúng ngày gửi lần đầu, đó là một thay đổi riêng về dữ liệu và không được suy diễn từ `datecreated`.
+Từ Migration 113 (Performance V2 & Canonical Quote Count), hệ thống đã chính thức bổ sung trường `first_sent_at` (thời điểm gửi thành công đầu tiên của bất kỳ version nào thuộc Group) và quản lý tập trung qua thư viện chuẩn `Quote_count_repository`. Mọi consumer gồm Rule Engine, Executive KPI, Performance Score và Dashboard đều dùng chung nguồn đếm này.
 
 ### 8.2 Doanh thu tuần
 

@@ -141,16 +141,29 @@ $base_currency = get_base_currency();
                                 <td data-label="<?php echo html_escape($can_view_all
                                     ? _l('sales_pipeline_performance_score')
                                     : _l('sales_pipeline_performance_your_score')); ?>">
+                                    <?php
+                                    $tier = function_exists('sales_pipeline_resolve_performance_tier')
+                                        ? sales_pipeline_resolve_performance_tier($metric['performance_score'])
+                                        : ['label' => '', 'badge_class' => '', 'score_class' => ''];
+                                    ?>
                                     <div class="sp-performance-score">
-                                        <strong><?php echo number_format((float) $metric['performance_score'], 1, ',', '.'); ?></strong>
+                                        <strong class="<?php echo html_escape($tier['score_class']); ?>">
+                                            <?php echo number_format((float) $metric['performance_score'], 1, ',', '.'); ?>
+                                        </strong>
                                         <span><?php echo _l('sales_pipeline_performance_points'); ?></span>
                                     </div>
-                                    <?php if (!empty($metric['is_provisional'])) { ?>
-                                        <span class="sp-performance-badge sp-performance-badge--provisional" role="status">
-                                            <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-                                            <?php echo _l('sales_pipeline_performance_provisional'); ?>
-                                        </span>
-                                    <?php } ?>
+                                    <div class="sp-tier-badge-container">
+                                        <?php if (!empty($tier['label'])) { ?>
+                                            <span class="sp-tier-badge <?php echo html_escape($tier['badge_class']); ?>">
+                                                <?php echo html_escape($tier['label']); ?>
+                                            </span>
+                                        <?php } ?>
+                                        <?php if (!empty($metric['is_provisional'])) { ?>
+                                            <span class="sp-performance-badge sp-performance-badge--provisional" role="status">
+                                                <?php echo _l('sales_pipeline_performance_provisional'); ?>
+                                            </span>
+                                        <?php } ?>
+                                    </div>
                                 </td>
                             </tr>
                         <?php } ?>

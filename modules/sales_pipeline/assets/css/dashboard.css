@@ -1310,10 +1310,10 @@
 .sp-score-breakdown__item {
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
     min-width: 0;
-    min-height: 98px;
-    padding: 13px 14px;
+    min-height: 76px;
+    padding: 12px 14px;
     background: var(--crm-bg-white);
     border-right: 1px solid var(--crm-border);
     border-bottom: 1px solid var(--crm-border);
@@ -1334,25 +1334,32 @@
 
 .sp-score-breakdown__item-top {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 7px;
     min-width: 0;
 }
 
 .sp-score-breakdown__item-icon {
     flex: 0 0 auto;
     font-size: 12px;
+    margin-top: 2px;
     color: var(--crm-primary);
 }
 
 .sp-score-breakdown__item-label {
     min-width: 0;
-    overflow: hidden;
     color: var(--crm-ink);
     font-size: 12px;
     font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.35;
+}
+
+.sp-score-breakdown__weight-hint {
+    display: inline;
+    color: var(--crm-muted);
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 2px;
 }
 
 .sp-score-breakdown__item-value {
@@ -2618,4 +2625,247 @@ body.sp-dashboard-drawer-open {
     .sp-score-breakdown__item:last-child {
         border-bottom: 0;
     }
+}
+
+/* ==========================================================================
+   Performance Score Tiers & Visual Progress Bar
+   ========================================================================== */
+
+/* Unified Integrated Score Tag (Mẫu 2) */
+.sp-score-unified-tag {
+    display: inline-flex;
+    align-items: stretch;
+    background: #ffffff;
+    border: 1px solid var(--crm-border, #e2e8f0);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sp-score-unified-tag__metric {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 5px 10px 5px 12px;
+    background: #ffffff;
+}
+
+.sp-score-unified-tag__label {
+    color: var(--crm-muted, #64748b);
+    font-size: 11.5px;
+    font-weight: 500;
+}
+
+.sp-score-unified-tag__metric strong {
+    font-size: 14.5px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.sp-score-unified-tag__unit {
+    color: var(--crm-muted, #64748b);
+    font-size: 10.5px;
+}
+
+.sp-score-unified-tag__divider {
+    width: 1px;
+    background: var(--crm-border, #e2e8f0);
+    align-self: stretch;
+}
+
+.sp-score-unified-tag__tier {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.sp-score-unified-tag__tier--critical {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+.sp-score-unified-tag__tier--warning {
+    background-color: #fffbeb;
+    color: #d97706;
+}
+
+.sp-score-unified-tag__tier--good {
+    background-color: #f0fdf4;
+    color: #16a34a;
+}
+
+.sp-score-unified-tag__tier--excellent {
+    background-color: #ecfdf5;
+    color: #059669;
+}
+
+.sp-tier-badge-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.sp-tier-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.25;
+    border: 1px solid transparent;
+    letter-spacing: 0.2px;
+}
+
+/* 4 Tiers: Critical (<50), Warning (50-79.9), Good (80-99.9), Excellent (>=100) */
+.sp-performance-tier-badge--critical {
+    background-color: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+}
+
+.sp-performance-tier-badge--warning {
+    background-color: #fffbeb;
+    border-color: #fde68a;
+    color: #b45309;
+}
+
+.sp-performance-tier-badge--good {
+    background-color: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #15803d;
+}
+
+.sp-performance-tier-badge--excellent {
+    background-color: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #047857;
+}
+
+/* Score number text colors */
+.sp-score--critical {
+    color: #dc2626 !important;
+}
+
+.sp-score--warning {
+    color: #d97706 !important;
+}
+
+.sp-score--good {
+    color: #16a34a !important;
+}
+
+.sp-score--excellent {
+    color: #059669 !important;
+}
+
+/* Progress bar fill gradient colors */
+.sp-tier--critical {
+    background: linear-gradient(90deg, #fca5a5 0%, #ef4444 100%) !important;
+}
+
+.sp-tier--warning {
+    background: linear-gradient(90deg, #fcd34d 0%, #f59e0b 100%) !important;
+}
+
+.sp-tier--good {
+    background: linear-gradient(90deg, #86efac 0%, #22c55e 100%) !important;
+}
+
+.sp-tier--excellent {
+    background: linear-gradient(90deg, #6ee7b7 0%, #059669 100%) !important;
+}
+
+/* Drawer Progress Bar Component */
+.sp-performance-progress {
+    padding: 13px 16px 15px;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--crm-border);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.sp-performance-progress__info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sp-performance-progress__gap {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--crm-ink);
+}
+
+.sp-performance-progress__scale {
+    font-size: 11px;
+    color: var(--crm-muted);
+}
+
+.sp-performance-progress__track-container {
+    position: relative;
+    padding-bottom: 18px;
+}
+
+.sp-performance-progress__track {
+    position: relative;
+    height: 9px;
+    background: #e2e8f0;
+    border-radius: 6px;
+    overflow: visible;
+}
+
+.sp-performance-progress__bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.35s ease-in-out;
+}
+
+.sp-performance-progress__marker {
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 13px;
+    background: #94a3b8;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.sp-performance-progress__marker--target {
+    top: -3px;
+    width: 2px;
+    height: 15px;
+    background: #0284c7;
+    box-shadow: 0 0 3px rgba(2, 132, 199, 0.4);
+}
+
+.sp-performance-progress__labels {
+    position: relative;
+    margin-top: 5px;
+    height: 14px;
+}
+
+.sp-progress-label {
+    position: absolute;
+    font-size: 9.5px;
+    color: #64748b;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.sp-progress-label--target {
+    font-weight: 700;
+    color: #0284c7;
 }

@@ -90,8 +90,13 @@ foreach (['Migration_Version_110', 'sales_pipeline_ensure_reminder_repository_sc
 }
 
 $module = file_get_contents($moduleRoot . '/sales_pipeline.php');
+preg_match('/Version:\s*(\d+\.\d+\.\d+)/', $module, $vMatches);
+$modVer = $vMatches[1] ?? '0.0.0';
+if (version_compare($modVer, '1.0.13', '<')) {
+    fwrite(STDERR, "FAIL: reminder repository bootstrap requires at least Version: 1.0.13 (got {$modVer})\n");
+    exit(1);
+}
 foreach ([
-    'Version: 1.0.12',
     "field_exists('last_error_code', \$deliveries)",
     "field_exists('expires_at', \$deliveries)",
     "table_exists(\$rate_buckets)",

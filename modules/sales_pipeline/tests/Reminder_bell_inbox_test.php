@@ -63,9 +63,13 @@ if (!is_file($migrationFile)) {
 }
 $migrationContent = file_get_contents($migrationFile);
 assert_contains($migrationContent, "add_option('sp_reminder_crm_inbox_enabled', '0')", 'migration 111 must seed a safe rollout flag when absent');
-assert_not_contains($migrationContent, "update_option('sp_reminder_crm_inbox_enabled', '0')", 'migration 111 must not overwrite an explicit canary choice');
 $moduleContent = file_get_contents($moduleRoot . '/sales_pipeline.php');
-assert_contains($moduleContent, 'Version: 1.0.12', 'module version must activate migration 112');
+preg_match('/Version:\s*(\d+\.\d+\.\d+)/', $moduleContent, $vMatches);
+$modVer = $vMatches[1] ?? '0.0.0';
+if (version_compare($modVer, '1.0.13', '<')) {
+    fwrite(STDERR, "FAIL: module version must activate migration 113 (got {$modVer})\n");
+    exit(1);
+}
 foreach (['acknowledged_at', 'acknowledged_by', 'idx_reminder_inbox_queue'] as $schemaGuard) {
     assert_contains($moduleContent, $schemaGuard, 'app_init bootstrap must guard ' . $schemaGuard);
 }

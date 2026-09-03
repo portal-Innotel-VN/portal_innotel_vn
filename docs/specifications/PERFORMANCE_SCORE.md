@@ -106,9 +106,15 @@ quote_score = CLAMP(
 )
 ```
 
-Trong ranking path hiện tại, `estimate_count` là số Estimate Group do Staff sở hữu, có `datecreated` trong kỳ. Các Rev.1/Rev.2/Rev.3 của cùng Group chỉ tính một lần.
+Trong ranking path chuẩn hóa (Canonical Quote Count thông qua `Quote_count_repository`), `estimate_count` là số Estimate Group do Staff sở hữu, có `first_sent_at` nằm trong kỳ đánh giá nửa mở `[period_start, period_end_exclusive)`. Các Rev.1/Rev.2/Rev.3 của cùng Group chỉ tính một lần.
 
-Ví dụ target 20, có 15 Group:
+Một Estimate Group được ghi nhận `first_sent_at` khi có ít nhất một phiên bản có bằng chứng gửi (Sent Evidence) hợp lệ theo thứ tự ưu tiên:
+1. `activity_email_sent`: Activity gửi email thành công (`invoice_estimate_activity_sent_to_client`).
+2. `estimate_datesend`: Thao tác chuyển sang Đã gửi trong Core Perfex có ghi nhận `sent = 1` và `datesend IS NOT NULL`.
+3. `activity_status_sent`: Activity log chuyển/đánh dấu trạng thái sang `2`.
+Báo giá chỉ ở trạng thái Nháp (Draft-only: `status = 1, sent = 0, datesend = NULL`) tuyệt đối không được tính.
+
+Ví dụ target 20, có 15 Group hợp lệ đã gửi:
 
 ```text
 quote_score = 15 / 20 × 100 = 75
@@ -281,6 +287,27 @@ Lệnh kiểm thử hiện có:
 php modules/sales_pipeline/tests/Performance_score_calculator_test.php
 php modules/sales_pipeline/tests/Performance_score_period_options_test.php
 php modules/sales_pipeline/tests/Performance_score_language_render_test.php
+php modules/sales_pipeline/tests/Performance_tier_and_language_test.php
 ```
 
 Chỉ kết luận điểm hợp lệ khi formula version, kỳ, target, raw metrics, Estimate Group và projection quyền nhất quán.
+
+## 13. Phân tầng cấp độ và Trực quan hóa tiến độ (Performance Tiers)
+
+Hệ thống phân chia kết quả Điểm hiệu suất (thang 0 – 100, trần 120) thành 4 cấp độ trực quan:
+
+| Mức điểm | Cấp độ | Mã (`key`) | Màu nhận diện | Ý nghĩa |
+|---|---|---|---|---|
+| $\ge 100$ | **XUẤT SẮC** | `excellent` | Xanh lục bảo (`#047857`) | Vượt chỉ tiêu (Overachiever) |
+| $80 - 99,9$ | **ĐẠT CHUẨN** | `good` | Xanh lá (`#15803d`) | Đạt kỳ vọng KPI (On Track) |
+| $50 - 79,9$ | **CẦN TĂNG TỐC** | `warning` | Vàng cam (`#b45309`) | Chưa đạt chuẩn (Needs Focus) |
+| $< 50$ | **BÁO ĐỘNG** | `critical` | Đỏ đậm (`#dc2626`) | Nguy cơ rớt KPI (Critical) |
+
+- **Khoảng cách vạch chuẩn (Gap)**:
+  - Nếu điểm $< 80$: $\text{gap} = 80 - \text{score}$ (Khoảng cách tới vạch đạt chuẩn).
+  - Nếu điểm $80 \le \text{score} < 100$: $\text{gap} = 100 - \text{score}$ (Khoảng cách tới mốc 100% KPI).
+  - Nếu điểm $\ge 100$: Thông báo đã đạt chuẩn hiệu suất (vượt chỉ tiêu).
+- **Quy chuẩn UI**:
+  - Tuyệt đối không dùng icon trong badge cấp độ và progress bar (No-Icon rule).
+  - Sử dụng hộp tích hợp (Integrated Metric Tag) tại Drawer: `[ Điểm hiệu suất: X điểm │ TRẠNG THÁI ]`.
+  - Thanh tiến độ (Progress Bar) từ 0 đến 120 với các mốc: 0, 50, 80, 100, 120.

@@ -350,3 +350,42 @@ Các cờ dữ liệu tối thiểu:
 8. Rank của Staff được tính trên toàn cohort trước khi chỉ giữ lại dòng của Staff.
 9. Admin và Staff nhìn cùng một `performance_score/rank` cho cùng nhân viên, cùng kỳ và cùng bộ lọc.
 10. Staff không nhận dữ liệu cấu thành của nhân viên khác trong HTML hoặc AJAX payload.
+
+---
+
+## 11. Phân tầng cấp độ và Trực quan hóa tiến độ (Performance Tiers & Progress Bar)
+
+Để thúc đẩy động lực và cảnh báo kịp thời cho đội ngũ kinh doanh, hệ thống quy chuẩn hóa **4 cấp độ hiệu suất** dựa trên thang điểm 0 – 100 (trần 120):
+
+### 11.1. Bảng phân tầng 4 cấp độ chuẩn
+
+| Mức điểm tổng kết | Cấp độ / Trạng thái | Mã định danh (`key`) | Màu sắc nhận diện | Tác động quản trị & KPI |
+|:---:|:---:|:---:|:---:|---|
+| **$\ge 100$ điểm** | **XUẤT SẮC** | `excellent` | Xanh lục bảo (`#047857`) / Nền `#ecfdf5` | Vượt chỉ tiêu toàn diện (Overachiever). Khen thưởng, vinh danh. |
+| **$80 - 99,9$ điểm** | **ĐẠT CHUẨN** | `good` | Xanh lá (`#15803d`) / Nền `#f0fdf4` | Đạt kỳ vọng KPI (On Track). Giữ vững phong độ. |
+| **$50 - 79,9$ điểm** | **CẦN TĂNG TỐC** | `warning` | Vàng cam (`#b45309`) / Nền `#fffbeb` | Chưa đạt chuẩn (Needs Focus). Cần đẩy mạnh gửi báo giá và bám sát deal. |
+| **$< 50$ điểm** | **BÁO ĐỘNG** | `critical` | Đỏ đậm (`#dc2626`) / Nền `#fef2f2` | Nguy cơ rớt KPI (Critical / At Risk). Cảnh báo khẩn cấp cần hành động ngay. |
+
+### 11.2. Công thức tính khoảng cách vạch chuẩn (Gap Indicator)
+
+- **Nếu điểm $< 80,0$**: Khoảng cách tính tới mốc Đạt chuẩn:
+  $$\text{gap} = 80,0 - \text{score}$$
+  *Thông điệp*: `"Cách vạch đạt chuẩn (80 điểm): còn [gap] điểm"`
+- **Nếu điểm $80,0 \le \text{score} < 100,0$**: Khoảng cách tính tới mốc hoàn thành 100% KPI:
+  $$\text{gap} = 100,0 - \text{score}$$
+  *Thông điệp*: `"Cách mốc 100% KPI: còn [gap] điểm"`
+- **Nếu điểm $\ge 100,0$**:
+  *Thông điệp*: `"Đã đạt chuẩn hiệu suất (Vượt chỉ tiêu)"`
+
+### 11.3. Quy chuẩn hiển thị giao diện (UI Specs)
+
+1. **Nguyên tắc No-Icon**: Tuyệt đối không dùng icon trong badge cấp độ và thanh đo tiến độ; dùng kiểu chữ đậm (typography) và mã màu CSS chuyên nghiệp.
+2. **Hộp trạng thái tích hợp (Integrated Metric Tag)** tại Drawer:
+   - Cấu trúc: `[ Điểm hiệu suất: X điểm │ TÊN TRẠNG THÁI ]`
+   - Vế trái nền trắng với số điểm mang màu cấp độ.
+   - Vạch phân cách dọc thanh mảnh.
+   - Vế phải nền màu pastel với chữ in hoa trạng thái tương ứng.
+3. **Thanh đo tiến độ trực quan (Visual Progress Bar)**:
+   - Thang đo: 0 đến 120 điểm.
+   - Dải màu thanh bar tự động chuyển màu theo cấp độ hiện tại (Gradient Đỏ $\rightarrow$ Vàng $\rightarrow$ Xanh).
+   - Đánh dấu 5 mốc cố định: `0`, `50`, `80`, `100`, `120`.
