@@ -11,6 +11,30 @@ class Sales_pipeline_model extends App_Model
     public function __construct()
     {
         parent::__construct();
+        $this->ensure_schema();
+    }
+
+    /**
+     * Idempotent self-healing schema sync:
+     * Guarantees all required tables & columns up to v1.1.4 exist even if Perfex CRM
+     * skipped running App_module_migration due to tblmodules.installed_version match.
+     */
+    public function ensure_schema()
+    {
+        if (get_option('sp_schema_v114_synced') !== '1') {
+            require_once dirname(__DIR__) . '/includes/estimate_group_schema.php';
+            require_once dirname(__DIR__) . '/includes/reminder_repository_schema.php';
+            require_once dirname(__DIR__) . '/includes/architecture_113_schema.php';
+
+            sales_pipeline_ensure_estimate_group_schema($this);
+            sales_pipeline_ensure_reminder_repository_schema($this);
+            sales_pipeline_ensure_deal_estimate_groups_schema($this);
+            sales_pipeline_ensure_architecture_113_schema($this);
+            sales_pipeline_run_architecture_113_backfill($this);
+            sales_pipeline_upgrade_target_options_113();
+
+            update_option('sp_schema_v114_synced', '1');
+        }
     }
 
     // =========================================================================

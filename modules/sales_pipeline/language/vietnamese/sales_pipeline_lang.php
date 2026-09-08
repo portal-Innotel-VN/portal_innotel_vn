@@ -793,3 +793,9 @@ $lang['sales_pipeline_permission_manage_finance_lock'] = 'Quản lý Khóa tài 
 $lang['sales_pipeline_finance_lock_invalid_entity'] = 'Đối tượng hoặc thao tác Khóa tài chính không hợp lệ.';
 $lang['sales_pipeline_finance_lock_reference_reason_required'] = 'Cần nhập mã phê duyệt và lý do để khóa dữ liệu tài chính.';
 $lang['sales_pipeline_finance_lock_update_failed'] = 'Không thể cập nhật trạng thái Khóa tài chính.';
+
+// Estimate Revenue KPI Filtering & Scope
+$lang['sales_pipeline_kpi_filtered_by'] = 'Đang lọc';
+$lang['sales_pipeline_view_all_short'] = 'Xem tất cả';
+$lang['sales_pipeline_view_company_total'] = 'Quay về tổng doanh thu công ty';
+

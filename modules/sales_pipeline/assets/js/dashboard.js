@@ -28,6 +28,9 @@
         var activeDashboardTab = String(
             $dashboard.find('[data-dashboard-tab][aria-selected="true"]').data('dashboard-tab') || 'deals'
         );
+        var currentScopeRequestId = 0;
+        var companyEstimateKpiData = null;
+        var activeStaffTrigger = null;
 
         function todayIso() {
             var today = new Date();
@@ -95,6 +98,19 @@
         function activateDashboardTab(tab, moveFocus) {
             if (tab !== 'deals' && tab !== 'estimates') {
                 tab = 'deals';
+            }
+
+            if (activeRequest) {
+                activeRequest.abort();
+                activeRequest = null;
+            }
+
+            ++currentScopeRequestId;
+            $contentWrapper.find('.sp-estimate-revenue-kpi-card').removeClass('is-loading');
+            $drawerPanel.removeAttr('aria-busy');
+
+            if (tab === 'estimates') {
+                resetCompanyEstimateKpi();
             }
 
             activeDashboardTab = tab;
@@ -313,11 +329,204 @@
             }
         }
 
+        function extractEstimateKpiDomData() {
+            var $card = $contentWrapper.find('.sp-estimate-revenue-kpi-card');
+            if (!$card.length) {
+                return null;
+            }
+
+            // Safety guard: do not extract DOM data if it is currently filtered by a salesperson
+            if ($('#sp-estimate-kpi-scope-badge').is(':visible')) {
+                return null;
+            }
+
+            var $chartEl = $('#sp-estimate-revenue-sparkline-chart');
+            var kpiData = $chartEl.data('revenue-kpi');
+            if (typeof kpiData === 'string') {
+                try {
+                    kpiData = JSON.parse(kpiData);
+                } catch (e) {
+                    kpiData = null;
+                }
+            }
+
+            var $badge = $card.find('.sp-kpi-badge');
+            var badgeClass = 'sp-kpi-badge--flat';
+            if ($badge.hasClass('sp-kpi-badge--up')) {
+                badgeClass = 'sp-kpi-badge--up';
+            } else if ($badge.hasClass('sp-kpi-badge--down')) {
+                badgeClass = 'sp-kpi-badge--down';
+            }
+
+            var badgeIcon = 'fa-minus';
+            var $icon = $badge.find('i');
+            if ($icon.hasClass('fa-arrow-up')) {
+                badgeIcon = 'fa-arrow-up';
+            } else if ($icon.hasClass('fa-arrow-down')) {
+                badgeIcon = 'fa-arrow-down';
+            }
+
+            return {
+                kpiData: kpiData,
+                currentTotal: $card.find('.sp-revenue-kpi-card__number').text(),
+                previousTotal: $card.find('.sp-revenue-kpi-card__vs-label strong').text(),
+                badgeClass: badgeClass,
+                badgeIcon: badgeIcon,
+                badgeText: $badge.find('span').text()
+            };
+        }
+
+        function applyStaffEstimateKpi(kpiData, staffName, staffId, trigger) {
+            if (!kpiData) {
+                return;
+            }
+
+            var $card = $contentWrapper.find('.sp-estimate-revenue-kpi-card');
+            if (!$card.length) {
+                return;
+            }
+
+            var $chartEl = $('#sp-estimate-revenue-sparkline-chart');
+            if ($chartEl.length && kpiData.series) {
+                $chartEl.data('revenue-kpi', kpiData);
+                if (estimatesChartInstance) {
+                    try {
+                        estimatesChartInstance.updateOptions({
+                            xaxis: {
+                                categories: kpiData.series.labels || []
+                            },
+                            series: [
+                                {
+                                    name: String(dashboardI18n.currentPeriod || ''),
+                                    data: kpiData.series.current || []
+                                },
+                                {
+                                    name: String(dashboardI18n.previousPeriod || ''),
+                                    data: kpiData.series.previous || []
+                                }
+                            ]
+                        }, true, true);
+                    } catch (e) {
+                        estimatesChartInstance = initSparklineChart($chartEl, estimatesChartInstance);
+                    }
+                } else {
+                    estimatesChartInstance = initSparklineChart($chartEl, estimatesChartInstance);
+                }
+            }
+
+            var formattedCurrent = (kpiData.formatted && kpiData.formatted.current_total)
+                ? kpiData.formatted.current_total
+                : formatCompactVND(kpiData.current_total);
+            var formattedPrevious = (kpiData.formatted && kpiData.formatted.previous_total)
+                ? kpiData.formatted.previous_total
+                : formatCompactVND(kpiData.previous_total);
+
+            $card.find('.sp-revenue-kpi-card__number').text(formattedCurrent);
+            $card.find('.sp-revenue-kpi-card__vs-label strong').text(formattedPrevious);
+
+            var changePct = Number(kpiData.change_pct) || 0;
+            var changeDir = kpiData.change_direction || 'flat';
+            var badgeClass = 'sp-kpi-badge--flat';
+            var badgeIcon = 'fa-minus';
+            var sign = '';
+
+            if (changeDir === 'up') {
+                badgeClass = 'sp-kpi-badge--up';
+                badgeIcon = 'fa-arrow-up';
+                sign = '+';
+            } else if (changeDir === 'down') {
+                badgeClass = 'sp-kpi-badge--down';
+                badgeIcon = 'fa-arrow-down';
+                sign = '-';
+            }
+
+            var $badge = $card.find('.sp-kpi-badge');
+            $badge.removeClass('sp-kpi-badge--up sp-kpi-badge--down sp-kpi-badge--flat').addClass(badgeClass);
+            $badge.find('i').removeClass('fa-arrow-up fa-arrow-down fa-minus').addClass(badgeIcon);
+            $badge.find('span').text(sign + changePct.toLocaleString(numberLocale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
+
+            var $scopeBadge = $('#sp-estimate-kpi-scope-badge');
+            if ($scopeBadge.length) {
+                $('#sp-estimate-kpi-scope-name').text(staffName || '');
+                $scopeBadge.show();
+            }
+
+            $contentWrapper.find('.sp-staff-trigger--active').removeClass('sp-staff-trigger--active');
+            if (trigger) {
+                $(trigger).addClass('sp-staff-trigger--active');
+                activeStaffTrigger = trigger;
+            } else if (staffId) {
+                var $matchedTrigger = $contentWrapper.find('.js-sp-open-staff[data-staff-id="' + staffId + '"]');
+                $matchedTrigger.addClass('sp-staff-trigger--active');
+                activeStaffTrigger = $matchedTrigger.get(0);
+            }
+        }
+
+        function resetCompanyEstimateKpi() {
+            var thisRequestId = ++currentScopeRequestId;
+
+            var $card = $contentWrapper.find('.sp-estimate-revenue-kpi-card');
+            if ($card.length) {
+                $card.removeClass('is-loading');
+            }
+
+            if (!$card.length || !companyEstimateKpiData) {
+                return;
+            }
+
+            var kpiData = companyEstimateKpiData.kpiData;
+            var $chartEl = $('#sp-estimate-revenue-sparkline-chart');
+            if ($chartEl.length && kpiData && kpiData.series) {
+                $chartEl.data('revenue-kpi', kpiData);
+                if (estimatesChartInstance) {
+                    try {
+                        estimatesChartInstance.updateOptions({
+                            xaxis: {
+                                categories: kpiData.series.labels || []
+                            },
+                            series: [
+                                {
+                                    name: String(dashboardI18n.currentPeriod || ''),
+                                    data: kpiData.series.current || []
+                                },
+                                {
+                                    name: String(dashboardI18n.previousPeriod || ''),
+                                    data: kpiData.series.previous || []
+                                }
+                            ]
+                        }, true, true);
+                    } catch (e) {
+                        estimatesChartInstance = initSparklineChart($chartEl, estimatesChartInstance);
+                    }
+                } else {
+                    estimatesChartInstance = initSparklineChart($chartEl, estimatesChartInstance);
+                }
+            }
+
+            $card.find('.sp-revenue-kpi-card__number').text(companyEstimateKpiData.currentTotal);
+            $card.find('.sp-revenue-kpi-card__vs-label strong').text(companyEstimateKpiData.previousTotal);
+
+            var $badge = $card.find('.sp-kpi-badge');
+            $badge.removeClass('sp-kpi-badge--up sp-kpi-badge--down sp-kpi-badge--flat')
+                  .addClass(companyEstimateKpiData.badgeClass);
+            $badge.find('i').removeClass('fa-arrow-up fa-arrow-down fa-minus')
+                  .addClass(companyEstimateKpiData.badgeIcon);
+            $badge.find('span').text(companyEstimateKpiData.badgeText);
+
+            $('#sp-estimate-kpi-scope-badge').hide();
+            $('#sp-estimate-kpi-scope-name').text('');
+
+            $contentWrapper.find('.sp-staff-trigger--active').removeClass('sp-staff-trigger--active');
+            activeStaffTrigger = null;
+        }
+
         function initializeDashboardContent() {
             if ($.fn.tooltip) {
                 $contentWrapper.find('[data-toggle="tooltip"]').tooltip();
             }
             initAllCharts();
+            companyEstimateKpiData = extractEstimateKpiDomData();
+            activeStaffTrigger = null;
         }
 
         function setDashboardLoading(isLoading) {
@@ -393,6 +602,19 @@
                 $drawerPanel.trigger('focus');
             }, 30);
 
+            var thisRequestId = ++currentScopeRequestId;
+
+            var $kpiCard = $contentWrapper.find('.sp-estimate-revenue-kpi-card');
+            if (isEstimatesTab && $kpiCard.length) {
+                if (!companyEstimateKpiData) {
+                    var extracted = extractEstimateKpiDomData();
+                    if (extracted) {
+                        companyEstimateKpiData = extracted;
+                    }
+                }
+                $kpiCard.addClass('is-loading');
+            }
+
             activeRequest = $.ajax({
                 url: staffUrl + '/' + encodeURIComponent(staffId),
                 method: 'GET',
@@ -403,19 +625,30 @@
                     period_anchor: selectedPeriodAnchor()
                 }
             }).done(function (response) {
+                if (thisRequestId !== currentScopeRequestId) {
+                    return;
+                }
+
                 if (response && response.success && response.data
                     && Object.prototype.hasOwnProperty.call(response.data, 'html')) {
                     $drawerContent.html(response.data.html);
                     if ($.fn.tooltip) {
                         $drawerContent.find('[data-toggle="tooltip"]').tooltip();
                     }
+
+                    if (isEstimatesTab && response.data.estimate_revenue_kpi) {
+                        applyStaffEstimateKpi(response.data.estimate_revenue_kpi, response.data.staff_name, staffId, trigger);
+                    }
                     return;
                 }
 
                 var responseMessage = response && response.message ? response.message : errorMessage;
                 setDrawerState('fa-exclamation-circle', responseMessage, true);
+                if (isEstimatesTab && typeof sp_alert === 'function') {
+                    sp_alert('danger', responseMessage);
+                }
             }).fail(function (xhr, status) {
-                if (status === 'abort') {
+                if (thisRequestId !== currentScopeRequestId || status === 'abort') {
                     return;
                 }
 
@@ -423,9 +656,15 @@
                     ? xhr.responseJSON.message
                     : errorMessage;
                 setDrawerState('fa-exclamation-circle', responseMessage, true);
+                if (isEstimatesTab && typeof sp_alert === 'function') {
+                    sp_alert('danger', responseMessage);
+                }
             }).always(function () {
-                activeRequest = null;
-                $drawerPanel.removeAttr('aria-busy');
+                if (thisRequestId === currentScopeRequestId) {
+                    activeRequest = null;
+                    $drawerPanel.removeAttr('aria-busy');
+                    $kpiCard.removeClass('is-loading');
+                }
             });
         }
 
@@ -434,11 +673,7 @@
                 return;
             }
 
-            if (activeRequest) {
-                activeRequest.abort();
-                activeRequest = null;
-            }
-
+            // Do NOT abort activeRequest - allow KPI card and chart sync to complete
             $drawer.removeClass('is-open').attr('aria-hidden', 'true');
             $('body').removeClass('sp-dashboard-drawer-open');
 
@@ -450,6 +685,12 @@
 
         $dashboard.on('click', '.js-sp-open-staff', function () {
             openDrawer(this);
+        });
+
+        $dashboard.on('click', '.js-sp-reset-estimate-kpi', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            resetCompanyEstimateKpi();
         });
 
         function updateLastUpdatedTimestamp() {
@@ -475,6 +716,15 @@
             if (activeDashboardRequest) {
                 activeDashboardRequest.abort();
             }
+
+            if (activeRequest) {
+                activeRequest.abort();
+                activeRequest = null;
+            }
+
+            ++currentScopeRequestId;
+            $contentWrapper.find('.sp-estimate-revenue-kpi-card').removeClass('is-loading');
+            $drawerPanel.removeAttr('aria-busy');
 
             periodAnchor = periodAnchor || todayIso();
             updateDashboardUrl(period, activeDashboardTab, periodAnchor);

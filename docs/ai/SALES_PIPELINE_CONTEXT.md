@@ -23,6 +23,12 @@ Phân biệt Báo giá mới với revision, tránh duplicate KPI và vẫn cho 
 
 `performance_score_v1` tổng hợp 4 thành phần: Quote count (20%), Accepted revenue (40%), Acceptance rate (25%), và Reminder response (15%). Thành phần Reminder response hoạt động động theo cơ chế per-staff fallback: áp dụng mẫu số 100 khi có nhắc nhở đến hạn (`eligible_reminders > 0`), tự động chuyển sang `not_applicable` và tính trên mẫu số 85 khi không có nhắc nhở (`eligible_reminders == 0`), và gắn cờ `insufficient_reminder_sample` (`is_provisional = true`) khi `0 < eligible_reminders < 3`. Toàn bộ cohort được đánh giá tại một mốc `$calculated_at` thống nhất. Công thức chi tiết tại [`PERFORMANCE_SCORE.md`](../specifications/PERFORMANCE_SCORE.md).
 
+## Dashboard & Phân quyền Capability
+
+- **Quyền xem Dashboard tổng thể (`can_view_dashboard_all`):** Cấp cho Admin hoặc nhân sự có quyền `sales_pipeline:view`. Người dùng nhóm này xem toàn bộ leaderboard và dữ liệu tổng hợp của toàn công ty.
+- **Quyền xem Dashboard cá nhân:** Nhân sự chỉ có quyền `sales_pipeline:view_own` chỉ xem dữ liệu và dòng xếp hạng của chính mình.
+- **Đồng bộ biểu đồ KPI Doanh thu Báo giá:** Người có quyền xem tổng thể khi chọn NVKD trên Leaderboard sẽ đồng bộ thẻ KPI và biểu đồ sparkline sang số liệu riêng của NVKD đó. Trạng thái lọc duy trì khi đóng Drawer và chỉ hoàn nguyên về tổng công ty khi bấm `[✕ Xem tất cả]` hoặc click tab Báo giá.
+
 ## Entry points
 
 - Module bootstrap/hooks: `modules/sales_pipeline/sales_pipeline.php`

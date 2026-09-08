@@ -81,8 +81,8 @@ Target được seed bằng `performance_score_defaults.php`; option còn thiế
 
 `get_estimate_performance_ranking()` lấy Staff active có quyền `view` hoặc `view_own` Sales Pipeline. Ranking được tính trên cohort trước khi áp dụng projection:
 
-- Admin nhận toàn bộ leaderboard.
-- Staff chỉ nhận dòng của chính mình, nhưng rank vẫn lấy từ toàn cohort.
+- Admin hoặc người dùng có quyền `sales_pipeline:view` nhận toàn bộ leaderboard.
+- Staff chỉ có quyền `sales_pipeline:view_own` chỉ nhận dòng của chính mình, nhưng rank vẫn lấy từ toàn cohort.
 - Metric của Staff được khởi tạo bằng 0; Admin không có hoạt động có thể bị loại khỏi cohort theo logic hiện tại.
 - Staff không nhận component score, email hoặc raw metrics của người khác.
 
@@ -245,7 +245,7 @@ total_ranked_staff
 is_provisional
 ```
 
-Admin có thể nhận toàn bộ leaderboard và breakdown theo contract. Không dùng CSS/JavaScript làm lớp bảo mật; projection phải được thực hiện ở server.
+Admin hoặc người dùng có quyền `sales_pipeline:view` có thể nhận toàn bộ leaderboard và breakdown theo contract. Không dùng CSS/JavaScript làm lớp bảo mật; projection phải được thực hiện ở server.
 
 ## 10. Cờ chất lượng dữ liệu
 

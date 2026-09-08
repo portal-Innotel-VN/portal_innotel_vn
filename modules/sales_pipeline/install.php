@@ -323,3 +323,12 @@ if (!$CI->db->table_exists(db_prefix() . 'sales_pipeline_import_log')) {
 // Performance Score v1 defaults. add_option preserves administrator overrides.
 sales_pipeline_seed_performance_score_options();
 sales_pipeline_seed_reminder_rule_options();
+
+// Ensure Migration 109 & 113 Architecture schemas and backfill exist authoritatively
+require_once(__DIR__ . '/includes/architecture_113_schema.php');
+sales_pipeline_ensure_deal_estimate_groups_schema($CI);
+sales_pipeline_ensure_architecture_113_schema($CI);
+sales_pipeline_run_architecture_113_backfill($CI);
+sales_pipeline_upgrade_target_options_113();
+update_option('sp_schema_v114_synced', '1');
+

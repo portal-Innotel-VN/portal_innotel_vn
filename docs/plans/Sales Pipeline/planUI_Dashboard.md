@@ -68,13 +68,13 @@ Không gọi toàn bộ Executive Dashboard với `staff_id = null` rồi trả 
 
 ```mermaid
 flowchart TD
-    REQUEST["Dashboard request<br/>period + dashboard_tab=estimates"] --> AUTH{"Admin hay Staff?"}
+    REQUEST["Dashboard request<br/>period + dashboard_tab=estimates"] --> AUTH{"Admin hoặc có quyền view?"}
     REQUEST --> COHORT["Tạo ranking cohort<br/>cùng kỳ + cùng bộ lọc"]
     COHORT --> METRICS["Tính raw metrics cho toàn cohort"]
     METRICS --> SCORE["Áp performance_score_v1"]
     SCORE --> RANK["Xếp hạng toàn cohort"]
-    AUTH -- "Admin" --> ADMIN["Projection toàn bộ nhân viên"]
-    AUTH -- "Staff" --> PERSONAL["Projection chỉ current_staff"]
+    AUTH -- "Admin hoặc sales_pipeline:view" --> ADMIN["Projection toàn bộ nhân viên<br/>Đồng bộ biểu đồ khi click"]
+    AUTH -- "Chỉ có sales_pipeline:view_own" --> PERSONAL["Projection chỉ current_staff"]
     RANK --> ADMIN
     RANK --> PERSONAL
     PERSONAL --> STAFFUI["Thứ hạng chuẩn #X<br/>chỉ số cá nhân + Điểm của bạn"]
