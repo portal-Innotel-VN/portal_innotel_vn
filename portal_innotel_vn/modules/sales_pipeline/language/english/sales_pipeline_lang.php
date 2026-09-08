@@ -793,3 +793,9 @@ $lang['sales_pipeline_permission_manage_finance_lock'] = 'Manage Finance Lock & 
 $lang['sales_pipeline_finance_lock_invalid_entity'] = 'Invalid Finance lock entity or action.';
 $lang['sales_pipeline_finance_lock_reference_reason_required'] = 'An approval reference and reason are required to lock financial data.';
 $lang['sales_pipeline_finance_lock_update_failed'] = 'Unable to update the Finance lock.';
+
+// Estimate Revenue KPI Filtering & Scope
+$lang['sales_pipeline_kpi_filtered_by'] = 'Filtered by';
+$lang['sales_pipeline_view_all_short'] = 'View all';
+$lang['sales_pipeline_view_company_total'] = 'Return to company total revenue';
+
