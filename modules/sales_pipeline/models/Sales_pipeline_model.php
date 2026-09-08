@@ -128,9 +128,9 @@ class Sales_pipeline_model extends App_Model
         }
 
         // Xử lý checkbox
-        $data['contract_signed']  = isset($data['contract_signed']) ? 1 : 0;
-        $data['invoice_issued']   = isset($data['invoice_issued']) ? 1 : 0;
-        $data['reminder_enabled'] = isset($data['reminder_enabled']) ? 1 : 0;
+        $data['contract_signed']  = !empty($data['contract_signed']) ? 1 : 0;
+        $data['invoice_issued']   = !empty($data['invoice_issued']) ? 1 : 0;
+        $data['reminder_enabled'] = isset($data['reminder_enabled']) ? (!empty($data['reminder_enabled']) ? 1 : 0) : 1;
 
         // Loại bỏ field không thuộc bảng
         $activity_description = '';
@@ -181,10 +181,16 @@ class Sales_pipeline_model extends App_Model
             $cost_price_updated = true;
         }
 
-        // Xử lý checkbox
-        $data['contract_signed']  = isset($data['contract_signed']) ? 1 : 0;
-        $data['invoice_issued']   = isset($data['invoice_issued']) ? 1 : 0;
-        $data['reminder_enabled'] = isset($data['reminder_enabled']) ? 1 : 0;
+        // Xử lý checkbox (chỉ cập nhật nếu trường tồn tại trong payload $data để không ghi đè khi update từng phần)
+        if (array_key_exists('contract_signed', $data)) {
+            $data['contract_signed'] = !empty($data['contract_signed']) ? 1 : 0;
+        }
+        if (array_key_exists('invoice_issued', $data)) {
+            $data['invoice_issued'] = !empty($data['invoice_issued']) ? 1 : 0;
+        }
+        if (array_key_exists('reminder_enabled', $data)) {
+            $data['reminder_enabled'] = !empty($data['reminder_enabled']) ? 1 : 0;
+        }
 
         // Xử lý activity
         $activity_description = '';
@@ -219,6 +225,124 @@ class Sales_pipeline_model extends App_Model
         }
 
         return $updated;
+    }
+
+    /**
+     * Persist the manual synchronization lock and its audit activity atomically.
+     * Authorization and request validation remain controller responsibilities.
+     *
+     * @param int    $deal_id
+     * @param bool   $is_locked
+     * @param int    $staff_id
+     * @param string $reason
+     * @return bool
+     */
+    public function set_deal_manual_lock($deal_id, $is_locked, $staff_id, $reason = '')
+    {
+        $deal_id = (int) $deal_id;
+        $staff_id = (int) $staff_id;
+        $is_locked = (bool) $is_locked;
+        $reason = trim((string) $reason);
+        if ($deal_id <= 0) {
+            return false;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $this->db->trans_start();
+        $this->db->where('id', $deal_id)->update(db_prefix() . 'sales_pipeline', [
+            'is_manual_lock'     => $is_locked ? 1 : 0,
+            'manual_lock_by'     => $is_locked ? $staff_id : null,
+            'manual_lock_at'     => $is_locked ? $now : null,
+            'manual_lock_reason' => $is_locked ? $reason : null,
+            'datemodified'       => $now,
+        ]);
+
+        $activity_message = $is_locked
+            ? _l('sales_pipeline_activity_deal_locked', [$reason])
+            : _l('sales_pipeline_activity_deal_unlocked');
+        $this->add_activity($deal_id, $activity_message, null, null, $staff_id);
+        $this->db->trans_complete();
+
+        return $this->db->trans_status();
+    }
+
+    /**
+     * Persist an approved Finance lock mutation on a Deal or Estimate Group.
+     *
+     * @param string $entity_type deal|estimate_group
+     * @param int    $entity_id
+     * @param bool   $is_locked
+     * @param int    $staff_id
+     * @param string $reference
+     * @param string $reason
+     * @return array
+     */
+    public function set_finance_lock($entity_type, $entity_id, $is_locked, $staff_id, $reference = '', $reason = '')
+    {
+        $tables = [
+            'deal'           => db_prefix() . 'sales_pipeline',
+            'estimate_group' => db_prefix() . 'sales_pipeline_estimate_groups',
+        ];
+        $entity_type = (string) $entity_type;
+        $entity_id = (int) $entity_id;
+        if ($entity_id <= 0 || !isset($tables[$entity_type])) {
+            return ['success' => false, 'reason' => 'invalid_entity'];
+        }
+
+        $table = $tables[$entity_type];
+        $existing = $this->db->select('id')->where('id', $entity_id)->get($table)->row_array();
+        if (!$existing) {
+            return ['success' => false, 'reason' => 'not_found'];
+        }
+
+        $is_locked = (bool) $is_locked;
+        $now = date('Y-m-d H:i:s');
+        $update = [
+            'is_finance_locked'          => $is_locked ? 1 : 0,
+            'finance_locked_at'          => $is_locked ? $now : null,
+            'finance_locked_by'          => $is_locked ? (int) $staff_id : null,
+            'finance_approval_reference' => $is_locked ? trim((string) $reference) : null,
+            'finance_lock_reason'        => $is_locked ? trim((string) $reason) : null,
+        ];
+
+        $this->db->trans_start();
+        $this->db->where('id', $entity_id)->update($table, $update);
+        $this->db->trans_complete();
+
+        return [
+            'success'    => $this->db->trans_status(),
+            'reason'     => $this->db->trans_status() ? null : 'database_error',
+            'locked_at'  => $now,
+            'is_locked'  => $is_locked,
+            'entity_id'  => $entity_id,
+            'entity_type'=> $entity_type,
+        ];
+    }
+
+    /**
+     * Save normalized module options in one transaction.
+     * Input validation and option allow-listing must be completed by the caller.
+     *
+     * @param array $normalized_options
+     * @return array{success:bool,changed:array}
+     */
+    public function save_pipeline_settings(array $normalized_options)
+    {
+        $changed = [];
+        $this->db->trans_start();
+        foreach ($normalized_options as $key => $value) {
+            if ((string) get_option($key) === (string) $value) {
+                continue;
+            }
+            $changed[] = $key;
+            update_option($key, $value);
+        }
+        $this->db->trans_complete();
+
+        return [
+            'success' => $this->db->trans_status(),
+            'changed' => $changed,
+        ];
     }
 
     /**
@@ -1066,7 +1190,7 @@ class Sales_pipeline_model extends App_Model
                     : null;
                 $weekEnd = $weekStart ? $weekStart->modify('+6 days') : null;
                 $range = $weekStart && $weekEnd
-                    ? $weekStart->format('d/m/y') . ' đến ' . $weekEnd->format('d/m/y')
+                    ? _l('sales_pipeline_date_range', [$weekStart->format('d/m/y'), $weekEnd->format('d/m/y')])
                     : $period;
                 $reminder['target_summary'] = _l('sales_pipeline_reminder_period_week_target', [$range]);
             }
@@ -1114,6 +1238,8 @@ class Sales_pipeline_model extends App_Model
     /**
      * Chuẩn hóa loại đối tượng và tên dùng chung cho email/quick response.
      * Pipeline có estimate_id hợp lệ được xem là Báo giá; còn lại là Deal.
+     *
+     * @deprecated Replaced by Reminder_engine context builders. Kept temporarily for rollback compatibility.
      */
     private function get_reminder_context($deal)
     {
@@ -1645,6 +1771,7 @@ class Sales_pipeline_model extends App_Model
     /**
      * Return the source estimate currently being copied by the module route.
      *
+     * @deprecated Copy context is owned by Estimate_revision_service::get_copy_context().
      * @return int|null
      */
     public function get_estimate_copy_source_id()
@@ -1772,6 +1899,7 @@ class Sales_pipeline_model extends App_Model
                 'currency_symbol'   => $row['currency_symbol'] ?: '',
                 'status'            => (int) $row['status'],
                 'status_label'      => $statusLabel,
+                'date'              => $row['date'] && function_exists('_d') ? _d($row['date']) : ($row['date'] ?: ''),
                 'expirydate'        => $row['expirydate'] && function_exists('_d') ? _d($row['expirydate']) : ($row['expirydate'] ?: ''),
                 'is_accepted'       => $isAccepted,
             ];
@@ -1939,6 +2067,7 @@ class Sales_pipeline_model extends App_Model
                 'currency_symbol'   => $row['currency_symbol'] ?: '',
                 'status'            => $estStatus,
                 'status_label'      => $statusLabel,
+                'date'              => $row['date'] && function_exists('_d') ? _d($row['date']) : ($row['date'] ?: ''),
                 'expirydate'        => $row['expirydate'] && function_exists('_d') ? _d($row['expirydate']) : ($row['expirydate'] ?: ''),
                 'is_accepted'       => $isAccepted,
                 'score'             => $score,
@@ -1993,7 +2122,7 @@ class Sales_pipeline_model extends App_Model
      * @param int $limit
      * @return int Number of Estimate groups checked
      */
-    public function reconcile_estimate_groups($limit = 1000)
+    public function reconcile_estimate_groups($limit = 100)
     {
         if (!$this->estimate_group_schema_available()) {
             return 0;
@@ -2337,19 +2466,21 @@ class Sales_pipeline_model extends App_Model
         $config = $this->get_performance_score_config($period['key']);
         $calculated_at = date('Y-m-d H:i:s');
         $config['calculated_at'] = $calculated_at;
+        require_once module_dir_path('sales_pipeline', 'libraries/Performance_score_dispatcher.php');
+        require_once module_dir_path('sales_pipeline', 'libraries/Performance_score_service.php');
+        $dispatcher = new Performance_score_dispatcher();
+        $formula_version = $dispatcher->resolve_formula_version($period['key'], $period['start'], $period['end']);
+        $config['formula_version'] = $formula_version;
 
         if (!$this->estimate_group_schema_available()) {
             return [
-                'formula_version'      => 'performance_score_v1',
+                'formula_version'      => $formula_version,
                 'calculated_at'        => $calculated_at,
                 'status'               => 'not_configured',
                 'configuration_errors' => ['estimate_group_schema'],
                 'leaderboard'          => [],
             ];
         }
-
-        $this->reconcile_estimate_groups(1000);
-        $this->reconcile_missing_first_sent_groups(100, 0, false);
 
         $reminder_sla_available = $this->reminder_sla_schema_available();
         $staff_members = $this->get_dashboard_staff_members(null);
@@ -2374,8 +2505,13 @@ class Sales_pipeline_model extends App_Model
         }
 
         if (!$staff_ids) {
-            $this->load->library('sales_pipeline/Performance_score_calculator');
-            return $this->performance_score_calculator->calculate_leaderboard([], $config);
+            return [
+                'formula_version'      => $formula_version,
+                'calculated_at'        => $calculated_at,
+                'status'               => 'ready',
+                'configuration_errors' => [],
+                'leaderboard'          => [],
+            ];
         }
 
         $group_table = db_prefix() . 'sales_pipeline_estimate_groups';
@@ -2478,14 +2614,25 @@ class Sales_pipeline_model extends App_Model
             }, array_values($metrics));
         }
 
-        require_once module_dir_path('sales_pipeline', 'libraries/Performance_score_service.php');
-        require_once module_dir_path('sales_pipeline', 'libraries/Performance_score_dispatcher.php');
-        $dispatcher = new Performance_score_dispatcher();
-        $periodType = $period['key'] ?? 'month';
-        $config['formula_version'] = $dispatcher->resolve_formula_version($periodType, $period['start'], $period['end']);
+        $score_service = new Performance_score_service($this);
+        $runtime = $score_service->calculate_runtime(
+            [
+                'type'  => $period['key'],
+                'start' => $period['start'],
+                'end'   => $period['end'],
+            ],
+            $cohort,
+            $config,
+            $calculated_at
+        );
 
-        $this->load->library('sales_pipeline/Performance_score_calculator');
-        return $this->performance_score_calculator->calculate_leaderboard($cohort, $config);
+        return [
+            'formula_version'      => $runtime['formula_version'],
+            'calculated_at'        => $runtime['calculated_at'],
+            'status'               => 'ready',
+            'configuration_errors' => [],
+            'leaderboard'          => array_values($runtime['cohort']),
+        ];
     }
 
     /**
@@ -2623,6 +2770,9 @@ class Sales_pipeline_model extends App_Model
         return $estimate;
     }
 
+    /**
+     * @deprecated Replaced by Estimate_revision_service. Do not add new callers.
+     */
     private function create_estimate_group($estimate_id, $grouping_source)
     {
         $snapshot = $this->get_estimate_snapshot($estimate_id);
@@ -2684,6 +2834,9 @@ class Sales_pipeline_model extends App_Model
         return $this->db->trans_status() && $group_id ? $group_id : false;
     }
 
+    /**
+     * @deprecated Replaced by Estimate_revision_service. Do not add new callers.
+     */
     private function append_estimate_revision($group_id, $estimate_id)
     {
         $snapshot = $this->get_estimate_snapshot($estimate_id);
@@ -2740,6 +2893,9 @@ class Sales_pipeline_model extends App_Model
         return $this->db->trans_status() ? (int) $group_id : false;
     }
 
+    /**
+     * @deprecated Legacy helper for create_estimate_group()/append_estimate_revision().
+     */
     private function insert_estimate_version($group_id, $snapshot, $revision_no)
     {
         return $this->db->insert(db_prefix() . 'sales_pipeline_estimate_versions', [
@@ -2977,7 +3133,6 @@ class Sales_pipeline_model extends App_Model
         $period = is_array($period) && isset($period['key'], $period['start'], $period['end'])
             ? $period
             : $this->resolve_dashboard_period($period, $period_anchor);
-        $this->reconcile_estimate_groups(1000);
         $staff_metrics = $this->get_staff_kpi_metrics($staff_id, $period);
         $quote_metrics = $this->get_estimate_dashboard_metrics($staff_id, $period);
         $staff_count = count($staff_metrics);
@@ -3908,16 +4063,23 @@ class Sales_pipeline_model extends App_Model
      * and request cooldown for dashboard opportunistic execution.
      *
      * @param int $limit Batch size
-     * @param int $cursor ID cursor (id > $cursor)
+     * @param int|null $cursor ID cursor (id > $cursor). If null, uses persistent option checkpoint 'sp_first_sent_reconcile_cursor'.
      * @param bool $force If true (migration/cron), bypasses cooldown and waits for lock up to 10s.
+     * @param bool $lockAlreadyHeld If true, the caller owns the unified lock and
+     *                              this method must not acquire/release it.
      * @return array
      */
-    public function reconcile_missing_first_sent_groups($limit = 100, $cursor = 0, $force = false)
+    public function reconcile_missing_first_sent_groups($limit = 100, $cursor = null, $force = false, $lockAlreadyHeld = false)
     {
         $limit = max(1, min(1000, (int) $limit));
-        $cursor = max(0, (int) $cursor);
+        $lockName = db_prefix() . 'sales_pipeline:first_sent_reconcile';
+        $cooldownOption = 'sp_first_sent_reconcile_last_run';
+        $cursorOption = 'sp_first_sent_reconcile_cursor';
+        $cooldownSeconds = 300; // 5 minutes
 
         $emptyResult = [
+            'status'              => 'unknown',
+            'reason'              => null,
             'scanned'             => 0,
             'captured'            => 0,
             'updated_from_legacy' => 0,
@@ -3925,34 +4087,52 @@ class Sales_pipeline_model extends App_Model
             'unchanged'           => 0,
             'no_evidence'         => 0,
             'error_count'         => 0,
-            'next_cursor'         => $cursor,
+            'cursor_before'       => ($cursor === null) ? (int) get_option($cursorOption) : max(0, (int) $cursor),
+            'next_cursor'         => ($cursor === null) ? (int) get_option($cursorOption) : max(0, (int) $cursor),
             'has_more'            => false,
+            'cycle_completed'     => false,
         ];
 
         if (!$this->db || !$this->db->table_exists(db_prefix() . 'sales_pipeline_estimate_groups')) {
-            return $emptyResult;
+            return array_merge($emptyResult, [
+                'status'      => 'failed',
+                'reason'      => 'table_missing',
+                'error_count' => 1,
+            ]);
         }
 
-        $lockName = db_prefix() . 'sales_pipeline:first_sent_reconcile';
-        $cooldownOption = 'sp_first_sent_reconcile_last_run';
-        $cooldownSeconds = 300; // 5 minutes
-
-        // 1. Check cooldown for opportunistic calls (Dashboard / Drawer)
+        // 1. Check cooldown for opportunistic calls (Dashboard / Drawer / unforced cron)
         if (!$force) {
-            $lastRun = (int) get_option($cooldownOption);
+            $lastRun = $this->get_reconcile_last_run();
             if ($lastRun > 0 && (time() - $lastRun) < $cooldownSeconds) {
-                return $emptyResult; // Cooldown active, fail-open
+                $curCursor = $this->get_reconcile_cursor();
+                return array_merge($emptyResult, [
+                    'status'        => 'skipped_cooldown',
+                    'reason'        => 'cooldown_active',
+                    'cursor_before' => $curCursor,
+                    'next_cursor'   => $curCursor,
+                ]);
             }
         }
 
-        // 2. Acquire unified advisory lock
-        $timeout = $force ? 10 : 0;
-        $lockRes = $this->db->query("SELECT GET_LOCK('{$lockName}', {$timeout}) as is_locked")->row();
-        if (!$lockRes || (int) $lockRes->is_locked !== 1) {
-            if ($force) {
-                throw new RuntimeException("Could not acquire advisory lock {$lockName} after {$timeout}s");
+        // 2. Acquire unified advisory lock unless the caller already owns it.
+        $lockAcquiredHere = false;
+        if (!$lockAlreadyHeld) {
+            $timeout = $force ? 10 : 0;
+            $lockRes = $this->db->query("SELECT GET_LOCK('{$lockName}', {$timeout}) as is_locked")->row();
+            if (!$lockRes || (int) $lockRes->is_locked !== 1) {
+                if ($force) {
+                    throw new RuntimeException("Could not acquire advisory lock {$lockName} after {$timeout}s");
+                }
+                $curCursor = $this->get_reconcile_cursor();
+                return array_merge($emptyResult, [
+                    'status'        => 'skipped_lock',
+                    'reason'        => 'advisory_lock_held',
+                    'cursor_before' => $curCursor,
+                    'next_cursor'   => $curCursor,
+                ]);
             }
-            return $emptyResult; // Lock held by another worker, fail-open
+            $lockAcquiredHere = true;
         }
 
         try {
@@ -3961,6 +4141,15 @@ class Sales_pipeline_model extends App_Model
             $versionsTable = db_prefix() . 'sales_pipeline_estimate_versions';
             $estimatesTable = db_prefix() . 'estimates';
             $activityTable = db_prefix() . 'sales_activity';
+
+            // Resolve cursor inside the lock to guarantee no concurrent race
+            $usePersistentCursor = ($cursor === null);
+            if ($usePersistentCursor) {
+                $cursor = $this->get_reconcile_cursor();
+            } else {
+                $cursor = max(0, (int) $cursor);
+            }
+            $cursorBefore = $cursor;
 
             // Query batch of candidate groups starting from cursor
             $groups = $this->db
@@ -3972,8 +4161,30 @@ class Sales_pipeline_model extends App_Model
                 ->result_array();
 
             $scanned = count($groups);
-            $hasMore = ($scanned === $limit);
-            $nextCursor = $cursor;
+
+            // If empty, table scan cycle has completed (or table is empty); reset cursor to 0
+            if ($scanned === 0) {
+                if ($usePersistentCursor && $cursorBefore > 0) {
+                    $this->set_reconcile_cursor(0);
+                }
+                $this->set_reconcile_last_run(time());
+
+                return [
+                    'status'              => 'processed',
+                    'reason'              => null,
+                    'scanned'             => 0,
+                    'captured'            => 0,
+                    'updated_from_legacy' => 0,
+                    'reversed_to_null'    => 0,
+                    'unchanged'           => 0,
+                    'no_evidence'         => 0,
+                    'error_count'         => 0,
+                    'cursor_before'       => $cursorBefore,
+                    'next_cursor'         => 0,
+                    'has_more'            => false,
+                    'cycle_completed'     => true,
+                ];
+            }
 
             $captured = 0;
             $updatedFromLegacy = 0;
@@ -3981,129 +4192,233 @@ class Sales_pipeline_model extends App_Model
             $unchanged = 0;
             $noEvidence = 0;
             $errors = 0;
+            $lastSuccessfulGroupId = $cursorBefore;
+            $batchError = null;
 
             foreach ($groups as $grp) {
                 $groupId = (int) $grp['id'];
-                $nextCursor = $groupId;
 
-                // Check estimate versions in this group
-                $estimates = $this->db
-                    ->select('e.id, e.status, e.sent, e.datesend, e.date, e.datecreated, e.invoiceid, e.invoiced_date')
-                    ->from($versionsTable . ' v')
-                    ->join($estimatesTable . ' e', 'e.id = v.estimate_id')
-                    ->where('v.estimate_group_id', $groupId)
-                    ->order_by('e.id', 'ASC')
-                    ->get()
-                    ->result_array();
-
-                if (empty($estimates)) {
-                    $noEvidence++;
-                    continue;
-                }
-
-                // Check activities for estimates in this group
-                $estimateIds = array_column($estimates, 'id');
-                $activities = [];
-                if (!empty($estimateIds) && $this->db->table_exists($activityTable)) {
-                    $activities = $this->db
-                        ->where('rel_type', 'estimate')
-                        ->where_in('rel_id', $estimateIds)
-                        ->order_by('date', 'ASC')
-                        ->get($activityTable)
+                try {
+                    // Check estimate versions in this group
+                    $estimates = $this->db
+                        ->select('e.id, e.status, e.sent, e.datesend, e.date, e.datecreated, e.invoiceid, e.invoiced_date')
+                        ->from($versionsTable . ' v')
+                        ->join($estimatesTable . ' e', 'e.id = v.estimate_id')
+                        ->where('v.estimate_group_id', $groupId)
+                        ->order_by('e.id', 'ASC')
+                        ->get()
                         ->result_array();
-                }
 
-                // Find strongest evidence across versions
-                $bestEvidence = ['source' => null, 'occurred_at' => null, 'estimate_id' => null];
-                $bestRank = Quote_first_sent_service::RANK_NONE;
+                    if (empty($estimates)) {
+                        $noEvidence++;
+                        $lastSuccessfulGroupId = $groupId;
+                        continue;
+                    }
 
-                foreach ($estimates as $est) {
-                    $estActivities = array_filter($activities, function ($act) use ($est) {
-                        return (int) $act['rel_id'] === (int) $est['id'];
-                    });
+                    // Check activities for estimates in this group
+                    $estimateIds = array_column($estimates, 'id');
+                    $activities = [];
+                    if (!empty($estimateIds) && $this->db->table_exists($activityTable)) {
+                        $activities = $this->db
+                            ->where('rel_type', 'estimate')
+                            ->where_in('rel_id', $estimateIds)
+                            ->order_by('date', 'ASC')
+                            ->get($activityTable)
+                            ->result_array();
+                    }
 
-                    $ev = $this->quote_first_sent_service->extract_estimate_evidence($est, $estActivities);
-                    if ($ev['source'] && $ev['occurred_at']) {
-                        $rank = $this->quote_first_sent_service->get_source_rank($ev['source']);
-                        if ($rank > $bestRank || ($rank === $bestRank && strtotime($ev['occurred_at']) < strtotime($bestEvidence['occurred_at']))) {
-                            $bestRank = $rank;
-                            $bestEvidence = [
-                                'source'      => $ev['source'],
-                                'occurred_at' => $ev['occurred_at'],
-                                'estimate_id' => (int) $est['id'],
-                            ];
+                    // Find strongest evidence across versions
+                    $bestEvidence = ['source' => null, 'occurred_at' => null, 'estimate_id' => null];
+                    $bestRank = Quote_first_sent_service::RANK_NONE;
+
+                    foreach ($estimates as $est) {
+                        $estActivities = array_filter($activities, function ($act) use ($est) {
+                            return (int) $act['rel_id'] === (int) $est['id'];
+                        });
+
+                        $ev = $this->quote_first_sent_service->extract_estimate_evidence($est, $estActivities);
+                        if ($ev['source'] && $ev['occurred_at']) {
+                            $rank = $this->quote_first_sent_service->get_source_rank($ev['source']);
+                            if ($rank > $bestRank || ($rank === $bestRank && strtotime($ev['occurred_at']) < strtotime($bestEvidence['occurred_at']))) {
+                                $bestRank = $rank;
+                                $bestEvidence = [
+                                    'source'      => $ev['source'],
+                                    'occurred_at' => $ev['occurred_at'],
+                                    'estimate_id' => (int) $est['id'],
+                                ];
+                            }
                         }
                     }
-                }
 
-                // Policy A: Remediation for Group 145 & legacy inferred with NO real sent evidence
-                $currentSource = $grp['first_sent_source'];
-                $isCurrentInferred = ($this->quote_first_sent_service->get_source_rank($currentSource) === Quote_first_sent_service::RANK_INFERRED_LEGACY);
+                    // Policy A: Remediation for Group 145 & legacy inferred with NO real sent evidence
+                    $currentSource = $grp['first_sent_source'];
+                    $isCurrentInferred = ($this->quote_first_sent_service->get_source_rank($currentSource) === Quote_first_sent_service::RANK_INFERRED_LEGACY);
 
-                if ($isCurrentInferred && $bestRank === Quote_first_sent_service::RANK_NONE) {
-                    // Reverse inferred without real evidence back to NULL
-                    $this->db->where('id', $groupId)->update($groupsTable, [
-                        'first_sent_at'          => null,
-                        'first_sent_source'      => null,
-                        'first_sent_estimate_id' => null,
-                    ]);
-                    $reversedToNull++;
-                    continue;
-                }
-
-                if ($bestRank === Quote_first_sent_service::RANK_NONE) {
-                    $noEvidence++;
-                    continue;
-                }
-
-                // Evaluate transition
-                $shouldReplace = $this->quote_first_sent_service->evaluate_evidence_transition(
-                    $grp['first_sent_source'],
-                    $grp['first_sent_at'],
-                    $bestEvidence['source'],
-                    $bestEvidence['occurred_at']
-                );
-
-                if ($shouldReplace) {
-                    $candidateAt = $bestEvidence['occurred_at'];
-                    $escapedAt = $this->db->escape($candidateAt);
-                    $escapedSource = $this->db->escape($bestEvidence['source']);
-                    $escapedEstId = (int) $bestEvidence['estimate_id'];
-
-                    $this->db->query("
-                        UPDATE `{$groupsTable}`
-                        SET `first_sent_estimate_id` = {$escapedEstId},
-                            `first_sent_source` = {$escapedSource},
-                            `first_sent_at` = {$escapedAt}
-                        WHERE `id` = {$groupId}
-                    ");
-
-                    if ($isCurrentInferred) {
-                        $updatedFromLegacy++;
-                    } else {
-                        $captured++;
+                    if ($isCurrentInferred && $bestRank === Quote_first_sent_service::RANK_NONE) {
+                        // Reverse inferred without real evidence back to NULL
+                        $this->db->where('id', $groupId)->update($groupsTable, [
+                            'first_sent_at'          => null,
+                            'first_sent_source'      => null,
+                            'first_sent_estimate_id' => null,
+                        ]);
+                        $reversedToNull++;
+                        $lastSuccessfulGroupId = $groupId;
+                        continue;
                     }
-                } else {
-                    $unchanged++;
+
+                    if ($bestRank === Quote_first_sent_service::RANK_NONE) {
+                        $noEvidence++;
+                        $lastSuccessfulGroupId = $groupId;
+                        continue;
+                    }
+
+                    // Evaluate transition
+                    $shouldReplace = $this->quote_first_sent_service->evaluate_evidence_transition(
+                        $grp['first_sent_source'],
+                        $grp['first_sent_at'],
+                        $bestEvidence['source'],
+                        $bestEvidence['occurred_at']
+                    );
+
+                    if ($shouldReplace) {
+                        $candidateAt = $bestEvidence['occurred_at'];
+                        $escapedAt = $this->db->escape($candidateAt);
+                        $escapedSource = $this->db->escape($bestEvidence['source']);
+                        $escapedEstId = (int) $bestEvidence['estimate_id'];
+
+                        $this->db->query("
+                            UPDATE `{$groupsTable}`
+                            SET `first_sent_estimate_id` = {$escapedEstId},
+                                `first_sent_source` = {$escapedSource},
+                                `first_sent_at` = {$escapedAt}
+                            WHERE `id` = {$groupId}
+                        ");
+
+                        if ($isCurrentInferred) {
+                            $updatedFromLegacy++;
+                        } else {
+                            $captured++;
+                        }
+                    } else {
+                        $unchanged++;
+                    }
+
+                    $lastSuccessfulGroupId = $groupId;
+                } catch (\Throwable $groupEx) {
+                    $errors++;
+                    $batchError = $groupEx->getMessage();
+                    log_message('error', "sales_pipeline reconcile_missing_first_sent error on group {$groupId}: " . $groupEx->getMessage());
+                    // Stop processing this batch so we do not advance cursor past the failing group
+                    break;
                 }
             }
 
-            // Update cooldown option on completion
-            update_option($cooldownOption, time());
+            // Error handling: if errors occurred, checkpoint advances ONLY up to lastSuccessfulGroupId
+            if ($errors > 0) {
+                $nextCursor = $lastSuccessfulGroupId;
+                if ($usePersistentCursor && $lastSuccessfulGroupId > $cursorBefore) {
+                    $this->set_reconcile_cursor($lastSuccessfulGroupId);
+                }
+                return [
+                    'status'              => 'failed',
+                    'reason'              => 'group_error: ' . $batchError,
+                    'scanned'             => $scanned,
+                    'captured'            => $captured,
+                    'updated_from_legacy' => $updatedFromLegacy,
+                    'reversed_to_null'    => $reversedToNull,
+                    'unchanged'           => $unchanged,
+                    'no_evidence'         => $noEvidence,
+                    'error_count'         => $errors,
+                    'cursor_before'       => $cursorBefore,
+                    'next_cursor'         => $nextCursor,
+                    'has_more'            => true,
+                    'cycle_completed'     => false,
+                ];
+            }
+
+            // No errors: determine whether cycle completed or more batches exist
+            $cycleCompleted = false;
+            $hasMore = ($scanned === $limit);
+
+            if (!$hasMore) {
+                // Scanned all remaining rows in table -> reset cursor to 0
+                $cycleCompleted = true;
+                $nextCursor = 0;
+                if ($usePersistentCursor) {
+                    $this->set_reconcile_cursor(0);
+                }
+            } else {
+                // Batch full -> advance cursor to last processed group
+                $nextCursor = $lastSuccessfulGroupId;
+                if ($usePersistentCursor) {
+                    $this->set_reconcile_cursor($nextCursor);
+                }
+            }
+
+            // Update cooldown option on successful completion
+            $this->set_reconcile_last_run(time());
 
             return [
+                'status'              => 'processed',
+                'reason'              => null,
                 'scanned'             => $scanned,
                 'captured'            => $captured,
                 'updated_from_legacy' => $updatedFromLegacy,
                 'reversed_to_null'    => $reversedToNull,
                 'unchanged'           => $unchanged,
                 'no_evidence'         => $noEvidence,
-                'error_count'         => $errors,
+                'error_count'         => 0,
+                'cursor_before'       => $cursorBefore,
                 'next_cursor'         => $nextCursor,
                 'has_more'            => $hasMore,
+                'cycle_completed'     => $cycleCompleted,
             ];
+        } catch (\Throwable $e) {
+            log_message('error', "sales_pipeline reconcile_missing_first_sent fatal error: " . $e->getMessage());
+            return array_merge($emptyResult, [
+                'status'        => 'failed',
+                'reason'        => 'fatal: ' . $e->getMessage(),
+                'error_count'   => max(1, $errors ?? 1),
+                'cursor_before' => $cursorBefore ?? 0,
+                'next_cursor'   => $cursorBefore ?? 0,
+            ]);
         } finally {
-            $this->db->query("SELECT RELEASE_LOCK('{$lockName}')");
+            if ($lockAcquiredHere) {
+                $this->db->query("SELECT RELEASE_LOCK('{$lockName}')");
+            }
+        }
+    }
+
+    public function get_reconcile_cursor()
+    {
+        $row = $this->db->select('value')->where('name', 'sp_first_sent_reconcile_cursor')->get(db_prefix() . 'options')->row();
+        return $row ? (int) $row->value : 0;
+    }
+
+    public function set_reconcile_cursor($cursor)
+    {
+        $cursor = max(0, (int) $cursor);
+        $name = 'sp_first_sent_reconcile_cursor';
+        if (!option_exists($name)) {
+            add_option($name, (string) $cursor, 0);
+        } else {
+            update_option($name, (string) $cursor, 0);
+        }
+    }
+
+    public function get_reconcile_last_run()
+    {
+        $row = $this->db->select('value')->where('name', 'sp_first_sent_reconcile_last_run')->get(db_prefix() . 'options')->row();
+        return $row ? (int) $row->value : 0;
+    }
+
+    public function set_reconcile_last_run($time)
+    {
+        $name = 'sp_first_sent_reconcile_last_run';
+        if (!option_exists($name)) {
+            add_option($name, (string) $time, 0);
+        } else {
+            update_option($name, (string) $time, 0);
         }
     }
 }

@@ -247,6 +247,7 @@
 
 <script>
 var salesPipelineLocale = <?php echo json_encode(_l('sales_pipeline_js_locale')); ?>;
+var salesPipelineResponseProcessingError = <?php echo json_encode(_l('sales_pipeline_response_processing_error'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 // Fallback: đảm bảo sp_alert luôn tồn tại kể cả khi sales_pipeline.js chưa tải xong
 if (typeof window.sp_alert !== 'function') {
     window.sp_alert = function(type, message, timeout) {
@@ -345,7 +346,7 @@ $(function() {
                         sp_alert('danger', (response && response.message) ? response.message : '<?php echo _l('something_went_wrong'); ?>');
                     }
                 } catch (e) {
-                    console.error("Lỗi khi xử lý phản hồi:", e);
+                    console.error(salesPipelineResponseProcessingError, e);
                     sp_alert('danger', '<?php echo _l('something_went_wrong'); ?>');
                 }
             },

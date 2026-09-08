@@ -57,12 +57,12 @@ assert_true(
     "Migration_Version_114 must implement down()"
 );
 
-// Check that sales_pipeline.php has Version 1.0.14
+// Check that sales_pipeline.php has Version 1.1.4 (corresponding to migration 114)
 $mainFile = __DIR__ . '/../sales_pipeline.php';
 $mainContent = file_get_contents($mainFile);
 assert_true(
-    strpos($mainContent, 'Version: 1.0.14') !== false,
-    'sales_pipeline.php must declare Version: 1.0.14'
+    strpos($mainContent, 'Version: 1.1.4') !== false,
+    'sales_pipeline.php must declare Version: 1.1.4 (matches migration 114)'
 );
 
 echo "PASS: Full_migration_chain_test (All migrations 101 to 114 verified)\n";

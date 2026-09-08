@@ -28,6 +28,7 @@ $period_label_short = (!empty($sp_range['start']) && !empty($sp_range['end']))
               data-staff-url="<?php echo html_escape(admin_url('sales_pipeline/dashboard_staff_pipeline')); ?>"
               data-dashboard-url="<?php echo html_escape(admin_url('sales_pipeline/ajax_dashboard_leaderboard')); ?>"
               data-loading-message="<?php echo html_escape(_l('sales_pipeline_dashboard_loading')); ?>"
+              data-loading-estimates-message="<?php echo html_escape(_l('sales_pipeline_dashboard_estimates_loading')); ?>"
               data-error-message="<?php echo html_escape(_l('sales_pipeline_dashboard_load_failed')); ?>"
               data-invalid-date-message="<?php echo html_escape(_l('sales_pipeline_dashboard_history_invalid_date')); ?>"
               data-on-date-text="<?php echo html_escape(_l('sales_pipeline_dashboard_on_date')); ?>"
@@ -207,7 +208,7 @@ $period_label_short = (!empty($sp_range['start']) && !empty($sp_range['end']))
 </div>
 
 <?php init_tail(); ?>
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script src="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/js/dashboard.js')); ?>?v=1.8.5"></script>
+<script src="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/js/apexcharts.min.js')); ?>?v=7.1.0"></script>
+<script src="<?php echo html_escape(module_dir_url('sales_pipeline', 'assets/js/dashboard.js')); ?>?v=1.8.7"></script>
 </body>
 </html>

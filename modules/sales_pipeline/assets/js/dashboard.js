@@ -18,7 +18,10 @@
         var staffUrl = String($dashboard.data('staff-url') || '').replace(/\/$/, '');
         var dashboardUrl = String($dashboard.data('dashboard-url') || '');
         var loadingMessage = String($dashboard.data('loading-message') || (window.salesPipelineI18n && window.salesPipelineI18n.loading) || '');
+        var loadingEstimatesMessage = String($dashboard.data('loading-estimates-message') || (window.salesPipelineI18n && window.salesPipelineI18n.loadingEstimates) || '');
         var errorMessage = String($dashboard.data('error-message') || (window.salesPipelineI18n && window.salesPipelineI18n.error) || '');
+        var dashboardI18n = window.salesPipelineI18n || {};
+        var numberLocale = String(dashboardI18n.locale || document.documentElement.lang || 'en-US');
         var activeRequest = null;
         var activeDashboardRequest = null;
         var lastTrigger = null;
@@ -137,19 +140,19 @@
             var num = Number(val) || 0;
             var abs = Math.abs(num);
             if (abs >= 1000000000) {
-                var bil = (num / 1000000000).toFixed(1).replace(/\.0$/, '').replace('.', ',');
-                return bil + ' tỷ';
+                return (num / 1000000000).toLocaleString(numberLocale, { maximumFractionDigits: 1 })
+                    + ' ' + String(dashboardI18n.currencyBillion || '');
             }
             if (abs >= 1000000) {
-                var mil = (num / 1000000).toFixed(1).replace(/\.0$/, '').replace('.', ',');
-                return mil + ' tr';
+                return (num / 1000000).toLocaleString(numberLocale, { maximumFractionDigits: 1 })
+                    + ' ' + String(dashboardI18n.currencyMillion || '');
             }
-            return num.toLocaleString('vi-VN') + ' đ';
+            return num.toLocaleString(numberLocale) + ' ' + String(dashboardI18n.currencyVnd || '');
         }
 
         function formatFullVND(val) {
             var num = Number(val) || 0;
-            return num.toLocaleString('vi-VN') + ' VNĐ';
+            return num.toLocaleString(numberLocale) + ' ' + String(dashboardI18n.currencyVnd || '');
         }
 
         function createSparklineOptions(series, labels) {
@@ -164,11 +167,11 @@
             return {
                 series: [
                     {
-                        name: 'Kỳ này',
+                        name: String(dashboardI18n.currentPeriod || ''),
                         data: series.current || []
                     },
                     {
-                        name: 'Kỳ trước',
+                        name: String(dashboardI18n.previousPeriod || ''),
                         data: series.previous || []
                     }
                 ],
@@ -382,7 +385,10 @@
             $drawer.addClass('is-open').attr('aria-hidden', 'false');
             $drawerPanel.attr('aria-busy', 'true');
             $('body').addClass('sp-dashboard-drawer-open');
-            setDrawerState('fa-circle-o-notch fa-spin', loadingMessage, false);
+            var isEstimatesTab = activeDashboardTab === 'estimates'
+                || $(trigger).closest('[data-dashboard-panel]').data('dashboard-panel') === 'estimates';
+            var drawerLoadingMessage = (isEstimatesTab && loadingEstimatesMessage) ? loadingEstimatesMessage : loadingMessage;
+            setDrawerState('fa-circle-o-notch fa-spin', drawerLoadingMessage, false);
             window.setTimeout(function () {
                 $drawerPanel.trigger('focus');
             }, 30);

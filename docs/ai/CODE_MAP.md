@@ -7,6 +7,7 @@
 | Deal, dashboard, KPI, Group queries | `modules/sales_pipeline/models/Sales_pipeline_model.php` |
 | Revision, link/unlink, Deal sync | `modules/sales_pipeline/libraries/Estimate_revision_service.php` |
 | Performance Score | `modules/sales_pipeline/libraries/Performance_score_calculator.php` |
+| Performance Score versioning/runtime | `modules/sales_pipeline/libraries/Performance_score_service.php`, `Performance_score_dispatcher.php`, `Performance_score_calculator_v1.php`, `Performance_score_calculator_v2.php` |
 | Reminder Rule/Delivery Engine | `modules/sales_pipeline/libraries/Reminder_engine.php` |
 | Reminder Repository schema | `modules/sales_pipeline/includes/reminder_repository_schema.php` |
 | Reminder Bell feed/acknowledge | `modules/sales_pipeline/models/Sales_pipeline_model.php`, `modules/sales_pipeline/controllers/Sales_pipeline.php` |
@@ -20,5 +21,7 @@
 | Version History UI | `modules/sales_pipeline/assets/js/estimate_version_history.js` |
 | Dashboard leaderboard | `modules/sales_pipeline/views/partials/_estimates_leaderboard.php` |
 | Tests | `modules/sales_pipeline/tests/` |
+
+Standalone/legacy ownership: [SALES_PIPELINE_STANDALONE_COMPONENTS.md](./SALES_PIPELINE_STANDALONE_COMPONENTS.md).
 
 Tìm symbol bằng `rg` trước khi mở file lớn. Không suy luận route/hook chỉ từ tên tài liệu.

@@ -29,8 +29,16 @@ class Performance_score_dispatcher
     public function resolve_formula_version($periodType, $periodStart, $periodEnd)
     {
         $startDate = substr((string) $periodStart, 0, 10);
+        $periodType = strtolower((string) $periodType);
+        $periodAliases = [
+            'this_week'    => 'week',
+            'this_month'   => 'month',
+            'this_quarter' => 'quarter',
+            'this_year'    => 'year',
+        ];
+        $periodType = $periodAliases[$periodType] ?? $periodType;
 
-        switch (strtolower((string) $periodType)) {
+        switch ($periodType) {
             case 'week':
                 // Week starting on or after 2026-09-07 uses V2
                 return $startDate >= '2026-09-07' ? 'performance_score_v2' : 'performance_score_v1';

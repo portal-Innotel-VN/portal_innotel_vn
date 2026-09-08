@@ -44,24 +44,29 @@ class Performance_score_service
         $formulaVersion = $this->dispatcher->resolve_formula_version($periodType, $periodStart, $periodEnd);
         $calculator = $this->dispatcher->get_calculator($formulaVersion);
 
+        $calculatorTargets = $this->normalize_calculator_targets($targets);
         $results = [];
         foreach ($cohortMetrics as $staffId => $metrics) {
-            $scoreData = $calculator->calculate_score($metrics, $targets);
-            $results[$staffId] = array_merge($metrics, $scoreData, [
-                'staff_id'      => (int) $staffId,
-                'calculated_at' => $calculatedAt,
-            ]);
+            $staffId = isset($metrics['staff_id']) ? (int) $metrics['staff_id'] : (int) $staffId;
+            $metrics['closed_count'] = isset($metrics['closed_count'])
+                ? (int) $metrics['closed_count']
+                : (int) ($metrics['accepted_count'] ?? 0) + (int) ($metrics['declined_count'] ?? 0);
+            $scoreData = $calculator->calculate_score($metrics, $calculatorTargets);
+            $results[$staffId] = $this->build_leaderboard_row(
+                $metrics,
+                $scoreData,
+                $formulaVersion,
+                $calculatorTargets,
+                $calculatedAt
+            );
         }
 
-        // Sort cohort descending by score_raw, then accepted_revenue, then estimate_count
+        // Keep the documented stable order: score descending, then staff name.
         uasort($results, function ($a, $b) {
-            if ($b['performance_score_raw'] != $a['performance_score_raw']) {
-                return ($b['performance_score_raw'] <=> $a['performance_score_raw']);
+            if ((float) $b['ranking_score'] !== (float) $a['ranking_score']) {
+                return (float) $b['ranking_score'] <=> (float) $a['ranking_score'];
             }
-            if ($b['accepted_revenue'] != $a['accepted_revenue']) {
-                return ($b['accepted_revenue'] <=> $a['accepted_revenue']);
-            }
-            return ($b['estimate_count'] <=> $a['estimate_count']);
+            return strcasecmp((string) ($a['staff_name'] ?? ''), (string) ($b['staff_name'] ?? ''));
         });
 
         // Standard competition ranking (1, 2, 2, 4)
@@ -72,7 +77,7 @@ class Performance_score_service
 
         foreach ($results as $staffId => $row) {
             $processedCount++;
-            $score = $row['performance_score_raw'];
+            $score = (float) $row['ranking_score'];
 
             if ($prevScore !== null && $score < $prevScore) {
                 $currentRank = $processedCount;
@@ -90,6 +95,109 @@ class Performance_score_service
             'calculated_at'   => $calculatedAt,
             'cohort'          => $ranked,
         ];
+    }
+
+    /**
+     * Translate the Model/config vocabulary to the immutable calculator contract.
+     *
+     * @param array $targets
+     * @return array
+     */
+    private function normalize_calculator_targets(array $targets)
+    {
+        return [
+            'target_quotes'       => $targets['target_quotes'] ?? $targets['quote_target'] ?? 30,
+            'target_revenue'      => $targets['target_revenue'] ?? $targets['revenue_target'] ?? 100000000,
+            'target_acceptance'   => $targets['target_acceptance'] ?? $targets['acceptance_target'] ?? 40,
+            'target_response_sla' => $targets['target_response_sla'] ?? $targets['response_target'] ?? 90,
+            'min_closed_quotes'   => $targets['min_closed_quotes'] ?? 5,
+        ];
+    }
+
+    /**
+     * Adapt a versioned calculator result to the existing Dashboard contract.
+     * Calculator component scores are weighted points; Dashboard component scores
+     * remain normalized percentages so existing views do not change semantics.
+     *
+     * @param array  $metrics
+     * @param array  $scoreData
+     * @param string $formulaVersion
+     * @param array  $targets
+     * @param string $calculatedAt
+     * @return array
+     */
+    private function build_leaderboard_row(array $metrics, array $scoreData, $formulaVersion, array $targets, $calculatedAt)
+    {
+        $components = $scoreData['components'] ?? [];
+        $eligibleReminders = array_key_exists('eligible_reminders', $metrics) && $metrics['eligible_reminders'] !== null
+            ? (int) $metrics['eligible_reminders']
+            : null;
+        $onTimeReminders = array_key_exists('on_time_reminders', $metrics) && $metrics['on_time_reminders'] !== null
+            ? (int) $metrics['on_time_reminders']
+            : null;
+        $reminderStatus = 'inactive';
+        if ($formulaVersion === 'performance_score_v2' && $eligibleReminders !== null) {
+            $reminderStatus = $eligibleReminders > 0 ? 'active' : 'not_applicable';
+        }
+
+        $closedCount = (int) ($metrics['closed_count'] ?? 0);
+        $acceptedCount = (int) ($metrics['accepted_count'] ?? 0);
+        $acceptanceRate = $closedCount > 0 ? ($acceptedCount / $closedCount) * 100.0 : null;
+        $onTimeRate = $eligibleReminders > 0 ? ((int) $onTimeReminders / $eligibleReminders) * 100.0 : null;
+
+        $normalizedComponent = function ($componentKey) use ($components) {
+            if (!isset($components[$componentKey])) {
+                return null;
+            }
+            $weight = (float) ($components[$componentKey]['weight'] ?? 0);
+            if ($weight <= 0) {
+                return null;
+            }
+            return round(((float) ($components[$componentKey]['score'] ?? 0) / $weight) * 100.0, 4);
+        };
+
+        $effectiveDenominator = (float) ($scoreData['effective_denominator'] ?? 0);
+        $effectiveWeights = [
+            'quote_score'            => $effectiveDenominator > 0 ? round((20.0 / $effectiveDenominator) * 100.0, 4) : 0.0,
+            'accepted_revenue_score' => $effectiveDenominator > 0 ? round((40.0 / $effectiveDenominator) * 100.0, 4) : 0.0,
+            'acceptance_score'       => $effectiveDenominator > 0 ? round((25.0 / $effectiveDenominator) * 100.0, 4) : 0.0,
+            'reminder_response'      => $reminderStatus === 'active' && $effectiveDenominator > 0
+                ? round((15.0 / $effectiveDenominator) * 100.0, 4)
+                : 0.0,
+        ];
+
+        $flags = $scoreData['data_quality_flags'] ?? [];
+        if (!empty($metrics['missing_revenue_rate_count'])) {
+            $flags[] = 'missing_revenue_rate';
+        }
+        $flags = array_values(array_unique($flags));
+
+        $row = array_merge($metrics, [
+            'staff_id'                   => (int) ($metrics['staff_id'] ?? 0),
+            'closed_count'               => $closedCount,
+            'acceptance_rate'            => $acceptanceRate === null ? null : round($acceptanceRate, 1),
+            'quote_score'                => $normalizedComponent('quote_count'),
+            'accepted_revenue_score'     => $normalizedComponent('accepted_revenue'),
+            'acceptance_score'           => $normalizedComponent('acceptance_rate'),
+            'eligible_reminders'         => $eligibleReminders,
+            'on_time_reminders'          => $onTimeReminders,
+            'on_time_rate'               => $onTimeRate === null ? null : round($onTimeRate, 1),
+            'response_score'             => $normalizedComponent('reminder_response'),
+            'component_status'           => ['reminder_response' => $reminderStatus],
+            'effective_weights'          => $effectiveWeights,
+            'performance_score_raw'      => (float) $scoreData['performance_score_raw'],
+            'performance_score'          => (float) $scoreData['performance_score'],
+            'ranking_score'              => (float) $scoreData['performance_score'],
+            'is_provisional'             => !empty($scoreData['is_provisional']) || !empty($flags),
+            'data_quality_flags'         => $flags,
+            'components'                 => $components,
+            'raw_metrics'                => $metrics,
+            'config'                     => $targets,
+            'formula_version'            => $formulaVersion,
+            'calculated_at'              => $calculatedAt,
+        ]);
+
+        return $row;
     }
 
     /**

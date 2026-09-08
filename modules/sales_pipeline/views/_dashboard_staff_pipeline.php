@@ -149,9 +149,9 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
             <div class="sp-performance-progress__track-container">
                 <div class="sp-performance-progress__track">
                     <div class="sp-performance-progress__bar <?php echo html_escape($drawer_tier['class']); ?>" style="width: <?php echo $progress_pct; ?>%;"></div>
-                    <div class="sp-performance-progress__marker" style="left: 41.67%;" title="50 điểm (Cần tăng tốc)"></div>
-                    <div class="sp-performance-progress__marker" style="left: 66.67%;" title="80 điểm (Đạt chuẩn)"></div>
-                    <div class="sp-performance-progress__marker sp-performance-progress__marker--target" style="left: 83.33%;" title="100 điểm (Mục tiêu chuẩn 100% KPI)"></div>
+                    <div class="sp-performance-progress__marker" style="left: 41.67%;" title="<?php echo html_escape(_l('sales_pipeline_performance_marker_accelerate', [50])); ?>"></div>
+                    <div class="sp-performance-progress__marker" style="left: 66.67%;" title="<?php echo html_escape(_l('sales_pipeline_performance_marker_standard', [80])); ?>"></div>
+                    <div class="sp-performance-progress__marker sp-performance-progress__marker--target" style="left: 83.33%;" title="<?php echo html_escape(_l('sales_pipeline_performance_marker_target', [100])); ?>"></div>
                 </div>
                 <div class="sp-performance-progress__labels">
                     <span class="sp-progress-label" style="left: 0%;">0</span>
@@ -168,19 +168,19 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
             $score_components = [
                 [
                     'label'       => 'sales_pipeline_performance_quote_component',
-                    'weight_text' => '(Chiếm 20% trọng số)',
+                    'weight'      => 20,
                     'score'       => $performance_metric['quote_score'],
                     'icon'        => 'fa-file-text-o',
                 ],
                 [
                     'label'       => 'sales_pipeline_performance_revenue_component',
-                    'weight_text' => '(Chiếm 40% trọng số)',
+                    'weight'      => 40,
                     'score'       => $performance_metric['accepted_revenue_score'],
                     'icon'        => 'fa-line-chart',
                 ],
                 [
                     'label'       => 'sales_pipeline_performance_acceptance_component',
-                    'weight_text' => '(Chiếm 25% trọng số)',
+                    'weight'      => 25,
                     'score'       => $performance_metric['acceptance_score'],
                     'icon'        => 'fa-check-circle-o',
                 ],
@@ -191,7 +191,7 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
                         <i class="fa <?php echo html_escape($component['icon']); ?> sp-score-breakdown__item-icon" aria-hidden="true"></i>
                         <span class="sp-score-breakdown__item-label">
                             <?php echo _l($component['label']); ?>
-                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape($component['weight_text']); ?></span>
+                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape(_l('sales_pipeline_performance_weight_hint', [$component['weight']])); ?></span>
                         </span>
                     </div>
                     <div class="sp-score-breakdown__item-value">
@@ -203,7 +203,7 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
             <?php
             $reminder_status = $performance_metric['component_status']['reminder_response'] ?? 'inactive';
             $reminder_score = $performance_metric['response_score'] ?? null;
-            $reminder_weight_text = '(Chiếm 15% trọng số)';
+            $reminder_weight = 15;
             ?>
             <?php if ($reminder_status === 'active') { ?>
                 <div class="sp-score-breakdown__item">
@@ -211,7 +211,7 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
                         <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
                         <span class="sp-score-breakdown__item-label">
                             <?php echo _l('sales_pipeline_performance_reminder_component'); ?>
-                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape($reminder_weight_text); ?></span>
+                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape(_l('sales_pipeline_performance_weight_hint', [$reminder_weight])); ?></span>
                         </span>
                     </div>
                     <div class="sp-score-breakdown__item-value">
@@ -225,7 +225,7 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
                         <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
                         <span class="sp-score-breakdown__item-label">
                             <?php echo _l('sales_pipeline_performance_reminder_component'); ?>
-                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape($reminder_weight_text); ?></span>
+                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape(_l('sales_pipeline_performance_weight_hint', [$reminder_weight])); ?></span>
                         </span>
                     </div>
                     <div class="sp-score-breakdown__item-value">
@@ -238,7 +238,7 @@ $is_estimate_dashboard = isset($dashboard_tab) && $dashboard_tab === 'estimates'
                         <i class="fa fa-bell-o sp-score-breakdown__item-icon" aria-hidden="true"></i>
                         <span class="sp-score-breakdown__item-label">
                             <?php echo _l('sales_pipeline_performance_reminder_component'); ?>
-                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape($reminder_weight_text); ?></span>
+                            <span class="sp-score-breakdown__weight-hint"><?php echo html_escape(_l('sales_pipeline_performance_weight_hint', [$reminder_weight])); ?></span>
                         </span>
                     </div>
                     <div class="sp-score-breakdown__item-value">

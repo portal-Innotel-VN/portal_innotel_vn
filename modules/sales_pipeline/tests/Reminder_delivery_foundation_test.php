@@ -96,17 +96,9 @@ if (version_compare($modVer, '1.0.13', '<')) {
     fwrite(STDERR, "FAIL: reminder repository bootstrap requires at least Version: 1.0.13 (got {$modVer})\n");
     exit(1);
 }
-foreach ([
-    "field_exists('last_error_code', \$deliveries)",
-    "field_exists('expires_at', \$deliveries)",
-    "table_exists(\$rate_buckets)",
-    'idx_delivery_channel_worker',
-    'idx_delivery_retention',
-] as $needle) {
-    if (strpos($module, $needle) === false) {
-        fwrite(STDERR, "FAIL: reminder repository bootstrap is missing {$needle}\n");
-        exit(1);
-    }
+if (strpos(file_get_contents($moduleRoot . '/install.php'), 'sales_pipeline_ensure_reminder_repository_schema') === false) {
+    fwrite(STDERR, "FAIL: module activation does not install the reminder repository schema\n");
+    exit(1);
 }
 
 foreach ([$schema, $migrationSource, $module] as $source) {

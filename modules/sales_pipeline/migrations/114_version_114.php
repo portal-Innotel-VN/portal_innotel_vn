@@ -9,7 +9,9 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * 1. Evidence-Rank Decision Matrix remediation (datesend replaces inferred timestamp).
  * 2. Policy A remediation: Reverses inferred timestamp without real sent evidence back to NULL (e.g. Group 145).
  * 3. Multi-batch cursor loop with strictly increasing cursor and safety bound against fake success.
- * 4. Unified advisory lock and per-batch transaction boundary.
+ * 4. Per-batch transaction boundary; this migration owns the unified advisory
+ *    lock `sales_pipeline:first_sent_reconcile` across all batches and tells
+ *    the model not to acquire it again.
  * 5. Non-destructive rollback to preserve audit history.
  */
 class Migration_Version_114 extends App_module_migration
@@ -25,19 +27,21 @@ class Migration_Version_114 extends App_module_migration
             throw new RuntimeException("Migration 114 aborted: Could not acquire lock {$lockName}");
         }
 
-        try {
-            $cursor = 0;
-            $batchSize = 100;
-            $maxIterations = 1000;
-            $iteration = 0;
-            $hasMore = true;
+        $cursor = 0;
+        $batchSize = 100;
+        $maxIterations = 1000;
+        $iteration = 0;
+        $hasMore = true;
 
+        try {
             while ($hasMore && $iteration < $maxIterations) {
                 $iteration++;
 
                 $CI->db->trans_begin();
                 try {
-                    $batchResult = $CI->sales_pipeline_model->reconcile_missing_first_sent_groups($batchSize, $cursor, true);
+                    // Migration owns GET_LOCK/RELEASE_LOCK for the complete run;
+                    // the model is explicitly told not to nest the same lock.
+                    $batchResult = $CI->sales_pipeline_model->reconcile_missing_first_sent_groups($batchSize, $cursor, true, true);
                 } catch (Exception $e) {
                     $CI->db->trans_rollback();
                     throw $e;

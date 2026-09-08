@@ -11,6 +11,9 @@ class Reminder_engine
     public static $currentEmailCC = null;
 
     private $CI;
+    private $staffCache = [];
+    private $staffEmailCache = [];
+    private $activeAdminStaffCache;
 
     public function __construct()
     {
@@ -58,14 +61,21 @@ class Reminder_engine
         // evaluated too. Starting from the Deal table would silently omit them.
         $staffRows = $this->CI->db->select('staffid')->where('active', 1)->where('admin', 0)
             ->get(db_prefix() . 'staff')->result_array();
+        $summaryRows = $this->CI->db
+            ->select('staff_id, COUNT(*) open_deal_count, COALESCE(SUM(deal_value),0) open_pipeline_value', false)
+            ->where_in('status', $statuses)
+            ->group_by('staff_id')
+            ->get(db_prefix() . 'sales_pipeline')->result_array();
+        $summariesByStaff = [];
+        foreach ($summaryRows as $summaryRow) {
+            $summariesByStaff[(int) $summaryRow['staff_id']] = $summaryRow;
+        }
         foreach ($staffRows as $staffRow) {
             $staffId = (int) $staffRow['staffid'];
             if (!staff_can('view', 'sales_pipeline', $staffId) && !staff_can('view_own', 'sales_pipeline', $staffId)) {
                 continue;
             }
-            $summary = $this->CI->db->select('COUNT(*) open_deal_count, COALESCE(SUM(deal_value),0) open_pipeline_value', false)
-                ->where('staff_id', $staffId)->where_in('status', $statuses)
-                ->get(db_prefix() . 'sales_pipeline')->row_array();
+            $summary = $summariesByStaff[$staffId] ?? [];
             $event = $this->CI->deal_reminder_rule_evaluator->evaluatePipelineMinimum([
                 'staff_id' => $staffId,
                 'open_deal_count' => (int) ($summary['open_deal_count'] ?? 0),
@@ -396,12 +406,14 @@ class Reminder_engine
         $maxValidAgeHours = (int) $this->option('sp_reminder_delivery_default_max_valid_age_hours');
         $recipients = [['type' => 'staff', 'id' => $event['staff_id']]];
         if (in_array('manager', $event['recipients'], true)) {
-            foreach ($this->CI->db->select('staffid')->where('active', 1)->where('admin', 1)
-                ->where('staffid !=', $event['staff_id'])->get(db_prefix() . 'staff')->result_array() as $admin) {
-                $recipients[] = ['type' => 'manager', 'id' => (int) $admin['staffid']];
+            foreach ($this->activeAdminStaff() as $admin) {
+                if ((int) $admin->staffid !== (int) $event['staff_id']) {
+                    $recipients[] = ['type' => 'manager', 'id' => (int) $admin->staffid];
+                }
             }
         }
         $isCCApplicable = $this->isManagerCCApplicable($event['severity'] ?? 'warning');
+        $deliveryRows = [];
         foreach ($recipients as $recipient) {
             $staff = $this->activeStaff($recipient['id']);
             if (!$staff) { continue; }
@@ -414,12 +426,27 @@ class Reminder_engine
                 $expiresAt = $channel === 'email'
                     ? $this->CI->reminder_delivery_policy->expiresAt($createdAt, $maxValidAgeHours)->format('Y-m-d H:i:s')
                     : null;
-                $this->CI->db->query('INSERT IGNORE INTO `' . db_prefix() . 'sales_pipeline_reminder_deliveries`'
-                    . ' (`reminder_id`,`channel`,`recipient_type`,`recipient_staff_id`,`recipient_key`,`status`,`expires_at`,`created_at`)'
-                    . ' VALUES (?,?,?,?,?,?,?,?)',
-                    [$reminderId, $channel, $recipient['type'], $recipient['id'], $key, 'pending', $expiresAt, $createdAtValue]);
+                $deliveryRows[] = [$reminderId, $channel, $recipient['type'], $recipient['id'], $key, 'pending', $expiresAt, $createdAtValue];
             }
         }
+        $this->insertDeliveryBatch($deliveryRows);
+    }
+
+    private function insertDeliveryBatch(array $rows)
+    {
+        if (!$rows) {
+            return;
+        }
+        $valuesSql = implode(',', array_fill(0, count($rows), '(?,?,?,?,?,?,?,?)'));
+        $params = [];
+        foreach ($rows as $row) {
+            foreach ($row as $value) {
+                $params[] = $value;
+            }
+        }
+        $this->CI->db->query('INSERT IGNORE INTO `' . db_prefix() . 'sales_pipeline_reminder_deliveries`'
+            . ' (`reminder_id`,`channel`,`recipient_type`,`recipient_staff_id`,`recipient_key`,`status`,`expires_at`,`created_at`)'
+            . ' VALUES ' . $valuesSql, $params);
     }
 
     private function isManagerCCApplicable($severity = 'warning', $eventAllowsCC = null)
@@ -443,20 +470,15 @@ class Reminder_engine
             return [];
         }
 
-        $staffObj = $this->CI->db->select('email')->where('staffid', (int) $staffId)->get(db_prefix() . 'staff')->row_array();
-        $staffEmail = !empty($staffObj['email']) ? strtolower(trim((string) $staffObj['email'])) : '';
+        $staff = $this->staffById($staffId);
+        $staffEmail = $staff && !empty($staff->email) ? strtolower(trim((string) $staff->email)) : '';
 
         $rawEmails = [];
 
-        $admins = $this->CI->db->select('email')
-            ->from(db_prefix() . 'staff')
-            ->where('active', 1)
-            ->where('admin', 1)
-            ->where('staffid !=', (int) $staffId)
-            ->get()->result_array();
-
-        foreach ($admins as $admin) {
-            $rawEmails[] = trim((string) $admin['email']);
+        foreach ($this->activeAdminStaff() as $admin) {
+            if ((int) $admin->staffid !== (int) $staffId) {
+                $rawEmails[] = trim((string) $admin->email);
+            }
         }
 
         if (empty($rawEmails)) {
@@ -587,7 +609,7 @@ class Reminder_engine
                 $inboxEnabled = (int) $this->option('sp_reminder_crm_inbox_enabled', '0');
                 if ($inboxEnabled === 1) {
                     $recipientStaffId = !empty($row['recipient_staff_id']) ? (int) $row['recipient_staff_id'] : (int) $row['recipient_key'];
-                    $staff = $recipientStaffId > 0 ? $this->CI->db->where('staffid', $recipientStaffId)->get(db_prefix() . 'staff')->row() : null;
+                    $staff = $recipientStaffId > 0 ? $this->staffById($recipientStaffId) : null;
                     $canUseInbox = $staff
                         && (int) $staff->active === 1
                         && (is_admin($recipientStaffId)
@@ -610,8 +632,8 @@ class Reminder_engine
             } elseif ($row['channel'] === 'email') {
                 $this->CI->load->model('emails_model');
                 $recipient = !empty($row['recipient_staff_id'])
-                    ? $this->CI->db->where('staffid', (int) $row['recipient_staff_id'])->get(db_prefix() . 'staff')->row()
-                    : $this->CI->db->where('email', $row['recipient_key'])->get(db_prefix() . 'staff')->row();
+                    ? $this->staffById((int) $row['recipient_staff_id'])
+                    : $this->staffByEmail((string) $row['recipient_key']);
                 $staffId = !empty($row['staff_id']) ? (int) $row['staff_id'] : ($recipient ? (int) $recipient->staffid : 0);
                 $severity = !empty($row['severity']) ? (string) $row['severity'] : 'warning';
                 $body = $this->CI->load->view('sales_pipeline/emails/reminder', [
@@ -997,7 +1019,47 @@ class Reminder_engine
 
     private function activeStaff($staffId)
     {
-        $staff = $staffId ? $this->CI->staff_model->get($staffId) : null;
+        $staff = $this->staffById($staffId);
         return $staff && (int) $staff->active === 1 ? $staff : null;
+    }
+
+    private function staffById($staffId)
+    {
+        $staffId = (int) $staffId;
+        if ($staffId <= 0) {
+            return null;
+        }
+        if (!array_key_exists($staffId, $this->staffCache)) {
+            $this->staffCache[$staffId] = $this->CI->staff_model->get($staffId) ?: null;
+        }
+        return $this->staffCache[$staffId];
+    }
+
+    private function staffByEmail($email)
+    {
+        $email = strtolower(trim((string) $email));
+        if ($email === '') {
+            return null;
+        }
+        if (!array_key_exists($email, $this->staffEmailCache)) {
+            $staff = $this->CI->db->where('email', $email)->get(db_prefix() . 'staff')->row();
+            $this->staffEmailCache[$email] = $staff ?: null;
+            if ($staff && !empty($staff->staffid)) {
+                $this->staffCache[(int) $staff->staffid] = $staff;
+            }
+        }
+        return $this->staffEmailCache[$email];
+    }
+
+    private function activeAdminStaff()
+    {
+        if ($this->activeAdminStaffCache === null) {
+            $this->activeAdminStaffCache = $this->CI->db->where('active', 1)->where('admin', 1)
+                ->get(db_prefix() . 'staff')->result();
+            foreach ($this->activeAdminStaffCache as $staff) {
+                $this->staffCache[(int) $staff->staffid] = $staff;
+            }
+        }
+        return $this->activeAdminStaffCache;
     }
 }

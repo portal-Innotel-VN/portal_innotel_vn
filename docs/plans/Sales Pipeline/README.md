@@ -17,9 +17,13 @@
 | `plan_reminder_bell_inbox.implementation.md` | Nhật ký triển khai, kiểm thử và trạng thái rollout Reminder Bell Inbox |
 | `test_tutorial.md` | Hướng dẫn kiểm thử lịch sử |
 | `fix_quote_count_first_sent_dashboard_plan.md` | Kế hoạch vá lỗi Báo giá Đã gửi không cập nhật Quote Count trên leaderboard và Drawer |
+| `../phase25_execution_20260907.md` | Nghiệm thu Phase 2.5: Benchmark PHP-FPM, macOS launchd, advisory lock và kiểm chứng cấp trường |
+| `../phase7_client_mailbox_acceptance_20260907.md` | Nghiệm thu Phase 7: Giao vận email thực tế qua MDaemon Webmail & Mobile, phê duyệt rollout |
+| `../master_acceptance_and_rollout_matrix.md` | Bảng ma trận tổng hợp 7 Phase giải quyết 6 Blockers, phê duyệt Go Production |
 
 Nguồn sự thật hiện hành sau khi chuẩn hóa:
 
 - [CREATE_ESTIMATES_WORKFLOW.md](../../specifications/CREATE_ESTIMATES_WORKFLOW.md)
 - [PERFORMANCE_SCORE.md](../../specifications/PERFORMANCE_SCORE.md)
 - [SALES_PIPELINE_CONTEXT.md](../../ai/SALES_PIPELINE_CONTEXT.md)
+- [Ma Trận Nghiệm Thu & Rollout](../master_acceptance_and_rollout_matrix.md)

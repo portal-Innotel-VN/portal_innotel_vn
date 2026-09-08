@@ -31,12 +31,12 @@
                                     </li>
                                     <li role="presentation">
                                         <a href="#reminders" aria-controls="reminders" role="tab" data-toggle="tab">
-                                            <i class="fa fa-bell-o" aria-hidden="true"></i> <?php echo _l('sales_pipeline_settings_reminders'); ?>
+                                            <?php echo _l('sales_pipeline_settings_reminders'); ?>
                                         </a>
                                     </li>
                                     <li role="presentation">
                                         <a href="#performance" aria-controls="performance" role="tab" data-toggle="tab">
-                                            <i class="fa fa-line-chart" aria-hidden="true"></i> <?php echo _l('sales_pipeline_settings_performance'); ?>
+                                            <?php echo _l('sales_pipeline_settings_performance'); ?>
                                         </a>
                                     </li>
                                 </ul>
@@ -176,25 +176,62 @@
                                 <input type="hidden" name="setting_type" value="performance">
                                 <div class="panel_s">
                                     <div class="panel-body">
-                                        <h5 class="bold"><i class="fa fa-line-chart" aria-hidden="true"></i> <?php echo _l('sales_pipeline_settings_performance_heading'); ?></h5>
+                                        <h5 class="bold"><?php echo _l('sales_pipeline_settings_performance_heading'); ?></h5>
                                         <p class="text-muted"><?php echo _l('sales_pipeline_settings_performance_help'); ?></p>
                                         <hr />
                                         <div class="row">
                                             <div class="col-md-6">
-                                                <?php echo render_input(
-                                                    'performance_response_target_percent',
-                                                    _l('performance_response_target_percent_label'),
-                                                    $performance_options['performance_response_target_percent'] ?? '90',
-                                                    'number',
-                                                    ['min' => 1, 'max' => 100, 'step' => 'any', 'required' => 'true']
-                                                ); ?>
-                                                <p class="text-muted small"><?php echo _l('performance_response_target_percent_help'); ?></p>
+                                                <div class="form-group">
+                                                    <label for="performance_response_target_percent" class="control-label">
+                                                        <?php echo _l('performance_response_target_percent_label'); ?>
+                                                    </label>
+                                                    <div class="input-group">
+                                                        <input type="number"
+                                                               id="performance_response_target_percent"
+                                                               name="performance_response_target_percent"
+                                                               class="form-control"
+                                                               min="1"
+                                                               max="100"
+                                                               step="any"
+                                                               required
+                                                               value="<?php echo html_escape($performance_options['performance_response_target_percent'] ?? '90'); ?>">
+                                                        <span class="input-group-addon">%</span>
+                                                    </div>
+                                                    <p class="text-muted small mtop5">
+                                                        <?php echo _l('performance_response_target_percent_help'); ?>
+                                                    </p>
+                                                </div>
+
+                                                <div class="mtop25">
+                                                    <button type="submit" class="btn btn-info">
+                                                        <i class="fa fa-floppy-o" aria-hidden="true"></i> <?php echo _l('sales_pipeline_save_settings'); ?>
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <button type="submit" class="btn btn-info">
-                                                <i class="fa fa-save" aria-hidden="true"></i> <?php echo _l('sales_pipeline_save_settings'); ?>
-                                            </button>
+
+                                            <div class="col-md-6">
+                                                <div class="panel panel-default" style="border-left: 4px solid #28b8da; background-color: #f8fafc; border-radius: 4px; box-shadow: none;">
+                                                    <div class="panel-body" style="padding: 16px 20px;">
+                                                        <h5 class="bold" style="margin-top: 0; margin-bottom: 12px; color: #1e879e; font-size: 14px;">
+                                                            <?php echo _l('sales_pipeline_perf_how_it_works_title'); ?>
+                                                        </h5>
+                                                        <div style="font-size: 13px; line-height: 1.6; color: #475569;">
+                                                            <p style="margin-bottom: 10px;">
+                                                                <?php echo _l('sales_pipeline_perf_weight_desc'); ?>
+                                                            </p>
+                                                            <p style="margin-bottom: 10px;">
+                                                                <?php echo _l('sales_pipeline_perf_formula_desc'); ?>
+                                                            </p>
+                                                            <p style="margin-bottom: 10px; color: #64748b;">
+                                                                <?php echo _l('sales_pipeline_perf_example_desc'); ?>
+                                                            </p>
+                                                            <p style="margin-bottom: 0; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #64748b;">
+                                                                <?php echo _l('sales_pipeline_perf_sla_link_note'); ?>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -269,11 +306,16 @@
 <script>
     $(function(){
         initDataTable('.dt-table');
-        if (window.location.hash === '#reminders') {
-            $('.nav-tabs a[href="#reminders"]').tab('show');
-        } else if (window.location.hash === '#performance') {
-            $('.nav-tabs a[href="#performance"]').tab('show');
+        if (window.location.hash && $('.nav-tabs a[href="' + window.location.hash + '"]').length) {
+            $('.nav-tabs a[href="' + window.location.hash + '"]').tab('show');
         }
+        $('.nav-tabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+            if (history.replaceState) {
+                history.replaceState(null, null, e.target.hash);
+            } else {
+                window.location.hash = e.target.hash;
+            }
+        });
         $('#sp_reminder_global_enabled').on('change', function () { $('.sp-reminder-section--rule').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('.sp-reminder-rule-toggle input').on('change', function () { $(this).closest('.sp-reminder-rule-row').find('.sp-reminder-channels,.sp-rule-fields').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('#sp-reminder-settings-form').on('submit', function () { $('.sp-reminder-section--dimmed').removeClass('sp-reminder-section--dimmed'); });

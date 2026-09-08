@@ -631,7 +631,10 @@ class Estimate_revision_service
         $this->CI->db->trans_start();
 
         // Lock target group row to prevent concurrent revision number collisions
-        $this->CI->db->query('SELECT id, current_estimate_id FROM `' . $groupTable . '` WHERE `id` = ' . $groupId . ' FOR UPDATE');
+        $this->CI->db->query(
+            'SELECT id, current_estimate_id FROM `' . $groupTable . '` WHERE `id` = ? FOR UPDATE',
+            [$groupId]
+        );
 
         // Determine next revision number: MAX(revision_no) + 1
         $maxRow = $this->CI->db
@@ -867,8 +870,14 @@ class Estimate_revision_service
         $secondLockId = max($sourceGroupId, $targetGroupId);
 
         $this->CI->db->trans_start();
-        $this->CI->db->query("SELECT id, current_estimate_id FROM `{$groupTable}` WHERE id = {$firstLockId} FOR UPDATE");
-        $this->CI->db->query("SELECT id, current_estimate_id FROM `{$groupTable}` WHERE id = {$secondLockId} FOR UPDATE");
+        $this->CI->db->query(
+            "SELECT id, current_estimate_id FROM `{$groupTable}` WHERE id = ? FOR UPDATE",
+            [$firstLockId]
+        );
+        $this->CI->db->query(
+            "SELECT id, current_estimate_id FROM `{$groupTable}` WHERE id = ? FOR UPDATE",
+            [$secondLockId]
+        );
 
         // Target's current_estimate_id becomes parent_estimate_id
         $freshTargetGroup = $this->CI->db->where('id', $targetGroupId)->get($groupTable)->row_array();
@@ -1079,7 +1088,7 @@ class Estimate_revision_service
         $this->CI->db->trans_start();
 
         // Lock old group
-        $this->CI->db->query("SELECT id FROM `{$groupTable}` WHERE id = {$oldGroupId} FOR UPDATE");
+        $this->CI->db->query("SELECT id FROM `{$groupTable}` WHERE id = ? FOR UPDATE", [$oldGroupId]);
 
         // Create new group for unlinked revision
         $newGroupData = [

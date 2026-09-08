@@ -59,5 +59,7 @@ assert_equals('sp-score--critical', $tier4['score_class']);
 // 2. Test language key: 'sales_pipeline_performance_revenue_component' and 'sales_pipeline_performance_breakdown'
 assert_equals('Điểm giá trị Báo giá đã chấp nhận', _l('sales_pipeline_performance_revenue_component'));
 assert_equals('Bảng Điểm Hiệu Suất', _l('sales_pipeline_performance_breakdown'));
+assert_equals('Đang tải thông tin nhân viên...', _l('sales_pipeline_dashboard_estimates_loading'));
+assert_equals('Deal', _l('sales_pipeline_deal'));
 
 echo "PASS: Performance tier resolution and language keys test\n";

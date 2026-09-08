@@ -101,12 +101,10 @@ foreach (['recipient_staff_id', 'cc_recipients'] as $column) {
     }
 }
 
-$module = file_get_contents($moduleRoot . '/sales_pipeline.php');
-foreach (['field_exists(\'recipient_staff_id\', $deliveries)', 'field_exists(\'cc_recipients\', $deliveries)'] as $needle) {
-    if (strpos($module, $needle) === false) {
-        fwrite(STDERR, "FAIL: reminder repository bootstrap does not verify {$needle}\n");
-        exit(1);
-    }
+$install = file_get_contents($moduleRoot . '/install.php');
+if (strpos($install, 'sales_pipeline_ensure_reminder_repository_schema') === false) {
+    fwrite(STDERR, "FAIL: module activation does not install the reminder repository schema\n");
+    exit(1);
 }
 
 fwrite(STDOUT, "PASS: Reminder rule settings, delivery safety, and audit invariants\n");

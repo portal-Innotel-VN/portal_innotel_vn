@@ -14,6 +14,10 @@ require_once __DIR__ . '/Finance_lock_guard.php';
  * 4. Optimistic locking before-value guard.
  * 5. Idempotent batch application within a single database transaction.
  * 6. Audit before/after capture in sanitization tables.
+ *
+ * Standalone/offline component: this class is intentionally not registered on
+ * an HTTP or Cron hook. Applying a manifest requires an explicit Finance-approved
+ * maintenance workflow; normal Deal/Estimate requests must not invoke it.
  */
 class Currency_data_sanitizer
 {

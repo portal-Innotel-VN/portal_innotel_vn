@@ -5,7 +5,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /*
 Module Name: Sales Pipeline
 Description: Quản lý Tiến Độ Kinh Doanh - Số hóa quy trình bán hàng, theo dõi deal, nhắc nhở tự động
-Version: 1.0.14
+Version: 1.1.4
 Requires at least: 2.3.*
 Author: Hiệp - Innotel Developer
 */
@@ -40,6 +40,24 @@ hooks()->add_action('estimate_sent', 'sales_pipeline_handle_estimate_sent');
 
 require_once(__DIR__ . '/libraries/Authoritative_exchange_rate_provider.php');
 hooks()->add_filter('sales_pipeline_quote_exchange_rate', 'sales_pipeline_resolve_quote_exchange_rate_hook', 10, 5);
+hooks()->add_filter('get_option', 'sales_pipeline_filter_realtime_options', 10, 2);
+
+/**
+ * Filter get_option to guarantee real-time option values for cadence and backfill options.
+ */
+function sales_pipeline_filter_realtime_options($val, $name)
+{
+    if ($name === 'sp_first_sent_reconcile_cursor' || $name === 'sp_first_sent_reconcile_last_run') {
+        $CI = &get_instance();
+        if ($CI && isset($CI->db)) {
+            $row = $CI->db->select('value')->where('name', $name)->get(db_prefix() . 'options')->row();
+            if ($row) {
+                return $row->value;
+            }
+        }
+    }
+    return $val;
+}
 
 /**
  * Đăng ký quyền truy cập module
@@ -108,7 +126,8 @@ function sales_pipeline_cron_reminder()
     $CI = &get_instance();
     $CI->load->model('sales_pipeline/sales_pipeline_model');
     $CI->sales_pipeline_model->process_reminder_rules();
-    $CI->sales_pipeline_model->reconcile_estimate_groups(1000);
+    $CI->sales_pipeline_model->reconcile_estimate_groups(100);
+    $CI->sales_pipeline_model->reconcile_missing_first_sent_groups(100, null, false);
     $CI->load->library('sales_pipeline/Reminder_delivery_maintenance');
     $CI->reminder_delivery_maintenance->runIfDue();
     $CI->load->library('sales_pipeline/Reminder_engine');
@@ -231,8 +250,6 @@ function sales_pipeline_quote_estimate_deleted($estimate_id)
 }
 
 hooks()->add_action('app_init', 'sales_pipeline_load_helpers');
-hooks()->add_action('app_init', 'sales_pipeline_estimate_group_schema_bootstrap');
-hooks()->add_action('app_init', 'sales_pipeline_reminder_repository_schema_bootstrap');
 hooks()->add_action('app_init', 'sales_pipeline_performance_score_options_bootstrap');
 hooks()->add_action('app_init', 'sales_pipeline_reminder_rule_options_bootstrap');
 
@@ -254,122 +271,6 @@ function sales_pipeline_performance_score_options_bootstrap()
 function sales_pipeline_reminder_rule_options_bootstrap()
 {
     sales_pipeline_seed_reminder_rule_options();
-}
-
-/**
- * Active installations may not run a module migration until the module manager
- * is visited. Bootstrap the new schema once when it is genuinely missing.
- * Checks all tables, columns, and indexes before allowing early return.
- */
-function sales_pipeline_estimate_group_schema_bootstrap()
-{
-    $CI = &get_instance();
-    $group_table = db_prefix() . 'sales_pipeline_estimate_groups';
-    $version_table = db_prefix() . 'sales_pipeline_estimate_versions';
-    $history_table = db_prefix() . 'sales_pipeline_estimate_outcome_history';
-    $events_table = db_prefix() . 'sales_pipeline_estimate_group_events';
-    $bridge_table = db_prefix() . 'sales_pipeline_deal_estimate_groups';
-    $pipeline_table = db_prefix() . 'sales_pipeline';
-    $legacy_table = db_prefix() . 'sales_pipeline_quote_opportunities';
-
-    $has_group_schema = $CI->db->table_exists($group_table)
-        && $CI->db->table_exists($version_table)
-        && $CI->db->table_exists($history_table)
-        && $CI->db->table_exists($events_table)
-        && $CI->db->table_exists($bridge_table)
-        && !$CI->db->table_exists($legacy_table)
-        && !$CI->db->field_exists('pipeline_id', $group_table)
-        && $CI->db->field_exists('decision_estimate_id', $group_table)
-        && $CI->db->field_exists('decision_value_base', $group_table)
-        && $CI->db->field_exists('last_reconciled_at', $group_table)
-        && $CI->db->field_exists('estimate_group_id', $version_table)
-        && $CI->db->field_exists('parent_estimate_id', $version_table)
-        && $CI->db->field_exists('link_method', $version_table)
-        && $CI->db->field_exists('linked_by', $version_table)
-        && $CI->db->field_exists('estimate_group_id', $history_table)
-        && $CI->db->field_exists('is_manual_lock', $pipeline_table);
-
-    if ($has_group_schema) {
-        $recon_idx = $CI->db->query('SHOW INDEX FROM `' . $group_table . '` WHERE Key_name = "idx_last_reconciled"')->row_array();
-        $parent_idx = $CI->db->query('SHOW INDEX FROM `' . $version_table . '` WHERE Key_name = "idx_parent_estimate"')->row_array();
-        $evt_est_idx = $CI->db->query('SHOW INDEX FROM `' . $events_table . '` WHERE Key_name = "idx_event_estimate"')->row_array();
-        $evt_from_idx = $CI->db->query('SHOW INDEX FROM `' . $events_table . '` WHERE Key_name = "idx_event_from_group"')->row_array();
-        $evt_to_idx = $CI->db->query('SHOW INDEX FROM `' . $events_table . '` WHERE Key_name = "idx_event_to_group"')->row_array();
-        $bridge_uq = $CI->db->query('SHOW INDEX FROM `' . $bridge_table . '` WHERE Key_name = "uq_estimate_group"')->row_array();
-        $lock_idx = $CI->db->query('SHOW INDEX FROM `' . $pipeline_table . '` WHERE Key_name = "idx_manual_lock"')->row_array();
-
-        if ($recon_idx && $parent_idx && $evt_est_idx && $evt_from_idx && $evt_to_idx && $bridge_uq && $lock_idx) {
-            return;
-        }
-    }
-
-    require_once(__DIR__ . '/includes/estimate_group_schema.php');
-    sales_pipeline_ensure_estimate_group_schema($CI);
-}
-
-
-/**
- * Keep active installations compatible before the module manager runs 1.0.6.
- */
-function sales_pipeline_reminder_repository_schema_bootstrap()
-{
-    $CI = &get_instance();
-    $table = db_prefix() . 'sales_pipeline_reminders_log';
-    $deliveries = db_prefix() . 'sales_pipeline_reminder_deliveries';
-    $rate_buckets = db_prefix() . 'sales_pipeline_reminder_delivery_rate_buckets';
-    if (!$CI->db->table_exists($table)) {
-        return;
-    }
-
-    $pipeline_column = $CI->db
-        ->query('SHOW COLUMNS FROM `' . $table . '` LIKE ' . $CI->db->escape('pipeline_id'))
-        ->row_array();
-    $delivery_index_names = [];
-    $reminder_index_names = [];
-    $reminder_indexes = $CI->db->query('SHOW INDEX FROM `' . $table . '`')->result_array();
-    $reminder_index_names = array_unique(array_column($reminder_indexes, 'Key_name'));
-    if ($CI->db->table_exists($deliveries)) {
-        $delivery_indexes = $CI->db->query('SHOW INDEX FROM `' . $deliveries . '`')->result_array();
-        $delivery_index_names = array_unique(array_column($delivery_indexes, 'Key_name'));
-    }
-    if ($CI->db->field_exists('entity_type', $table)
-        && $CI->db->field_exists('rule_code', $table)
-        && $CI->db->field_exists('dedupe_key', $table)
-        && $CI->db->field_exists('entity_id', $table)
-        && $CI->db->field_exists('period_key', $table)
-        && $CI->db->field_exists('checkpoint', $table)
-        && $CI->db->field_exists('severity', $table)
-        && $CI->db->field_exists('response_required', $table)
-        && $CI->db->field_exists('response_sla_hours', $table)
-        && $CI->db->field_exists('response_due_at', $table)
-        && $CI->db->field_exists('acknowledged_at', $table)
-        && $CI->db->field_exists('acknowledged_by', $table)
-        && $CI->db->field_exists('title', $table)
-        && $CI->db->field_exists('created_at', $table)
-        && in_array('idx_reminder_inbox_queue', $reminder_index_names, true)
-        && in_array('idx_reminder_sla_eval', $reminder_index_names, true)
-        && $CI->db->table_exists($deliveries)
-        && $CI->db->field_exists('recipient_staff_id', $deliveries)
-        && $CI->db->field_exists('cc_recipients', $deliveries)
-        && $CI->db->field_exists('last_error_code', $deliveries)
-        && $CI->db->field_exists('last_error_class', $deliveries)
-        && $CI->db->field_exists('last_attempt_at', $deliveries)
-        && $CI->db->field_exists('expires_at', $deliveries)
-        && $CI->db->field_exists('expired_at', $deliveries)
-        && in_array('idx_delivery_channel_worker', $delivery_index_names, true)
-        && in_array('idx_delivery_retention', $delivery_index_names, true)
-        && $CI->db->table_exists($rate_buckets)
-        && $CI->db->field_exists('scope_key', $rate_buckets)
-        && $CI->db->field_exists('bucket_minute', $rate_buckets)
-        && $CI->db->field_exists('message_attempts', $rate_buckets)
-        && $CI->db->field_exists('recipient_attempts', $rate_buckets)
-        && $pipeline_column
-        && strtoupper((string) $pipeline_column['Null']) === 'YES') {
-        return;
-    }
-
-    require_once(__DIR__ . '/includes/reminder_repository_schema.php');
-    sales_pipeline_ensure_reminder_repository_schema($CI);
 }
 
 /**
@@ -396,11 +297,18 @@ function sales_pipeline_load_js()
     $CI = &get_instance();
     if ($CI->router->fetch_module() == 'sales_pipeline') {
         $translations = json_encode([
-            'pleaseWait'  => _l('please_wait'),
-            'loading'     => _l('sales_pipeline_dashboard_loading'),
-            'error'       => _l('sales_pipeline_dashboard_load_failed'),
-            'onDate'      => _l('sales_pipeline_dashboard_on_date'),
-            'invalidDate' => _l('sales_pipeline_dashboard_history_invalid_date'),
+            'pleaseWait'        => _l('please_wait'),
+            'loading'           => _l('sales_pipeline_dashboard_loading'),
+            'loadingEstimates'  => _l('sales_pipeline_dashboard_estimates_loading'),
+            'error'             => _l('sales_pipeline_dashboard_load_failed'),
+            'onDate'            => _l('sales_pipeline_dashboard_on_date'),
+            'invalidDate'       => _l('sales_pipeline_dashboard_history_invalid_date'),
+            'locale'            => _l('sales_pipeline_js_locale'),
+            'currencyBillion'   => _l('sales_pipeline_currency_billion'),
+            'currencyMillion'   => _l('sales_pipeline_currency_million'),
+            'currencyVnd'       => _l('sales_pipeline_currency_vnd'),
+            'currentPeriod'     => _l('sales_pipeline_kpi_current_period'),
+            'previousPeriod'    => _l('sales_pipeline_kpi_previous_period'),
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
         echo '<script>window.salesPipelineI18n=' . $translations . ';</script>';
         echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/sales_pipeline.js') . '?v=' . time() . '"></script>';
@@ -436,11 +344,16 @@ function sales_pipeline_load_estimate_revision_js()
             'sourceEstimate'            => _l('sales_pipeline_source_estimate_label'),
             'sourceTotal'               => _l('sales_pipeline_source_estimate_total'),
             'sourceStatus'              => _l('sales_pipeline_source_estimate_status'),
+            'sourceDate'                => _l('sales_pipeline_source_estimate_date'),
             'sourceExpiry'              => _l('sales_pipeline_source_estimate_expiry'),
+            'sourceDateShort'           => _l('sales_pipeline_source_estimate_date_short'),
+            'sourceExpiryShort'         => _l('sales_pipeline_source_estimate_expiry_short'),
             'sourceRevision'            => _l('sales_pipeline_source_estimate_revision'),
             'selectCustomerFirst'       => _l('sales_pipeline_select_customer_first'),
             'noSources'                 => _l('sales_pipeline_no_source_estimates_found'),
             'loadingSources'            => _l('sales_pipeline_loading_source_estimates'),
+            'searchPlaceholder'         => _l('sales_pipeline_search_source_estimates'),
+            'noSearchResults'           => _l('sales_pipeline_no_matching_source_estimates'),
             'acceptedWarning'           => _l('sales_pipeline_revision_accepted_warning'),
             'overrideReasonLabel'       => _l('sales_pipeline_override_reason_label'),
             'overrideReasonPlaceholder' => _l('sales_pipeline_override_reason_placeholder'),
@@ -450,6 +363,7 @@ function sales_pipeline_load_estimate_revision_js()
             'smartPromptCustomer'      => _l('sales_pipeline_smart_prompt_customer'),
             'smartPromptTotal'         => _l('sales_pipeline_smart_prompt_total'),
             'smartPromptStatus'        => _l('sales_pipeline_smart_prompt_status'),
+            'smartPromptDate'          => _l('sales_pipeline_smart_prompt_date'),
             'smartPromptExpiry'        => _l('sales_pipeline_smart_prompt_expiry'),
             'smartPromptQuestion'      => _l('sales_pipeline_smart_prompt_question'),
             'smartPromptApply'          => _l('sales_pipeline_smart_prompt_apply'),
@@ -459,7 +373,7 @@ function sales_pipeline_load_estimate_revision_js()
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
 
         echo '<script>window.salesPipelineEstimateRevisionI18n = ' . $translations . ';</script>';
-        echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/estimate_revision.js') . '?v=1.0.14"></script>';
+        echo '<script src="' . module_dir_url('sales_pipeline', 'assets/js/estimate_revision.js') . '?v=1.0.17"></script>';
     }
 }
 
@@ -474,7 +388,7 @@ function sales_pipeline_load_estimate_revision_css()
     $id = $CI->uri->segment(4);
 
     if ($class === 'estimates' && $method === 'estimate' && (empty($id) || !is_numeric($id))) {
-        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/estimate_revision.css') . '?v=1.0.14">';
+        echo '<link rel="stylesheet" href="' . module_dir_url('sales_pipeline', 'assets/css/estimate_revision.css') . '?v=1.1.4">';
     }
 }
 

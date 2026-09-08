@@ -29,11 +29,15 @@ $perfDefaults = sales_pipeline_performance_score_default_options();
 assert_true(isset($perfDefaults['performance_response_target_percent']), 'performance_response_target_percent must exist in defaults');
 assert_same('90', $perfDefaults['performance_response_target_percent'], 'Default response target must be 90%');
 
-// 1.1 Test Bootstrap guards in sales_pipeline.php
-$moduleSource = file_get_contents(dirname(__DIR__) . '/sales_pipeline.php');
-foreach (["field_exists('response_sla_hours', \$table)", "field_exists('response_due_at', \$table)", 'idx_reminder_sla_eval'] as $needle) {
-    assert_true(strpos($moduleSource, $needle) !== false, "sales_pipeline.php bootstrap must guard {$needle}");
+// 1.1 Schema belongs to activation/migrations, never runtime app_init.
+$schemaSource = file_get_contents(dirname(__DIR__) . '/includes/reminder_repository_schema.php');
+foreach (['response_sla_hours', 'response_due_at', 'idx_reminder_sla_eval'] as $needle) {
+    assert_true(strpos($schemaSource, $needle) !== false, "reminder repository schema must define {$needle}");
 }
+assert_true(
+    strpos(file_get_contents(dirname(__DIR__) . '/install.php'), 'sales_pipeline_ensure_reminder_repository_schema') !== false,
+    'module activation must install the reminder repository schema'
+);
 
 // 2. Test SLA Eligibility & On-time logic simulation
 $calculatedAt = '2026-03-15 12:00:00';
@@ -261,4 +265,3 @@ assert_same(true, $performanceOptionsModified, 'Performance form submission only
 assert_same(false, $reminderOptionsModified, 'Performance form submission does not touch reminder options');
 
 fwrite(STDOUT, "PASS: Reminder SLA reconcile, delivery and settings contract tests\n");
-

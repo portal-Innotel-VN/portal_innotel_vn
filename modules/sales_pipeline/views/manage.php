@@ -775,6 +775,7 @@ var salesPipelineLang = <?php echo json_encode([
     'previous' => _l('sales_pipeline_pagination_prev'),
     'next' => _l('sales_pipeline_pagination_next'),
     'locale' => _l('sales_pipeline_js_locale'),
+    'responseProcessingError' => _l('sales_pipeline_response_processing_error'),
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
 function salesPipelineTranslate(key, replacements) {
@@ -1468,7 +1469,7 @@ $(function() {
                         sp_alert('danger', (response && response.message) ? response.message : '<?php echo _l('something_went_wrong'); ?>');
                     }
                 } catch (e) {
-                    console.error("Lỗi khi xử lý phản hồi:", e);
+                    console.error(salesPipelineLang.responseProcessingError, e);
                     sp_alert('danger', '<?php echo _l('something_went_wrong'); ?>');
                 }
             },

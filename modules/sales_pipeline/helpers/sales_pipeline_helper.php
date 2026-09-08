@@ -48,11 +48,11 @@ if (!function_exists('sales_pipeline_resolve_performance_tier')) {
         if ($score >= 100.0) {
             return [
                 'key'         => 'excellent',
-                'label'       => function_exists('_l') ? _l('sales_pipeline_tier_excellent') : 'Xuất sắc',
+                'label'       => _l('sales_pipeline_tier_excellent'),
                 'class'       => 'sp-tier--excellent',
                 'badge_class' => 'sp-performance-tier-badge--excellent',
                 'score_class' => 'sp-score--excellent',
-                'gap_text'    => function_exists('_l') ? _l('sales_pipeline_tier_target_met') : 'Đã đạt chuẩn hiệu suất (Vượt chỉ tiêu)',
+                'gap_text'    => _l('sales_pipeline_tier_target_met'),
             ];
         }
 
@@ -60,11 +60,11 @@ if (!function_exists('sales_pipeline_resolve_performance_tier')) {
             $gap = round(100.0 - $score, 1);
             return [
                 'key'         => 'good',
-                'label'       => function_exists('_l') ? _l('sales_pipeline_tier_good') : 'Đạt chuẩn',
+                'label'       => _l('sales_pipeline_tier_good'),
                 'class'       => 'sp-tier--good',
                 'badge_class' => 'sp-performance-tier-badge--good',
                 'score_class' => 'sp-score--good',
-                'gap_text'    => function_exists('_l') ? _l('sales_pipeline_tier_gap_100', [number_format($gap, 1, ',', '.')]) : "Cách mốc 100% KPI: còn {$gap} điểm",
+                'gap_text'    => _l('sales_pipeline_tier_gap_100', [number_format($gap, 1, ',', '.')]),
             ];
         }
 
@@ -72,22 +72,22 @@ if (!function_exists('sales_pipeline_resolve_performance_tier')) {
             $gap = round(80.0 - $score, 1);
             return [
                 'key'         => 'warning',
-                'label'       => function_exists('_l') ? _l('sales_pipeline_tier_warning') : 'Cần tăng tốc',
+                'label'       => _l('sales_pipeline_tier_warning'),
                 'class'       => 'sp-tier--warning',
                 'badge_class' => 'sp-performance-tier-badge--warning',
                 'score_class' => 'sp-score--warning',
-                'gap_text'    => function_exists('_l') ? _l('sales_pipeline_tier_gap_80', [number_format($gap, 1, ',', '.')]) : "Cách vạch đạt chuẩn (80 điểm): còn {$gap} điểm",
+                'gap_text'    => _l('sales_pipeline_tier_gap_80', [number_format($gap, 1, ',', '.')]),
             ];
         }
 
         $gap = round(80.0 - $score, 1);
         return [
             'key'         => 'critical',
-            'label'       => function_exists('_l') ? _l('sales_pipeline_tier_critical') : 'Báo động',
+            'label'       => _l('sales_pipeline_tier_critical'),
             'class'       => 'sp-tier--critical',
             'badge_class' => 'sp-performance-tier-badge--critical',
             'score_class' => 'sp-score--critical',
-            'gap_text'    => function_exists('_l') ? _l('sales_pipeline_tier_gap_80', [number_format($gap, 1, ',', '.')]) : "Cách vạch đạt chuẩn (80 điểm): còn {$gap} điểm",
+            'gap_text'    => _l('sales_pipeline_tier_gap_80', [number_format($gap, 1, ',', '.')]),
         ];
     }
 }

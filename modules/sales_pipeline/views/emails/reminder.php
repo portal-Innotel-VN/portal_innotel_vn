@@ -102,7 +102,7 @@ $hasSnapshotDetails = !empty($snapshot['customer_name'])
             <td class="sp-email-body" style="padding: 28px 24px 20px;">
                 <!-- Greeting -->
                 <p style="margin: 0 0 12px; font-size: 15px; color: #475569;">
-                    <?php echo _l('sales_pipeline_reminder_email_greeting', ['<strong style="color: #0f172a;">' . html_escape($staff_name ?: 'Anh/Chị') . '</strong>']); ?>
+                    <?php echo _l('sales_pipeline_reminder_email_greeting', ['<strong style="color: #0f172a;">' . html_escape($staff_name ?: _l('sales_pipeline_reminder_email_recipient_fallback')) . '</strong>']); ?>
                 </p>
 
                 <!-- Title -->

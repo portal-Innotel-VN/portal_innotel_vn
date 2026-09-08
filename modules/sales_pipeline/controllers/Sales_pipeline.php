@@ -399,7 +399,7 @@ class Sales_pipeline extends AdminController
             return $this->json_response(false, _l('sales_pipeline_override_reason_required'), [], 400);
         }
 
-        $deal = $this->sales_pipeline_model->get_deal($deal_id);
+        $deal = $this->sales_pipeline_model->get($deal_id);
         if (!$deal) {
             return $this->json_response(false, _l('sales_pipeline_deal_not_found'), [], 404);
         }
@@ -410,15 +410,9 @@ class Sales_pipeline extends AdminController
             return $this->json_response(false, _l('access_denied'), [], 403);
         }
 
-        $pipeline_table = db_prefix() . 'sales_pipeline';
-        $now = date('Y-m-d H:i:s');
-        $this->db->where('id', $deal_id)->update($pipeline_table, [
-            'is_manual_lock'     => $is_locked,
-            'manual_lock_by'     => $is_locked ? $staff_id : null,
-            'manual_lock_at'     => $is_locked ? $now : null,
-            'manual_lock_reason' => $is_locked ? $reason : null,
-            'datemodified'       => $now,
-        ]);
+        if (!$this->sales_pipeline_model->set_deal_manual_lock($deal_id, $is_locked === 1, $staff_id, $reason)) {
+            return $this->json_response(false, _l('problem_updating'), [], 500);
+        }
 
         $this->load->library('sales_pipeline/estimate_revision_service');
 
@@ -426,12 +420,6 @@ class Sales_pipeline extends AdminController
         if ($is_locked === 0) {
             $this->estimate_revision_service->sync_deal($deal_id);
         }
-
-        $activity_msg = $is_locked
-            ? _l('sales_pipeline_activity_deal_locked', [$reason])
-            : _l('sales_pipeline_activity_deal_unlocked');
-
-        $this->sales_pipeline_model->log_activity($deal_id, $activity_msg, $staff_id);
 
         return $this->json_response(true, _l('sales_pipeline_updated_successfully'), [
             'deal_id'        => $deal_id,
@@ -595,9 +583,9 @@ class Sales_pipeline extends AdminController
                     'deal_date'           => to_sql_date($post['deal_date'] ?? null),
                     'status'              => $post['status'] ?? 0,
                     'staff_id'            => $post['staff_id'] ?? get_staff_user_id(),
-                    'contract_signed'     => $post['contract_signed'] ?? 0,
-                    'invoice_issued'      => $post['invoice_issued'] ?? 0,
-                    'reminder_enabled'    => $post['reminder_enabled'] ?? 0,
+                    'contract_signed'     => !empty($post['contract_signed']) ? 1 : 0,
+                    'invoice_issued'      => !empty($post['invoice_issued']) ? 1 : 0,
+                    'reminder_enabled'    => !empty($post['reminder_enabled']) ? 1 : 0,
                     'reminder_frequency'  => $post['reminder_frequency'] ?? 2,
                     'activity_description' => $post['activity_description'] ?? '',
                 ];
@@ -634,9 +622,9 @@ class Sales_pipeline extends AdminController
                     'deal_date'            => $post['deal_date'] ?? '',
                     'status'               => $post['status'] ?? '',
                     'staff_id'             => $post['staff_id'] ?? get_staff_user_id(),
-                    'contract_signed'      => $post['contract_signed'] ?? 0,
-                    'invoice_issued'       => $post['invoice_issued'] ?? 0,
-                    'reminder_enabled'     => $post['reminder_enabled'] ?? 0,
+                    'contract_signed'      => !empty($post['contract_signed']) ? 1 : 0,
+                    'invoice_issued'       => !empty($post['invoice_issued']) ? 1 : 0,
+                    'reminder_enabled'     => !empty($post['reminder_enabled']) ? 1 : 0,
                     'reminder_frequency'   => $post['reminder_frequency'] ?? 2,
                     'activity_description' => $post['activity_description'] ?? '',
                 ];
@@ -1465,13 +1453,10 @@ class Sales_pipeline extends AdminController
                 }
                 $normalized['sp_reminder_holiday_dates'] = implode("\n", array_unique($holidays));
                 if ($errors) { set_alert('warning', implode('<br>', $errors)); redirect(admin_url('sales_pipeline/settings#reminders')); }
-                $changed = [];
-                $this->db->trans_begin();
-                foreach ($normalized as $key => $value) {
-                    if ((string) get_option($key) !== $value) { $changed[] = $key; update_option($key, $value); }
-                }
-                if ($this->db->trans_status() === false) { $this->db->trans_rollback(); set_alert('danger', _l('problem_updating')); }
-                else { $this->db->trans_commit(); if ($changed) { log_activity('Sales Pipeline reminder settings updated by Staff #' . get_staff_user_id() . ': ' . implode(', ', $changed)); } set_alert('success', _l('updated_successfully', _l('sales_pipeline_settings_reminders'))); }
+                $save_result = $this->sales_pipeline_model->save_pipeline_settings($normalized);
+                $changed = $save_result['changed'];
+                if (!$save_result['success']) { set_alert('danger', _l('problem_updating')); }
+                else { if ($changed) { log_activity('Sales Pipeline reminder settings updated by Staff #' . get_staff_user_id() . ': ' . implode(', ', $changed)); } set_alert('success', _l('updated_successfully', _l('sales_pipeline_settings_reminders'))); }
                 redirect(admin_url('sales_pipeline/settings#reminders'));
             } elseif ($type == 'performance') {
                 $errors = [];
@@ -1494,19 +1479,11 @@ class Sales_pipeline extends AdminController
                     redirect(admin_url('sales_pipeline/settings#performance'));
                 }
 
-                $changed = [];
-                $this->db->trans_begin();
-                foreach ($normalized as $key => $value) {
-                    if ((string) get_option($key) !== $value) {
-                        $changed[] = $key;
-                        update_option($key, $value);
-                    }
-                }
-                if ($this->db->trans_status() === false) {
-                    $this->db->trans_rollback();
+                $save_result = $this->sales_pipeline_model->save_pipeline_settings($normalized);
+                $changed = $save_result['changed'];
+                if (!$save_result['success']) {
                     set_alert('danger', _l('problem_updating'));
                 } else {
-                    $this->db->trans_commit();
                     if ($changed) {
                         log_activity('Sales Pipeline performance score settings updated by Staff #' . get_staff_user_id() . ': ' . implode(', ', $changed));
                     }
@@ -1793,47 +1770,32 @@ class Sales_pipeline extends AdminController
         $reference = trim((string) $this->input->post('reference'));
         $reason = trim((string) $this->input->post('reason'));
 
-        if (!in_array($entityType, ['deal', 'estimate_group'], true) || $entityId <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Invalid entity parameter']);
-            return;
+        if (!in_array($entityType, ['deal', 'estimate_group'], true) || $entityId <= 0 || !in_array($lockAction, ['lock', 'unlock'], true)) {
+            return $this->json_response(false, _l('sales_pipeline_finance_lock_invalid_entity'), [], 400);
         }
 
         if ($lockAction === 'lock' && (empty($reference) || empty($reason))) {
-            echo json_encode(['success' => false, 'message' => 'Reference and reason are required to lock']);
-            return;
+            return $this->json_response(false, _l('sales_pipeline_finance_lock_reference_reason_required'), [], 400);
         }
 
-        $table = $entityType === 'deal'
-            ? db_prefix() . 'sales_pipeline_deals'
-            : db_prefix() . 'sales_pipeline_estimate_groups';
-
-        $now = date('Y-m-d H:i:s');
         $actorStaffId = get_staff_user_id();
-
-        $updateData = [];
-        if ($lockAction === 'lock') {
-            $updateData = [
-                'is_finance_locked'          => 1,
-                'finance_locked_at'          => $now,
-                'finance_locked_by'          => (int) $actorStaffId,
-                'finance_approval_reference' => $reference,
-            ];
-        } else {
-            $updateData = [
-                'is_finance_locked'          => 0,
-                'finance_locked_at'          => null,
-                'finance_locked_by'          => null,
-                'finance_approval_reference' => null,
-            ];
+        $result = $this->sales_pipeline_model->set_finance_lock(
+            $entityType,
+            $entityId,
+            $lockAction === 'lock',
+            $actorStaffId,
+            $reference,
+            $reason
+        );
+        if (!$result['success']) {
+            $statusCode = $result['reason'] === 'not_found' ? 404 : 500;
+            return $this->json_response(false, _l('sales_pipeline_finance_lock_update_failed'), [], $statusCode);
         }
 
-        $this->db->where('id', $entityId)->update($table, $updateData);
-
-        echo json_encode([
-            'success'   => true,
+        return $this->json_response(true, _l('sales_pipeline_updated_successfully'), [
             'status'    => $lockAction === 'lock' ? 'locked' : 'unlocked',
             'entity_id' => $entityId,
-            'locked_at' => $now,
+            'locked_at' => $result['locked_at'],
         ]);
     }
 }

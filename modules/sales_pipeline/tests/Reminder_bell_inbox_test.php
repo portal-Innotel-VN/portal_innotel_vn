@@ -70,11 +70,7 @@ if (version_compare($modVer, '1.0.13', '<')) {
     fwrite(STDERR, "FAIL: module version must activate migration 113 (got {$modVer})\n");
     exit(1);
 }
-foreach (['acknowledged_at', 'acknowledged_by', 'idx_reminder_inbox_queue'] as $schemaGuard) {
-    assert_contains($moduleContent, $schemaGuard, 'app_init bootstrap must guard ' . $schemaGuard);
-}
-
-// 2. Kiểm tra Schema Bootstrap chứa acknowledged_at và acknowledged_by
+// 2. Schema creation belongs to activation/migrations, never app_init.
 $schemaFile = $moduleRoot . '/includes/reminder_repository_schema.php';
 $schemaContent = file_get_contents($schemaFile);
 if (strpos($schemaContent, 'acknowledged_at') === false || strpos($schemaContent, 'acknowledged_by') === false) {

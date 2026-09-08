@@ -30,6 +30,7 @@
     --sp-bell-transparent: rgba(255, 111, 0, 0);
     --sp-reminder-dot-top: 37.2px;
     --sp-reminder-dot-left: 50%;
+    --sp-bell-touch-target: 44px;
 }
 
 .notifications-wrapper.header-notifications.has-sp-reminder-pending>a.notifications-icon {
@@ -275,6 +276,27 @@
 /* =========================================================================
    RESPONSIVE / MOBILE
    ========================================================================= */
+@media (max-width: 767px) {
+    /* Keep the combined module/Core notification list inside the phone viewport. */
+    .notifications-wrapper.header-notifications > .dropdown-menu.notifications {
+        max-height: calc(100vh - 64px);
+        max-height: calc(100dvh - 64px);
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    /* Phase 5 gate: all reminder actions need a 44px touch target. */
+    .sp-bell-ack-btn,
+    .sp-reminder-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: var(--sp-bell-touch-target);
+        min-height: var(--sp-bell-touch-target);
+    }
+}
+
 @media (max-width: 520px) {
     .sp-reminder-inbox-scroll {
         max-height: 200px;
@@ -284,10 +306,9 @@
         padding: 10px;
     }
 
-    .sp-bell-ack-btn,
     .sp-reminder-btn {
-        min-height: 38px;
-        min-width: 38px;
+        min-height: var(--sp-bell-touch-target);
+        min-width: var(--sp-bell-touch-target);
         justify-content: center;
     }
 }

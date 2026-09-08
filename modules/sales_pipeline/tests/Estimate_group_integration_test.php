@@ -309,14 +309,13 @@ assert_true(strpos($schemaContent, 'idx_event_from_group') !== false, 'Test 6: a
 assert_true(strpos($schemaContent, 'idx_event_to_group') !== false, 'Test 6: audit to_group index');
 assert_true(strpos($schemaContent, 'idx_parent_estimate') !== false, 'Test 6: parent estimate index');
 
-// Test 7: Bootstrap verification in sales_pipeline.php
+// Test 7: Schema ownership and module wiring verification
 $moduleContent = file_get_contents($moduleRoot . '/sales_pipeline.php');
-assert_true(strpos($moduleContent, 'idx_last_reconciled') !== false, 'Test 7: bootstrap checks idx_last_reconciled');
-assert_true(strpos($moduleContent, 'idx_parent_estimate') !== false, 'Test 7: bootstrap checks idx_parent_estimate');
-assert_true(strpos($moduleContent, 'idx_event_estimate') !== false, 'Test 7: bootstrap checks idx_event_estimate');
-assert_true(strpos($moduleContent, 'idx_event_from_group') !== false, 'Test 7: bootstrap checks idx_event_from_group');
-assert_true(strpos($moduleContent, 'idx_event_to_group') !== false, 'Test 7: bootstrap checks idx_event_to_group');
-assert_true(strpos($moduleContent, 'idx_manual_lock') !== false, 'Test 7: bootstrap checks idx_manual_lock');
+assert_true(strpos($moduleContent, 'sales_pipeline_estimate_group_schema_bootstrap') === false, 'Test 7: no Estimate Group DDL bootstrap on app_init');
+assert_true(strpos($moduleContent, 'sales_pipeline_reminder_repository_schema_bootstrap') === false, 'Test 7: no Reminder Repository DDL bootstrap on app_init');
+$installContent = file_get_contents($moduleRoot . '/install.php');
+assert_true(strpos($installContent, 'sales_pipeline_ensure_estimate_group_schema') !== false, 'Test 7: activation install owns Estimate Group schema creation');
+assert_true(strpos($installContent, 'sales_pipeline_ensure_reminder_repository_schema') !== false, 'Test 7: activation install owns Reminder Repository schema creation');
 assert_true(strpos($moduleContent, 'manage_estimate_revisions') !== false, 'Test 7: manage_estimate_revisions capability registered');
 assert_true(strpos($moduleContent, 'before_estimate_added') !== false, 'Test 7: before_estimate_added filter registered');
 assert_true(strpos($moduleContent, 'sales_pipeline_load_estimate_revision_js') !== false, 'Test 7: JS loader registered');
@@ -346,7 +345,8 @@ $jsContent = file_get_contents($moduleRoot . '/assets/js/estimate_revision.js');
 assert_true(strpos($jsContent, 'sales_pipeline[intent]') !== false, 'Test 11: JS contains intent input');
 assert_true(strpos($jsContent, 'sales_pipeline[revision_of_estimate_id]') !== false, 'Test 11: JS contains source selector');
 assert_true(strpos($jsContent, 'sales_pipeline[override_reason]') !== false, 'Test 11: JS contains override reason textarea');
-assert_true(strpos($jsContent, 'estimate_revision_sources') !== false, 'Test 11: JS calls estimate_revision_sources');
+assert_true(strpos($jsContent, 'i18n.sourcesUrl') !== false, 'Test 11: JS calls the localized source endpoint');
+assert_true(strpos($moduleContent, "admin_url('sales_pipeline/estimate_revision_sources')") !== false, 'Test 11: PHP injects estimate_revision_sources URL');
 
 $cssContent = file_get_contents($moduleRoot . '/assets/css/estimate_revision.css');
 assert_true(strpos($cssContent, '.sp-estimate-intent-panel') !== false, 'Test 11: CSS panel selector exists');
@@ -384,8 +384,8 @@ assert_true(strpos($schemaContent, 'KEY `idx_event_estimate` (`estimate_id`, `da
 assert_true(strpos($schemaContent, 'KEY `idx_event_from_group` (`from_group_id`, `datecreated`)') !== false, 'Test 16: event from_group index');
 assert_true(strpos($schemaContent, 'KEY `idx_event_to_group` (`to_group_id`, `datecreated`)') !== false, 'Test 16: event to_group index');
 
-// Test 17: Version number bump verification
-assert_true(preg_match('/Version:\s*1\.0\.(1[1-9]|\d{3,})/', $moduleContent) === 1, 'Test 17: module version is 1.0.11+');
+// Test 17: Version number bump verification (must be >= 1.0.11, e.g. 1.1.4)
+assert_true(preg_match('/Version:\s*(1\.1\.\d+|1\.0\.(1[1-9]|\d{3,}))/', $moduleContent) === 1, 'Test 17: module version is 1.0.11+ / 1.1.4');
 
 // Test 18: Audit event allow-list types supported in service
 $serviceCode = file_get_contents($moduleRoot . '/libraries/Estimate_revision_service.php');
@@ -495,10 +495,10 @@ assert_true($fallbackGroupId > 0, 'Test 32: create_fallback_standalone_with_audi
 assert_true(strpos($modelContent, '$this->db->where(\'pipeline_id\', $id);') !== false, 'Test 33: delete model removes bridge records by pipeline_id');
 assert_true(strpos($modelContent, '$this->db->trans_start();') !== false, 'Test 33: delete model runs within transaction');
 
-// Test 34: Bootstrap Schema Guard Full Variables Check
-assert_true(strpos($moduleContent, '$legacy_table =') !== false, 'Test 34: bootstrap defines legacy_table');
-assert_true(strpos($moduleContent, '$events_table =') !== false, 'Test 34: bootstrap defines events_table');
-assert_true(strpos($moduleContent, '$bridge_table =') !== false, 'Test 34: bootstrap defines bridge_table');
+// Test 34: Schema helper retains legacy cleanup, audit, and bridge ownership
+assert_true(strpos($schemaContent, '$legacy_group_table =') !== false, 'Test 34: schema helper defines legacy_group_table');
+assert_true(strpos($schemaContent, '$events_table =') !== false, 'Test 34: schema helper defines events_table');
+assert_true(strpos($schemaContent, '$bridge_table =') !== false, 'Test 34: schema helper defines bridge_table');
 
 // Test 35: Version History UI labels are fully localized (no English status suffixes)
 assert_true(strpos($versionHistoryJsContent, 'salesPipelineVersionHistoryI18n') !== false, 'Test 35: Version History UI consumes module translations');

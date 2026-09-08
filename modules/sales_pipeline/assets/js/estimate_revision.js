@@ -4,37 +4,7 @@
 (function ($) {
     'use strict';
 
-    var i18n = $.extend({
-        intentLabel: 'Mục đích Báo giá',
-        intentStandalone: 'Báo giá mới độc lập',
-        intentStandaloneHelp: 'Khởi tạo một chuỗi thương vụ / giao dịch hoàn toàn mới cho khách hàng này.',
-        intentRevision: 'Bản điều chỉnh / Thay thế',
-        intentRevisionHelp: 'Sửa đổi số lượng, cấu hình, giá hoặc báo lại cho Báo giá đã hết hạn trước đó.',
-        selectSource: 'Chọn một Báo giá để điều chỉnh hoặc thay thế',
-        sourceEstimate: 'Báo giá',
-        sourceTotal: 'Tổng tiền',
-        sourceStatus: 'Trạng thái',
-        sourceExpiry: 'Hạn Báo giá',
-        sourceRevision: 'Phiên bản',
-        selectCustomerFirst: 'Vui lòng chọn Khách hàng ở ô phía trên trước để tải danh sách Báo giá.',
-        noSources: 'Khách hàng này chưa có Báo giá nào trước đó để liên kết.',
-        loadingSources: 'Đang tải danh sách Báo giá...',
-        acceptedWarning: 'Báo giá này đã được chấp nhận. Để tạo bản điều chỉnh sau chấp nhận, bạn cần nhập lý do xác nhận.',
-        overrideReasonLabel: 'Lý do điều chỉnh sau chấp nhận (Bắt buộc):',
-        overrideReasonPlaceholder: 'Nhập lý do điều chỉnh kỹ thuật / bổ sung phụ lục...',
-        smartPromptTitle: 'Gợi ý Báo giá Thông minh',
-        smartPromptIntro: 'Có một Báo giá gần đây phù hợp với khách hàng này:',
-        smartPromptEstimateNumber: 'Số Báo giá',
-        smartPromptCustomer: 'Khách hàng',
-        smartPromptTotal: 'Tổng tiền',
-        smartPromptStatus: 'Trạng thái',
-        smartPromptExpiry: 'Hạn Báo giá',
-        smartPromptQuestion: 'Bạn có đang tạo bản điều chỉnh cho Báo giá này không?',
-        smartPromptApply: 'Chọn làm bản điều chỉnh',
-        smartPromptDismiss: 'Bỏ qua',
-        sourcesUrl: (typeof admin_url !== 'undefined' ? admin_url : '') + 'sales_pipeline/estimate_revision_sources',
-        candidatesUrl: (typeof admin_url !== 'undefined' ? admin_url : '') + 'sales_pipeline/estimate_revision_candidates'
-    }, window.salesPipelineEstimateRevisionI18n || {});
+    var i18n = window.salesPipelineEstimateRevisionI18n || {};
 
     var state = {
         clientId: null,
@@ -117,7 +87,7 @@
                     '</label>',
                 '</div>',
 
-                '<!-- Smart Prompt Banner (Bước 5) -->',
+                '<!-- Smart Prompt Banner -->',
                 '<div class="sp-smart-prompt-banner" id="sp-smart-prompt-banner" style="display: none;">',
                     '<div class="sp-prompt-icon"><i class="fa fa-lightbulb-o"></i></div>',
                     '<div class="sp-prompt-content">',
@@ -156,7 +126,7 @@
                             '<div class="sp-select-search-wrap">',
                                 '<div class="sp-select-search-input">',
                                     '<i class="fa fa-search" aria-hidden="true"></i>',
-                                    '<input type="text" id="sp-select-search" autocomplete="off" placeholder="Tìm kiếm báo giá...">',
+                                    '<input type="text" id="sp-select-search" autocomplete="off" placeholder="' + escapeHtml(i18n.searchPlaceholder) + '">',
                                 '</div>',
                             '</div>',
                             '<div class="sp-select-listbox" id="sp-select-listbox" role="presentation">',
@@ -373,8 +343,7 @@
 
                         var listHtml = '';
                         $.each(res.data.sources, function (i, item) {
-                            var statusKey = (item.status_label || '').toLowerCase();
-                            var statusClass = getStatusClass(statusKey, item.is_accepted);
+                            var statusClass = getStatusClass(item.status, item.is_accepted);
 
                             // Populate native select for form submission
                             $nativeSelect.append(
@@ -388,9 +357,18 @@
                             if (item.total_formatted) {
                                 metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-money" aria-hidden="true"></i>' + escapeHtml(item.total_formatted) + '</span>';
                             }
-                            if (item.expirydate) {
-                                metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-calendar" aria-hidden="true"></i>' + escapeHtml(item.expirydate) + '</span>';
+                            // Option B: Display both Created Date and Expiry Date
+                            var dateParts = [];
+                            if (item.date) {
+                                dateParts.push(escapeHtml(i18n.sourceDateShort) + ': ' + escapeHtml(item.date));
                             }
+                            if (item.expirydate) {
+                                dateParts.push(escapeHtml(i18n.sourceExpiryShort) + ': ' + escapeHtml(item.expirydate));
+                            }
+                            if (dateParts.length > 0) {
+                                metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-calendar" aria-hidden="true"></i>' + dateParts.join(' • ') + '</span>';
+                            }
+
                             if (item.revision_no > 1) {
                                 metaHtml += '<span class="sp-option-meta-item"><i class="fa fa-code-fork" aria-hidden="true"></i>v' + item.revision_no + '</span>';
                             }
@@ -399,7 +377,7 @@
                                 + ' role="option"'
                                 + ' data-value="' + escapeHtml(String(item.estimate_id)) + '"'
                                 + ' data-accepted="' + (item.is_accepted ? '1' : '0') + '"'
-                                + ' data-search="' + escapeHtml((item.estimate_number + ' ' + (item.status_label || '')).toLowerCase()) + '"'
+                                + ' data-search="' + escapeHtml((item.estimate_number + ' ' + (item.status_label || '') + (item.date ? ' ' + item.date : '') + (item.expirydate ? ' ' + item.expirydate : '')).toLowerCase()) + '"'
                                 + ' tabindex="-1">'
                                 + '<span class="sp-option-icon"><i class="fa fa-file-text-o" aria-hidden="true"></i></span>'
                                 + '<span class="sp-option-body">'
@@ -483,6 +461,7 @@
                                 + promptDetail(i18n.smartPromptCustomer, top.customer_name)
                                 + promptDetail(i18n.smartPromptTotal, top.total_formatted)
                                 + promptDetail(i18n.smartPromptStatus, top.status_label)
+                                + promptDetail(i18n.smartPromptDate, top.date)
                                 + promptDetail(i18n.smartPromptExpiry, top.expirydate)
                                 + '</dl>'
                                 + '<p class="sp-prompt-question">' + escapeHtml(i18n.smartPromptQuestion) + '</p>';
@@ -595,21 +574,25 @@
         var $noResult = $('#sp-select-listbox .sp-select-no-result');
         if (!visibleCount && q) {
             if (!$noResult.length) {
-                $('#sp-select-listbox').append('<div class="sp-select-panel-msg sp-select-no-result">Không tìm thấy kết quả phù hợp.</div>');
+                $('#sp-select-listbox').append('<div class="sp-select-panel-msg sp-select-no-result">' + escapeHtml(i18n.noSearchResults) + '</div>');
             }
         } else {
             $noResult.remove();
         }
     }
 
-    function getStatusClass(statusLabel, isAccepted) {
+    function getStatusClass(status, isAccepted) {
         if (isAccepted) { return 'accepted'; }
-        var s = statusLabel.toLowerCase();
-        if (s.indexOf('nháp') !== -1 || s.indexOf('draft') !== -1) { return 'draft'; }
-        if (s.indexOf('gửi') !== -1 || s.indexOf('sent') !== -1) { return 'sent'; }
-        if (s.indexOf('chấp nhận') !== -1 || s.indexOf('accepted') !== -1) { return 'accepted'; }
-        if (s.indexOf('hết hạn') !== -1 || s.indexOf('expired') !== -1) { return 'expired'; }
-        if (s.indexOf('từ chối') !== -1 || s.indexOf('declined') !== -1) { return 'declined'; }
+        var statusClasses = {
+            1: 'draft',
+            2: 'sent',
+            3: 'declined',
+            4: 'accepted',
+            5: 'expired'
+        };
+        if (Object.prototype.hasOwnProperty.call(statusClasses, status)) {
+            return statusClasses[status];
+        }
         return 'default';
     }
 
