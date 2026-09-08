@@ -1,0 +1,65 @@
+.sp-reminder-response {
+    --crm-primary: #28b8da;
+    --crm-info: #03a9f4;
+    --crm-success: #84C529;
+    --crm-warning: #ff6f00;
+    --crm-ink: #323a45;
+    --crm-muted: #6c7888;
+    --crm-bg-soft: #f7f8fa;
+    --crm-border: #e4e8f1;
+    --crm-link-hover: #004B6D;
+    --crm-info-soft: #e5f6fd;
+    --crm-warning-ink: #8a4d00;
+    --crm-warning-soft: #fff3e8;
+    --crm-success-ink: #3e6812;
+    --crm-success-soft: #edf8df;
+    --crm-response-soft: #f4faeb;
+    box-sizing: border-box;
+}
+
+.sp-reminder-response__panel { border-radius: 8px; }
+.sp-reminder-response__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.sp-reminder-response__header h1 { margin: 3px 0 0; color: var(--crm-ink); font-size: 22px; line-height: 1.35; }
+.sp-reminder-response__eyebrow { color: var(--crm-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.sp-reminder-state { display: inline-flex; min-height: 38px; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.sp-reminder-state--info { color: var(--crm-link-hover); background: var(--crm-info-soft); }
+.sp-reminder-state--pending { color: var(--crm-warning-ink); background: var(--crm-warning-soft); }
+.sp-reminder-state--responded { color: var(--crm-success-ink); background: var(--crm-success-soft); }
+.sp-reminder-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
+.sp-reminder-context > div { padding: 12px; border: 1px solid var(--crm-border); border-radius: 6px; background: var(--crm-bg-soft); }
+.sp-reminder-context span, .sp-reminder-response__answer span { display: block; margin-bottom: 4px; color: var(--crm-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.sp-reminder-context strong { display: block; overflow-wrap: anywhere; color: var(--crm-ink); font-size: 14px; }
+.sp-reminder-message { display: flex; gap: 12px; margin-bottom: 20px; padding: 18px; color: var(--crm-ink); border: 1px solid var(--crm-border); border-left: 4px solid var(--crm-info); border-radius: 6px; background: var(--crm-bg-soft); line-height: 1.6; }
+.sp-reminder-message__icon { flex: 0 0 auto; margin-top: 3px; color: var(--crm-info); font-size: 18px; }
+.sp-reminder-message__content { min-width: 0; }
+.sp-reminder-message__greeting { margin: 0; }
+.sp-reminder-message__reason { display: flex; flex-wrap: wrap; gap: 5px 8px; align-items: baseline; margin: 0 0 12px; }
+.sp-reminder-message__reason span { color: var(--crm-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.sp-reminder-message__reason strong { color: var(--crm-warning-ink); }
+.sp-reminder-message__target { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.sp-reminder-message__target > strong { flex: 0 0 auto; margin-right: 2px; }
+.sp-reminder-message__target > span { min-width: 0; }
+.sp-reminder-message__question { margin: 7px 0 0; color: var(--crm-ink); font-weight: 600; }
+.sp-reminder-message__intro { margin: 16px 0 5px; font-weight: 600; }
+.sp-reminder-message__questions { margin: 0; padding: 0; list-style: none; }
+.sp-reminder-message__questions li { display: flex; gap: 6px; padding: 3px 0; }
+.sp-reminder-message__questions strong { flex: 0 0 auto; }
+.sp-reminder-message__warning { margin: 14px 0 0; padding: 11px 12px; color: var(--crm-warning-ink); border-color: #ffe69c; background: var(--crm-warning-soft); }
+.sp-reminder-message__warning i { margin-right: 5px; }
+.sp-reminder-message__warning strong { margin-right: 4px; }
+.sp-reminder-info-note { margin-bottom: 0; }
+.sp-reminder-response__answer { margin-top: 18px; padding: 15px; border-left: 4px solid var(--crm-success); border-radius: 4px; background: var(--crm-response-soft); }
+.sp-reminder-response__answer-content { display: block; height: auto; min-height: 100px; padding: 10px; overflow-wrap: anywhere; color: var(--crm-ink); border-color: var(--crm-border); background: #f5f5f5; line-height: 1.6; }
+.sp-reminder-response__answer time { color: var(--crm-muted); font-size: 11px; }
+.sp-reminder-response__success { margin: 12px 0 8px; }
+.sp-reminder-action { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 8px; }
+.sp-reminder-action:focus, .sp-reminder-response textarea:focus { outline: 2px solid var(--crm-info); outline-offset: 2px; }
+
+@media (max-width: 767px) {
+    .sp-reminder-response__header { display: block; }
+    .sp-reminder-state { margin-top: 12px; }
+    .sp-reminder-context { grid-template-columns: 1fr; }
+    .sp-reminder-message { padding: 15px; }
+    .sp-reminder-message__questions li { display: block; }
+    .sp-reminder-message__questions strong { display: block; }
+}

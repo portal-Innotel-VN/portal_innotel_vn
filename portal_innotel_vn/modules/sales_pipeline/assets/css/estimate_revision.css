@@ -1,0 +1,598 @@
+/**
+ * Sales Pipeline - Estimate Revision Intent Selector Styles
+ */
+
+.sp-estimate-intent-panel {
+    --crm-primary: #28b8da;
+    --crm-primary-hover: #1e95b1;
+    --crm-info: #03a9f4;
+    --crm-info-hover: #0286c2;
+    --crm-warning: #ff6f00;
+    --crm-warning-ink: #8a4d00;
+    --crm-warning-soft: #fff3e8;
+    --crm-ink: #323a45;
+    --crm-muted: #6c7888;
+    --crm-bg-soft: #f7f8fa;
+    --crm-bg-alt: #f1f5f7;
+    --crm-info-soft: #e5f6fd;
+    --crm-border: #e4e8f1;
+    --crm-border-input: #d6d6d6;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid var(--crm-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.sp-estimate-intent-panel:hover {
+    border-color: var(--crm-primary);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+}
+
+.sp-intent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--crm-ink);
+}
+
+.sp-intent-header i {
+    color: var(--crm-info);
+    font-size: 16px;
+}
+
+.sp-intent-options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+@media (max-width: 768px) {
+    .sp-intent-options-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.sp-intent-card {
+    position: relative;
+    border: 2px solid var(--crm-border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    background: #ffffff;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.sp-intent-card:hover {
+    background: var(--crm-bg-soft);
+    border-color: var(--crm-primary);
+}
+
+.sp-intent-card.active {
+    background: #ffffff;
+    border-color: var(--crm-info);
+}
+
+.sp-intent-card input[type="radio"] {
+    margin-top: 3px;
+    cursor: pointer;
+    accent-color: var(--crm-info);
+}
+
+.sp-intent-card-content {
+    flex: 1;
+}
+
+.sp-intent-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--crm-ink);
+    margin-bottom: 2px;
+}
+
+.sp-intent-title i {
+    width: 18px;
+    margin-right: 6px;
+    color: var(--crm-primary);
+    text-align: center;
+}
+
+.sp-intent-desc {
+    font-size: 12px;
+    color: var(--crm-muted);
+    line-height: 1.4;
+}
+
+/* Source Selection Dropdown Area */
+.sp-source-selection-container {
+    background: var(--crm-bg-soft);
+    border: 1px solid var(--crm-border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-top: 10px;
+    animation: spFadeIn 0.2s ease-in-out;
+}
+
+@keyframes spFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.sp-source-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--crm-ink);
+    margin-bottom: 6px;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Custom Dropdown — Không phụ thuộc giao diện hệ điều hành
+   ──────────────────────────────────────────────────────────── */
+
+/* Hidden native select (để form submit value) */
+.sp-source-select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Trigger button */
+.sp-custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 38px;
+    padding: 7px 12px;
+    background: #ffffff;
+    border: 1px solid var(--crm-border-input);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--crm-muted);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    box-sizing: border-box;
+    line-height: 1.4;
+}
+
+.sp-custom-select-trigger:hover {
+    border-color: var(--crm-primary);
+}
+
+.sp-custom-select-trigger.is-open,
+.sp-custom-select-trigger:focus {
+    border-color: var(--crm-info);
+    box-shadow: 0 0 0 3px rgba(3, 169, 244, 0.15);
+    outline: none;
+}
+
+.sp-custom-select-trigger .sp-trigger-value {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-custom-select-trigger .sp-trigger-value.is-placeholder {
+    color: var(--crm-muted);
+}
+
+.sp-custom-select-trigger .sp-trigger-value.is-selected {
+    color: var(--crm-ink);
+    font-weight: 500;
+}
+
+.sp-custom-select-trigger .sp-trigger-chevron {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--crm-muted);
+    transition: transform 0.18s ease;
+}
+
+.sp-custom-select-trigger.is-open .sp-trigger-chevron {
+    transform: rotate(180deg);
+}
+
+/* Loading / disabled state */
+.sp-custom-select-trigger.is-loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.sp-custom-select-trigger.is-loading .sp-trigger-chevron::before {
+    content: "\f021";
+    font-family: "FontAwesome";
+    animation: sp-spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+@keyframes sp-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Dropdown panel */
+.sp-custom-select-panel {
+    display: none;
+    position: absolute;
+    z-index: 9999;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    background: #ffffff;
+    border: 1px solid var(--crm-border-input);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(50, 58, 69, 0.12), 0 2px 6px rgba(50, 58, 69, 0.08);
+    overflow: hidden;
+    animation: sp-dropdown-in 0.15s ease-out forwards;
+}
+
+@keyframes sp-dropdown-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.sp-custom-select-panel.is-open {
+    display: block;
+}
+
+/* Search input inside panel */
+.sp-select-search-wrap {
+    padding: 8px 8px 6px;
+    border-bottom: 1px solid var(--crm-border);
+    background: var(--crm-bg-soft);
+}
+
+.sp-select-search-input {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #ffffff;
+    border: 1px solid var(--crm-border-input);
+    border-radius: 5px;
+    padding: 5px 10px;
+    transition: border-color 0.18s;
+}
+
+.sp-select-search-input:focus-within {
+    border-color: var(--crm-info);
+    box-shadow: 0 0 0 2px rgba(3, 169, 244, 0.12);
+}
+
+.sp-select-search-input i {
+    font-size: 12px;
+    color: var(--crm-muted);
+    flex-shrink: 0;
+}
+
+.sp-select-search-input input {
+    border: none;
+    outline: none;
+    font-size: 12px;
+    color: var(--crm-ink);
+    background: transparent;
+    width: 100%;
+    padding: 0;
+    height: auto;
+    box-shadow: none;
+}
+
+.sp-select-search-input input::placeholder {
+    color: var(--crm-muted);
+}
+
+/* List */
+.sp-select-listbox {
+    max-height: 260px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 0;
+    scroll-behavior: smooth;
+}
+
+.sp-select-listbox::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sp-select-listbox::-webkit-scrollbar-track {
+    background: var(--crm-bg-soft);
+}
+
+.sp-select-listbox::-webkit-scrollbar-thumb {
+    background: #c9d3de;
+    border-radius: 4px;
+}
+
+/* Option item */
+.sp-select-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: background 0.12s;
+    line-height: 1.4;
+    border-left: 3px solid transparent;
+}
+
+.sp-select-option:hover,
+.sp-select-option.is-focused {
+    background: var(--crm-bg-soft);
+    border-left-color: var(--crm-primary);
+}
+
+.sp-select-option.is-selected {
+    background: #e5f6fd;
+    border-left-color: var(--crm-info);
+}
+
+.sp-select-option.is-placeholder {
+    color: var(--crm-muted);
+    font-style: italic;
+    border-left-color: transparent;
+}
+
+.sp-option-icon {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--crm-muted);
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+}
+
+.sp-select-option.is-selected .sp-option-icon {
+    color: var(--crm-info);
+}
+
+.sp-option-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.sp-option-number {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--crm-ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.sp-option-meta {
+    font-size: 11.5px;
+    color: var(--crm-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    line-height: 1.5;
+}
+
+.sp-option-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.sp-option-meta-item i {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+/* Status badge on option */
+.sp-option-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.sp-option-status--draft    { background: #e8edf2; color: #526170; }
+.sp-option-status--sent     { background: #e5f6fd; color: #0286c2; }
+.sp-option-status--accepted { background: #edfade; color: #4a7d0e; }
+.sp-option-status--expired  { background: #fff0ee; color: #c7291b; }
+.sp-option-status--declined { background: #fff0ee; color: #c7291b; }
+.sp-option-status--default  { background: #e8edf2; color: #526170; }
+
+/* Empty / info messages inside panel */
+.sp-select-panel-msg {
+    padding: 16px 14px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--crm-muted);
+    font-style: italic;
+}
+
+/* Wrapper (relative for panel positioning) */
+.sp-custom-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.sp-source-empty-hint {
+    font-size: 12px;
+    color: var(--crm-muted);
+    font-style: italic;
+    margin-top: 4px;
+}
+
+/* Override Reason box for Manager */
+.sp-override-reason-container {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--crm-border);
+}
+
+.sp-override-warning {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--crm-warning-ink);
+    background: var(--crm-warning-soft);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.sp-override-warning i {
+    font-size: 14px;
+}
+
+.sp-override-textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px 12px;
+    font-size: 12px;
+    border: 1px solid var(--crm-warning);
+    border-radius: 6px;
+    resize: vertical;
+}
+
+.sp-override-textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+/* Smart Prompt Banner (Bước 5) */
+.sp-smart-prompt-banner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    background: var(--crm-info-soft);
+    border: 1px solid #b8e7f8;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    animation: spFadeIn 0.25s ease-in-out;
+}
+
+.sp-prompt-icon {
+    font-size: 20px;
+    color: var(--crm-info);
+    flex-shrink: 0;
+}
+
+.sp-prompt-content {
+    min-width: 0;
+    flex: 1;
+}
+
+.sp-prompt-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--crm-ink);
+    margin-bottom: 2px;
+}
+
+.sp-prompt-text {
+    font-size: 12px;
+    color: var(--crm-link, #008ece);
+    line-height: 1.4;
+}
+
+.sp-prompt-intro,
+.sp-prompt-question {
+    margin: 0;
+}
+
+.sp-prompt-intro {
+    color: var(--crm-ink);
+    font-weight: 600;
+}
+
+.sp-prompt-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 16px;
+    margin: 8px 0;
+}
+
+.sp-prompt-detail {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 5px;
+    min-width: 0;
+    line-height: 1.4;
+}
+
+.sp-prompt-detail dt {
+    flex: 0 0 auto;
+    color: var(--crm-muted);
+    font-weight: 600;
+}
+
+.sp-prompt-detail dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--crm-ink);
+}
+
+.sp-prompt-question {
+    color: var(--crm-link, #008ece);
+    font-weight: 600;
+}
+
+.sp-prompt-actions {
+    grid-column: 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.sp-prompt-apply-btn {
+    background-color: var(--crm-info) !important;
+    border-color: var(--crm-info-hover) !important;
+    color: #ffffff !important;
+    font-weight: 500;
+    border-radius: 4px;
+    padding: 4px 10px;
+}
+
+.sp-prompt-apply-btn:hover {
+    background-color: var(--crm-info-hover) !important;
+}
+
+.sp-prompt-dismiss-btn {
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: var(--crm-muted);
+    border: 1px solid var(--crm-border-input);
+    background: #ffffff;
+}
+
+.sp-prompt-dismiss-btn:hover {
+    color: var(--crm-ink);
+    background-color: var(--crm-bg-alt);
+}
+
+@media (max-width: 768px) {
+    .sp-prompt-details { grid-template-columns: 1fr; }
+    .sp-prompt-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
