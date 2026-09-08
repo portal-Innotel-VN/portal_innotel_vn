@@ -156,6 +156,10 @@ class Quote_count_repository
         $versionsTable = $prefix . 'sales_pipeline_estimate_versions';
         $estimatesTable = $prefix . 'estimates';
 
+        if (!$db->table_exists($groupsTable) || !$db->field_exists('first_sent_at', $groupsTable)) {
+            return array_fill_keys($staffIds, 0);
+        }
+
         $escapedStart = $db->escape($periodStart);
         $escapedEnd = $db->escape($periodEndExclusive);
 

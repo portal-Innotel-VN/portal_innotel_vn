@@ -2,6 +2,49 @@
 
 defined('BASEPATH') or exit('No direct script access allowed');
 
+if (!function_exists('sales_pipeline_ensure_deal_estimate_groups_schema')) {
+    /**
+     * Ensure bridge table tblsales_pipeline_deal_estimate_groups and manual lock columns exist.
+     */
+    function sales_pipeline_ensure_deal_estimate_groups_schema($CI)
+    {
+        $bridgeTable = db_prefix() . 'sales_pipeline_deal_estimate_groups';
+        if (!$CI->db->table_exists($bridgeTable)) {
+            $charset = $CI->db->char_set ? $CI->db->char_set : 'utf8mb4';
+            $collate = $CI->db->dbcollat ? $CI->db->dbcollat : 'utf8mb4_unicode_ci';
+
+            $CI->db->query("CREATE TABLE `{$bridgeTable}` (
+                `id` INT(11) NOT NULL AUTO_INCREMENT,
+                `pipeline_id` INT(11) NOT NULL COMMENT 'FK tblsales_pipeline.id (Deal)',
+                `estimate_group_id` INT(11) NOT NULL COMMENT 'FK tblsales_pipeline_estimate_groups.id',
+                `is_primary` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = Group đại diện chính của Deal',
+                `linked_by` INT(11) NULL COMMENT 'Staff thực hiện liên kết',
+                `datecreated` DATETIME NOT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uq_estimate_group` (`estimate_group_id`),
+                KEY `idx_pipeline` (`pipeline_id`),
+                KEY `idx_estimate_group` (`estimate_group_id`),
+                KEY `idx_deal_primary` (`pipeline_id`, `is_primary`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collate};");
+        }
+
+        $pipelineTable = db_prefix() . 'sales_pipeline';
+        if ($CI->db->table_exists($pipelineTable)) {
+            $cols = [
+                'is_manual_lock'     => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = Khóa thủ công' AFTER `notes`",
+                'manual_lock_by'     => "INT(11) NULL COMMENT 'Staff khóa' AFTER `is_manual_lock`",
+                'manual_lock_at'     => "DATETIME NULL COMMENT 'Thời điểm khóa' AFTER `manual_lock_by`",
+                'manual_lock_reason' => "TEXT NULL COMMENT 'Lý do khóa' AFTER `manual_lock_at`",
+            ];
+            foreach ($cols as $col => $def) {
+                if (!$CI->db->field_exists($col, $pipelineTable)) {
+                    $CI->db->query("ALTER TABLE `{$pipelineTable}` ADD COLUMN `{$col}` {$def};");
+                }
+            }
+        }
+    }
+}
+
 if (!function_exists('sales_pipeline_ensure_architecture_113_schema')) {
     /**
      * Additive schema for Architecture 113:
