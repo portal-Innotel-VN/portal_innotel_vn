@@ -1,0 +1,326 @@
+/**
+ * Sales Pipeline - Reminder Bell Inbox CSS
+ * Injected into Perfex CRM Header Notifications Dropdown
+ */
+
+/* =========================================================================
+   PULSE DOT ON NOTIFICATION BELL ICON
+   ========================================================================= */
+.notifications-wrapper.header-notifications {
+    --sp-bell-primary: #28b8da;
+    --sp-bell-primary-hover: #1e95b1;
+    --sp-bell-danger: #fc2d42;
+    --sp-bell-warning: #ff6f00;
+    --sp-bell-info: #03a9f4;
+    --sp-bell-success: #84C529;
+    --sp-bell-ink: #323a45;
+    --sp-bell-muted: #6c7888;
+    --sp-bell-text-secondary: #7c838b;
+    --sp-bell-surface: #ffffff;
+    --sp-bell-surface-soft: #f7f8fa;
+    --sp-bell-surface-alt: #F1F5F7;
+    --sp-bell-border: #e4e8f1;
+    --sp-bell-border-subtle: #E6E9EB;
+    --sp-bell-core-text: #333333;
+    --sp-bell-core-muted: #777777;
+    --sp-bell-core-border: #f0f0f0;
+    --sp-bell-core-hover: #fbfbfb;
+    --sp-bell-warning-ring: rgba(255, 111, 0, 0.4);
+    --sp-bell-warning-pulse: rgba(255, 111, 0, 0.7);
+    --sp-bell-transparent: rgba(255, 111, 0, 0);
+    --sp-reminder-dot-top: 37.2px;
+    --sp-reminder-dot-left: 50%;
+    --sp-bell-touch-target: 44px;
+}
+
+.notifications-wrapper.header-notifications.has-sp-reminder-pending>a.notifications-icon {
+    position: relative;
+}
+
+.notifications-wrapper.header-notifications.has-sp-reminder-pending>a.notifications-icon::after {
+    content: '';
+    position: absolute;
+    top: var(--sp-reminder-dot-top);
+    left: var(--sp-reminder-dot-left);
+    width: 9px;
+    height: 9px;
+    background-color: var(--sp-bell-warning);
+    border: 2px solid var(--sp-bell-surface);
+    border-radius: 50%;
+    z-index: 10;
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 1px var(--sp-bell-warning-ring);
+    animation: sp-bell-pulse 2s infinite ease-in-out;
+}
+
+@keyframes sp-bell-pulse {
+    0% {
+        box-shadow: 0 0 0 0 var(--sp-bell-warning-pulse);
+    }
+
+    70% {
+        box-shadow: 0 0 0 3px var(--sp-bell-transparent);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 var(--sp-bell-transparent);
+    }
+}
+
+/* =========================================================================
+   REMINDER INBOX CONTAINER IN DROPDOWN
+   ========================================================================= */
+.sp-reminder-bell-inbox {
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--sp-bell-core-border);
+    background: var(--sp-bell-surface);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sp-reminder-inbox-scroll {
+    max-height: 260px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+/* Scrollbar styling */
+.sp-reminder-inbox-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sp-reminder-inbox-scroll::-webkit-scrollbar-track {
+    background: var(--sp-bell-surface-alt);
+}
+
+.sp-reminder-inbox-scroll::-webkit-scrollbar-thumb {
+    background: var(--sp-bell-border);
+    border-radius: 4px;
+}
+
+.sp-reminder-inbox-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--sp-bell-muted);
+}
+
+/* =========================================================================
+   REMINDER ITEM CARD
+   ========================================================================= */
+.sp-reminder-item {
+    --sp-reminder-severity-color: var(--sp-bell-warning);
+    position: relative;
+    padding: 10px;
+    border-left: 3px solid var(--sp-reminder-severity-color);
+    border-bottom: 1px solid var(--sp-bell-core-border);
+    background: transparent;
+    color: var(--sp-bell-core-text);
+    transition: background 0.15s ease, opacity 0.25s ease, transform 0.25s ease;
+}
+
+.sp-reminder-item.sp-severity-critical {
+    --sp-reminder-severity-color: var(--sp-bell-danger);
+}
+
+.sp-reminder-item.sp-severity-warning {
+    --sp-reminder-severity-color: var(--sp-bell-warning);
+}
+
+.sp-reminder-item:last-child {
+    border-bottom: none;
+}
+
+/*
+ * Perfex formats the final Core notification as a centered footer action.
+ * The Inbox is inserted before that footer, so its final reminder also
+ * matches the Core `li:last-child` selector. Restore the card presentation
+ * without changing Core styles.
+ */
+.navbar-right .dropdown-menu.notifications .sp-reminder-inbox-scroll>.sp-reminder-item:last-child {
+    padding: 10px;
+    font-weight: 400;
+    text-align: left;
+}
+
+.sp-reminder-item:hover {
+    background: var(--sp-bell-core-hover);
+}
+
+.sp-reminder-item.sp-item-fading {
+    opacity: 0;
+    transform: translateX(20px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    border: none;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-reminder-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.sp-reminder-item-title {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--sp-bell-core-text);
+    line-height: 1.42857;
+    flex: 1;
+}
+
+.sp-reminder-item-title a {
+    color: var(--sp-bell-core-text);
+    text-decoration: none;
+}
+
+.sp-reminder-item-title a:hover {
+    color: var(--sp-bell-core-text);
+    text-decoration: underline;
+}
+
+/* Dismiss / Acknowledge Button (✕) */
+.sp-bell-ack-btn {
+    background: transparent;
+    border: none;
+    color: var(--sp-bell-text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: color 0.15s ease, background 0.15s ease;
+    flex-shrink: 0;
+}
+
+.sp-bell-ack-btn:hover {
+    color: var(--sp-bell-danger);
+    background: var(--sp-bell-surface-alt);
+}
+
+.sp-reminder-item-message {
+    font-size: 13px;
+    color: var(--sp-bell-core-text);
+    line-height: 1.42857;
+    margin-bottom: 8px;
+    word-break: break-word;
+}
+
+.sp-reminder-item-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.sp-reminder-item-time {
+    color: var(--sp-bell-core-muted);
+    font-size: 70%;
+    line-height: 1.42857;
+}
+
+.sp-reminder-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-reminder-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-decoration: none !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+    line-height: 1.3;
+}
+
+.sp-reminder-btn-primary {
+    background: var(--sp-bell-primary);
+    color: var(--sp-bell-surface) !important;
+    border: 1px solid var(--sp-bell-primary-hover);
+}
+
+.sp-reminder-btn-primary:hover {
+    background: var(--sp-bell-primary-hover);
+}
+
+.sp-reminder-btn-default {
+    background: var(--sp-bell-surface-alt);
+    color: var(--sp-bell-ink) !important;
+    border: 1px solid var(--sp-bell-border-subtle);
+}
+
+.sp-reminder-btn-default:hover {
+    background: var(--sp-bell-border);
+    color: var(--sp-bell-ink) !important;
+}
+
+.sp-reminder-btn:focus,
+.sp-bell-ack-btn:focus {
+    outline: 2px solid var(--sp-bell-info);
+    outline-offset: 2px;
+}
+
+/* =========================================================================
+   RESPONSIVE / MOBILE
+   ========================================================================= */
+@media (max-width: 767px) {
+    /* Keep the combined module/Core notification list inside the phone viewport. */
+    .notifications-wrapper.header-notifications > .dropdown-menu.notifications {
+        max-height: calc(100vh - 64px);
+        max-height: calc(100dvh - 64px);
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    /* Phase 5 gate: all reminder actions need a 44px touch target. */
+    .sp-bell-ack-btn,
+    .sp-reminder-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: var(--sp-bell-touch-target);
+        min-height: var(--sp-bell-touch-target);
+    }
+}
+
+@media (max-width: 520px) {
+    .sp-reminder-inbox-scroll {
+        max-height: 200px;
+    }
+
+    .sp-reminder-item {
+        padding: 10px;
+    }
+
+    .sp-reminder-btn {
+        min-height: var(--sp-bell-touch-target);
+        min-width: var(--sp-bell-touch-target);
+        justify-content: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .notifications-wrapper.header-notifications.has-sp-reminder-pending>a.notifications-icon::after,
+    .sp-reminder-item,
+    .sp-reminder-item.sp-item-fading,
+    .sp-bell-ack-btn,
+    .sp-reminder-btn {
+        animation: none;
+        transition: none;
+    }
+}

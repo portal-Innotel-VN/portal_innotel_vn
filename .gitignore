@@ -1,0 +1,32 @@
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+__MACOSX/
+*/__MACOSX/
+
+# CodeIgniter runtime logs and temporary files
+portal_innotel_vn/application/logs/log-*.php
+portal_innotel_vn/application/logs/*.log
+portal_innotel_vn/application/cache/*
+!portal_innotel_vn/application/cache/index.html
+!portal_innotel_vn/application/cache/.htaccess
+
+# Local backup & credentials
+*.cpanel
+*.bak
+*.backup
+*.tmp
+*.sql
+*.tar.gz
+*.zip
+
+# IDE configs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
