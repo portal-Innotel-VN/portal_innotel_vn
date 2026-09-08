@@ -19,6 +19,7 @@ if ($change_direction === 'up') {
     $badge_icon = 'fa-arrow-down';
     $sign = '-';
 }
+$can_view_all = !empty($dashboard['viewer']['can_view_all']);
 ?>
 <section class="sp-revenue-kpi-card sp-estimate-revenue-kpi-card" aria-labelledby="sp-kpi-estimate-revenue-title">
     <div class="sp-revenue-kpi-card__header">
@@ -27,6 +28,21 @@ if ($change_direction === 'up') {
                 <i class="fa fa-line-chart" aria-hidden="true"></i>
                 <span id="sp-kpi-estimate-revenue-title"><?php echo _l('sales_pipeline_kpi_estimate_revenue_title'); ?></span>
             </span>
+            <?php if ($can_view_all) { ?>
+            <div class="sp-kpi-scope-badge" id="sp-estimate-kpi-scope-badge" style="display: none;">
+                <i class="fa fa-user-circle sp-kpi-scope-badge__icon" aria-hidden="true"></i>
+                <span class="sp-kpi-scope-badge__label"><?php echo _l('sales_pipeline_kpi_filtered_by'); ?>:</span>
+                <strong class="sp-kpi-scope-badge__name" id="sp-estimate-kpi-scope-name"></strong>
+                <span class="sp-kpi-scope-badge__divider" aria-hidden="true"></span>
+                <button type="button" 
+                        class="sp-kpi-scope-badge__reset js-sp-reset-estimate-kpi" 
+                        title="<?php echo _l('sales_pipeline_view_company_total'); ?>"
+                        data-toggle="tooltip">
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                    <span><?php echo _l('sales_pipeline_view_all_short'); ?></span>
+                </button>
+            </div>
+            <?php } ?>
             <div class="sp-revenue-kpi-card__legend">
                 <span class="sp-kpi-legend-item sp-kpi-legend-item--current">
                     <span class="sp-kpi-legend-bullet"></span>

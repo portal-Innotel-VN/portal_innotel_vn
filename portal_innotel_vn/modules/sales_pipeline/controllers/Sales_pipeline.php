@@ -492,6 +492,8 @@ class Sales_pipeline extends AdminController
             || staff_can('view', 'estimates')
             || ($staff_id === (int) get_staff_user_id() && staff_can('view_own', 'estimates'));
 
+        $can_open_staff_profile = is_admin() || has_permission('staff', '', 'view');
+
         $view_data = [
             'staff'                  => $staff,
             'dashboard_tab'          => $dashboard_tab,
@@ -503,11 +505,24 @@ class Sales_pipeline extends AdminController
             'actionable_feed'        => $actionable_feed,
             'can_open_pipeline_deal' => $can_open_pipeline_deal,
             'can_open_estimate'      => $can_open_estimate,
-            'can_open_staff_profile' => $this->can_view_dashboard_all(),
+            'can_open_staff_profile' => $can_open_staff_profile,
         ];
 
+        $staff_revenue_kpi = null;
+        if ($dashboard_tab === 'estimates' && $this->can_view_dashboard_all()) {
+            $staff_revenue_kpi = $this->sales_pipeline_model->get_estimate_revenue_timeseries($staff_id, $period_range);
+        }
+
         $html = $this->load->view('sales_pipeline/_dashboard_staff_pipeline', $view_data, true);
-        return $this->json_response(true, '', ['html' => $html]);
+        $response_data = ['html' => $html];
+
+        if ($dashboard_tab === 'estimates' && $this->can_view_dashboard_all()) {
+            $response_data['estimate_revenue_kpi'] = $staff_revenue_kpi;
+            $response_data['staff_id'] = $staff_id;
+            $response_data['staff_name'] = get_staff_full_name($staff_id);
+        }
+
+        return $this->json_response(true, '', $response_data);
     }
 
     /**
@@ -1696,6 +1711,7 @@ class Sales_pipeline extends AdminController
 
     private function can_access_dashboard($staff_id = '')
     {
+        $staff_id = $staff_id == '' ? get_staff_user_id() : $staff_id;
         return is_admin($staff_id)
             || has_permission('sales_pipeline', $staff_id, 'view')
             || has_permission('sales_pipeline', $staff_id, 'view_own');
@@ -1703,10 +1719,9 @@ class Sales_pipeline extends AdminController
 
     private function can_view_dashboard_all($staff_id = '')
     {
-        // The Performance Score contract is role-based: only Administrators
-        // receive the full cohort. A Staff account may hold `view` permission
-        // for other module workflows, but its Dashboard remains personal.
-        return is_admin($staff_id);
+        $staff_id = $staff_id == '' ? get_staff_user_id() : $staff_id;
+        return is_admin($staff_id)
+            || has_permission('sales_pipeline', $staff_id, 'view');
     }
 
     private function resolve_dashboard_tab($tab)
