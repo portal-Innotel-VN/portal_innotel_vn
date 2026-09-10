@@ -13,7 +13,7 @@ class Reminder_engine
     private $CI;
     private $staffCache = [];
     private $staffEmailCache = [];
-    private $activeAdminStaffCache;
+    private $activeManagerStaffCache;
 
     public function __construct()
     {
@@ -406,9 +406,9 @@ class Reminder_engine
         $maxValidAgeHours = (int) $this->option('sp_reminder_delivery_default_max_valid_age_hours');
         $recipients = [['type' => 'staff', 'id' => $event['staff_id']]];
         if (in_array('manager', $event['recipients'], true)) {
-            foreach ($this->activeAdminStaff() as $admin) {
-                if ((int) $admin->staffid !== (int) $event['staff_id']) {
-                    $recipients[] = ['type' => 'manager', 'id' => (int) $admin->staffid];
+            foreach ($this->activeManagerStaff() as $manager) {
+                if ((int) $manager->staffid !== (int) $event['staff_id']) {
+                    $recipients[] = ['type' => 'manager', 'id' => (int) $manager->staffid];
                 }
             }
         }
@@ -418,6 +418,10 @@ class Reminder_engine
             $staff = $this->activeStaff($recipient['id']);
             if (!$staff) { continue; }
             foreach ($event['channels'] as $channel) {
+                if ($channel === 'whatsapp') {
+                    // WhatsApp is materialized dedicatedly for managers per configured mode
+                    continue;
+                }
                 if ($recipient['type'] === 'manager' && $channel === 'email' && $isCCApplicable) {
                     continue;
                 }
@@ -429,7 +433,55 @@ class Reminder_engine
                 $deliveryRows[] = [$reminderId, $channel, $recipient['type'], $recipient['id'], $key, 'pending', $expiresAt, $createdAtValue];
             }
         }
+        if (in_array('whatsapp', $event['channels'], true)) {
+            $this->materializeWhatsAppDeliveries($reminderId, $event, $createdAtValue, $deliveryRows);
+        }
         $this->insertDeliveryBatch($deliveryRows);
+    }
+
+    private function materializeWhatsAppDeliveries($reminderId, array $event, $createdAtValue, array &$deliveryRows)
+    {
+        if ($this->option('sp_reminder_whatsapp_enabled') !== '1') {
+            return;
+        }
+        $mode = $this->option('sp_reminder_whatsapp_manager_mode') ?: 'group_only';
+        $groupJid = trim((string) $this->option('sp_reminder_whatsapp_group_jid'));
+
+        if (($mode === 'group_only' || $mode === 'both') && $groupJid !== '') {
+            $deliveryRows[] = [
+                $reminderId,
+                'whatsapp',
+                'manager',
+                null,
+                $groupJid,
+                'pending',
+                null,
+                $createdAtValue,
+            ];
+        }
+
+        if ($mode === 'direct_only' || $mode === 'both') {
+            $this->CI->load->library('sales_pipeline/Reminder_whatsapp_formatter');
+            foreach ($this->activeManagerStaff() as $manager) {
+                $staffObj = $this->activeStaff($manager->staffid);
+                if (!$staffObj || empty($staffObj->phonenumber)) {
+                    continue;
+                }
+                $jid = $this->CI->reminder_whatsapp_formatter->normalizePhoneToJid($staffObj->phonenumber);
+                if ($jid !== null) {
+                    $deliveryRows[] = [
+                        $reminderId,
+                        'whatsapp',
+                        'manager',
+                        (int) $manager->staffid,
+                        $jid,
+                        'pending',
+                        null,
+                        $createdAtValue,
+                    ];
+                }
+            }
+        }
     }
 
     private function insertDeliveryBatch(array $rows)
@@ -475,9 +527,9 @@ class Reminder_engine
 
         $rawEmails = [];
 
-        foreach ($this->activeAdminStaff() as $admin) {
-            if ((int) $admin->staffid !== (int) $staffId) {
-                $rawEmails[] = trim((string) $admin->email);
+        foreach ($this->activeManagerStaff() as $manager) {
+            if ((int) $manager->staffid !== (int) $staffId) {
+                $rawEmails[] = trim((string) $manager->email);
             }
         }
 
@@ -577,6 +629,8 @@ class Reminder_engine
         $anySent = false;
         $anySent = $this->dispatchDeliveryRows($crmRows, $maxAttempts) || $anySent;
 
+        $anySent = $this->dispatchWhatsAppDeliveries($now, $maxAttempts) || $anySent;
+
         if ($this->option('sp_reminder_delivery_email_circuit_state') !== 'closed'
             || !$this->CI->reminder_delivery_lock->acquire()) {
             return $anySent;
@@ -587,6 +641,197 @@ class Reminder_engine
             $anySent = $this->dispatchDeliveryRows($emailRows, $maxAttempts) || $anySent;
         } finally {
             $this->CI->reminder_delivery_lock->release();
+        }
+
+        return $anySent;
+    }
+
+    private function dispatchWhatsAppDeliveries(DateTimeImmutable $now, $maxAttempts)
+    {
+        if ($this->option('sp_reminder_whatsapp_enabled') !== '1') {
+            return false;
+        }
+
+        // MySQL Advisory Lock dedicated to WhatsApp dispatcher
+        $lockKey = db_prefix() . ':sales_pipeline:whatsapp:dispatcher';
+        $lockAcquired = $this->CI->db->query('SELECT GET_LOCK(?, 0) AS lck', [$lockKey])->row_array();
+        if (empty($lockAcquired['lck'])) {
+            return false;
+        }
+
+        $anySent = false;
+        $batchStart = microtime(true);
+        $timeBudgetOpt = $this->option('sp_reminder_whatsapp_time_budget');
+        $timeBudget = is_numeric($timeBudgetOpt) && (float) $timeBudgetOpt > 0 ? (float) $timeBudgetOpt : 15.0;
+        $minSafety = 5.0;
+
+        $this->CI->load->library('sales_pipeline/channels/Reminder_delivery_whatsapp_adapter');
+        $this->CI->load->library('sales_pipeline/Reminder_whatsapp_formatter');
+
+        try {
+            // Reconcile Pass: Resolve in-flight uncertain deliveries
+            $uncertainRows = $this->CI->reminder_delivery_selector->dueUncertainWhatsApp(10);
+            foreach ($uncertainRows as $row) {
+                $elapsed = microtime(true) - $batchStart;
+                if (($timeBudget - $elapsed) < 3.0) {
+                    break;
+                }
+                $statusResult = $this->CI->reminder_delivery_whatsapp_adapter->checkStatus((int) $row['id'], 3.0);
+                if ($statusResult['status'] === 'sent') {
+                    $completedAt = date('Y-m-d H:i:s');
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'status'              => 'sent',
+                        'sent_at'             => $completedAt,
+                        'provider_message_id' => $statusResult['message_id'] ?? null,
+                        'last_error'          => null,
+                        'last_error_code'     => null,
+                        'last_error_class'    => null,
+                        'next_retry_at'       => null,
+                        'updated_at'          => $completedAt,
+                    ]);
+                    $anySent = true;
+                } elseif ($statusResult['status'] === 'failed') {
+                    $rawRetrySafe = $statusResult['retry_safe'] ?? ($statusResult['raw']['retry_safe'] ?? null);
+
+                    if ($rawRetrySafe === true) {
+                        $attemptCount = (int) $row['attempt_count'] + 1;
+                        $nextRetryAt = $this->CI->reminder_delivery_backoff->nextRetryAt(
+                            $attemptCount, new DateTimeImmutable('now')
+                        )->format('Y-m-d H:i:s');
+
+                        $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                            'status'           => 'failed',
+                            'last_error'       => $statusResult['error'] ?? 'Gateway reported message delivery failure during reconciliation (retry_safe=true)',
+                            'last_error_code'  => 'gateway_reported_failed',
+                            'last_error_class' => 'transient',
+                            'next_retry_at'    => $nextRetryAt,
+                            'updated_at'       => date('Y-m-d H:i:s'),
+                        ]);
+                    } else {
+                        $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                            'last_error'       => $statusResult['error'] ?? 'Delivery result unverified or retry unsafe on Gateway (retry_safe != true); manual verification required',
+                            'last_error_code'  => 'whatsapp_reconcile_unverified',
+                            'last_error_class' => 'unverified',
+                            'next_retry_at'    => null,
+                            'updated_at'       => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                } elseif ($statusResult['status'] === 'not_found') {
+                    // Gateway has no record of this delivery after timeout; isolate permanently to prevent duplicates
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'last_error'       => 'Delivery result unverified on Gateway; manual verification required',
+                        'last_error_code'  => 'whatsapp_reconcile_unverified',
+                        'last_error_class' => 'unverified',
+                        'next_retry_at'    => null,
+                        'updated_at'       => date('Y-m-d H:i:s'),
+                    ]);
+                } elseif (in_array($statusResult['status'], ['in_progress', 'uncertain'], true)) {
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
+            // Normal Dispatch Pass
+            $whatsappRows = $this->CI->reminder_delivery_selector->due('whatsapp', 20, $maxAttempts, $now);
+            $hourlyLimit = max(1, (int) $this->option('sp_reminder_delivery_whatsapp_hourly_limit', 60));
+
+            foreach ($whatsappRows as $row) {
+                $elapsed = microtime(true) - $batchStart;
+                if (($timeBudget - $elapsed) < $minSafety) {
+                    break;
+                }
+
+                $reservation = $this->CI->reminder_delivery_rate_limiter->reserve(
+                    1,
+                    new DateTimeImmutable('now'),
+                    [
+                        'hourly_messages'            => $hourlyLimit,
+                        'hourly_recipients'          => $hourlyLimit,
+                        'daily_messages'             => $hourlyLimit * 24,
+                        'daily_recipients'           => $hourlyLimit * 24,
+                        'max_recipients_per_message' => 1,
+                    ],
+                    'whatsapp_baileys_gateway'
+                );
+
+                if (empty($reservation['allowed'])) {
+                    if (!empty($reservation['retryable'])) {
+                        $this->CI->reminder_delivery_selector->deferDueWhatsApp(
+                            $reservation['next_retry_at'], $reservation['code'], 'WhatsApp hourly rate limit reached'
+                        );
+                        break;
+                    } else {
+                        $this->CI->reminder_delivery_selector->cancel(
+                            (int) $row['id'], $reservation['code'], 'WhatsApp recipient limit exceeded'
+                        );
+                        continue;
+                    }
+                }
+
+                if (!$this->CI->reminder_delivery_selector->claim((int) $row['id'], 'whatsapp', $maxAttempts, new DateTimeImmutable('now'))) {
+                    continue;
+                }
+
+                $text = $this->CI->reminder_whatsapp_formatter->format($row);
+                $remainingTimeout = max(1.0, min(5.0, $timeBudget - (microtime(true) - $batchStart)));
+                $result = $this->CI->reminder_delivery_whatsapp_adapter->send(
+                    $row['recipient_key'],
+                    $text,
+                    (int) $row['id'],
+                    ['timeout' => $remainingTimeout]
+                );
+
+                $completedAt = date('Y-m-d H:i:s');
+                $attemptCount = (int) $row['attempt_count'] + 1;
+
+                if ($result['success']) {
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'status'              => 'sent',
+                        'attempt_count'       => $attemptCount,
+                        'last_attempt_at'     => $completedAt,
+                        'sent_at'             => $completedAt,
+                        'provider_message_id' => $result['provider_message_id'] ?? null,
+                        'last_error'          => null,
+                        'last_error_code'     => null,
+                        'last_error_class'    => null,
+                        'next_retry_at'       => null,
+                        'updated_at'          => $completedAt,
+                    ]);
+                    $anySent = true;
+                } elseif (!empty($result['uncertain'])) {
+                    // Result uncertain: isolate from regular due() to avoid double sends
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'status'           => 'failed',
+                        'attempt_count'    => $attemptCount,
+                        'last_attempt_at'  => $completedAt,
+                        'last_error'       => $result['last_error'] ?? 'WhatsApp delivery uncertain',
+                        'last_error_code'  => 'whatsapp_delivery_uncertain',
+                        'last_error_class' => 'uncertain',
+                        'next_retry_at'    => null,
+                        'updated_at'       => $completedAt,
+                    ]);
+                } else {
+                    $isPermanent = ($result['last_error_class'] === 'permanent');
+                    $status = $isPermanent ? 'cancelled' : 'failed';
+                    $nextRetryAt = $isPermanent ? null : $this->CI->reminder_delivery_backoff->nextRetryAt(
+                        $attemptCount, new DateTimeImmutable($completedAt)
+                    )->format('Y-m-d H:i:s');
+
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'status'           => $status,
+                        'attempt_count'    => $attemptCount,
+                        'last_attempt_at'  => $completedAt,
+                        'last_error'       => $result['last_error'] ?? 'WhatsApp delivery failed',
+                        'last_error_code'  => $result['last_error_code'] ?? 'whatsapp_delivery_failed',
+                        'last_error_class' => $result['last_error_class'] ?? 'transient',
+                        'next_retry_at'    => $nextRetryAt,
+                        'updated_at'       => $completedAt,
+                    ]);
+                }
+            }
+        } finally {
+            $this->CI->db->query('SELECT RELEASE_LOCK(?)', [$lockKey]);
         }
 
         return $anySent;
@@ -963,7 +1208,7 @@ class Reminder_engine
     private function parseChannels($optionKey)
     {
         $channels = array_filter(array_map('trim', explode(',', $this->option($optionKey))), function ($channel) {
-            return in_array($channel, ['crm', 'email'], true);
+            return in_array($channel, ['crm', 'email', 'whatsapp'], true);
         });
         return array_values(array_unique($channels));
     }
@@ -1051,15 +1296,22 @@ class Reminder_engine
         return $this->staffEmailCache[$email];
     }
 
-    private function activeAdminStaff()
+    /** Business recipients use the same global-view capability as the dashboard. */
+    private function activeManagerStaff()
     {
-        if ($this->activeAdminStaffCache === null) {
-            $this->activeAdminStaffCache = $this->CI->db->where('active', 1)->where('admin', 1)
+        if ($this->activeManagerStaffCache === null) {
+            $activeStaff = $this->CI->db->where('active', 1)
                 ->get(db_prefix() . 'staff')->result();
-            foreach ($this->activeAdminStaffCache as $staff) {
-                $this->staffCache[(int) $staff->staffid] = $staff;
+            $this->activeManagerStaffCache = [];
+            foreach ($activeStaff as $staff) {
+                $staffId = (int) $staff->staffid;
+                if ((int) $staff->admin === 1
+                    || has_permission('sales_pipeline', (string) $staffId, 'view')) {
+                    $this->activeManagerStaffCache[] = $staff;
+                    $this->staffCache[$staffId] = $staff;
+                }
             }
         }
-        return $this->activeAdminStaffCache;
+        return $this->activeManagerStaffCache;
     }
 }

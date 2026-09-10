@@ -18,7 +18,7 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
 
     <?php if (!empty($staff_metrics)) { ?>
         <div class="sp-dashboard-table-wrap">
-            <table class="sp-dashboard-table">
+            <table class="sp-dashboard-table sp-deals-table">
                 <thead>
                     <tr>
                         <th scope="col" class="sp-column-rank"><?php echo _l('sales_pipeline_dashboard_rank'); ?></th>
@@ -37,8 +37,9 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
                         $period_revenue_full = number_format((float) ($metric['period_revenue'] ?? 0), 0, ',', '.') . ' ' . _l('sales_pipeline_vnd');
                         $win_rate = (float) ($metric['period_win_rate'] ?? 0);
                         $win_rate_status = $win_rate >= 50 ? 'success' : ($win_rate >= 20 ? 'warning' : 'danger');
+                        $is_current = !empty($metric['staff_id']) && (int) $metric['staff_id'] === (int) get_staff_user_id();
                         ?>
-                        <tr>
+                        <tr class="<?php echo $is_current ? 'sp-leaderboard-row--current' : ''; ?>">
                             <td class="sp-column-rank" data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_rank')); ?>">
                                 <span class="sp-rank sp-rank--<?php echo $rank <= 3 ? $rank : 'standard'; ?>">
                                     <?php echo $rank; ?>
@@ -58,25 +59,30 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
                                         ['alt' => $metric['staff_name']]
                                     ); ?>
                                     <span class="sp-staff-copy">
-                                        <strong><?php echo html_escape($metric['staff_name']); ?></strong>
+                                        <strong>
+                                            <?php if ($is_current) { ?>
+                                                <span class="sp-performance-you"><?php echo _l('sales_pipeline_performance_you'); ?></span>
+                                            <?php } ?>
+                                            <?php echo html_escape($metric['staff_name']); ?>
+                                        </strong>
                                         <small><?php echo html_escape($metric['email']); ?></small>
                                     </span>
                                     <i class="fa fa-angle-right" aria-hidden="true"></i>
                                 </button>
                             </td>
 
-                            <td data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_period_deals')); ?>">
+                            <td class="sp-column-deals" data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_period_deals')); ?>">
                                 <strong class="sp-quote-estimate-total">
                                     <?php echo number_format((int) ($metric['period_deals'] ?? 0), 0, ',', '.'); ?>
                                 </strong>
                             </td>
-                            <td data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_period_revenue')); ?>"
+                            <td class="sp-column-revenue" data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_period_revenue')); ?>"
                                 title="<?php echo html_escape($period_revenue_full); ?>">
                                 <strong class="sp-quote-revenue">
                                     <?php echo html_escape($period_revenue_formatted); ?>
                                 </strong>
                             </td>
-                            <td data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_win_rate')); ?>">
+                            <td class="sp-column-winrate" data-label="<?php echo html_escape(_l('sales_pipeline_dashboard_win_rate')); ?>">
                                 <span class="sp-quote-rate sp-quote-rate--<?php echo $win_rate_status; ?>">
                                     <?php echo number_format($win_rate, 1, ',', ''); ?>%
                                 </span>

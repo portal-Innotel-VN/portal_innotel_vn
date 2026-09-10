@@ -2,6 +2,7 @@
     --sp-primary: #28b8da;
     --sp-border: #e4e8f1;
     --sp-muted: #6c7888;
+    --sp-surface-soft: #f8fafc;
     box-sizing: border-box;
 }
 
@@ -10,22 +11,181 @@
     border-left: 4px solid var(--sp-primary);
     border-radius: 6px;
     box-shadow: 0 1px 1px rgba(0, 0, 0, .03);
-    margin-bottom: 18px;
-    padding: 18px 20px;
+    margin-bottom: 22px;
+    padding: 20px 22px;
+    background: #fff;
 }
 
-.sp-reminder-section h5 { color: #323a45; font-weight: 600; margin: 0 0 14px; }
+.sp-reminder-section h5 { color: #323a45; font-weight: 600; margin: 0 0 16px; }
 .sp-reminder-section--global { border-left-color: #84c529; }
+.sp-reminder-section--cc { border-left-color: #03a9f4; }
+.sp-reminder-section--whatsapp { border-left-color: #25D366; }
+.sp-reminder-section--deal { border-left-color: #28b8da; }
 .sp-reminder-section--kpi { border-left-color: #ff6f00; }
 .sp-reminder-section--lifecycle { border-left-color: #fc2d42; }
-.sp-reminder-rule-row { border-bottom: 1px dashed var(--sp-border); padding: 13px 0; }
-.sp-reminder-rule-row:last-child { border-bottom: 0; padding-bottom: 0; }
-.sp-reminder-rule-toggle { display: inline-block; margin: 0 18px 0 0; }
-.sp-reminder-channels { display: inline-block; color: var(--sp-muted); }
-.sp-rule-fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: 9px; }
-.sp-reminder-section--dimmed { opacity: .45; pointer-events: none; user-select: none; }
-.sp-reminder-settings input:focus, .sp-reminder-settings textarea:focus { border-color: #03a9f4; outline: 0; }
-@media (max-width: 767px) { .sp-reminder-section { padding: 15px; } .sp-rule-fields { grid-template-columns: 1fr; } .sp-reminder-channels { display: block; margin-top: 8px; } }
+
+/* Guide Panel (#performance style) */
+.sp-guide-panel {
+    border: 1px solid var(--sp-border);
+    border-left: 4px solid var(--sp-guide-accent, #28b8da);
+    background-color: var(--sp-surface-soft);
+    border-radius: 4px;
+    box-shadow: none;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+}
+.sp-guide-panel--global { --sp-guide-accent: #84c529; }
+.sp-guide-panel--cc { --sp-guide-accent: #03a9f4; }
+.sp-guide-panel--whatsapp { --sp-guide-accent: #25D366; }
+.sp-guide-panel--deal { --sp-guide-accent: #28b8da; }
+.sp-guide-panel--kpi { --sp-guide-accent: #ff6f00; }
+.sp-guide-panel--lifecycle { --sp-guide-accent: #fc2d42; }
+
+.sp-guide-panel__title {
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: #1e879e;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.sp-guide-panel--global .sp-guide-panel__title { color: #5a8a17; }
+.sp-guide-panel--cc .sp-guide-panel__title { color: #0286c2; }
+.sp-guide-panel--whatsapp .sp-guide-panel__title { color: #128C7E; }
+.sp-guide-panel--deal .sp-guide-panel__title { color: #1e879e; }
+.sp-guide-panel--kpi .sp-guide-panel__title { color: #cc5900; }
+.sp-guide-panel--lifecycle .sp-guide-panel__title { color: #d32034; }
+
+.sp-guide-panel__body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #475569;
+}
+.sp-guide-panel__body p {
+    margin-bottom: 10px;
+}
+.sp-guide-panel__body p:last-child {
+    margin-bottom: 0;
+}
+.sp-guide-panel__note {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #cbd5e1;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Compact input and textbox sizing */
+.sp-compact-field {
+    max-width: 360px;
+}
+.sp-compact-number,
+.sp-compact-time {
+    max-width: 220px;
+}
+.sp-holiday-dates-textarea {
+    max-width: 100%;
+    min-height: 80px;
+    max-height: 180px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.sp-reminder-rule-row {
+    border-bottom: 1px dashed var(--sp-border);
+    padding: 14px 0;
+}
+.sp-reminder-rule-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+.sp-reminder-rule-toggle {
+    display: inline-block;
+    margin: 0 18px 0 0;
+    vertical-align: middle;
+}
+.sp-reminder-channels {
+    display: inline-block;
+    color: var(--sp-muted);
+    vertical-align: middle;
+}
+.sp-rule-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+}
+.sp-rule-fields .form-group {
+    flex: 0 0 auto;
+    min-width: 160px;
+    max-width: 230px;
+    margin-bottom: 0;
+}
+.sp-rule-fields .form-group input {
+    height: 34px;
+    font-size: 13px;
+}
+.sp-rule-fields .form-group label {
+    font-size: 12px;
+    margin-bottom: 4px;
+    color: #475569;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+.sp-reminder-section--dimmed {
+    opacity: .45;
+    pointer-events: none;
+    user-select: none;
+}
+.sp-reminder-settings input:focus,
+.sp-reminder-settings textarea:focus,
+.sp-reminder-settings select:focus {
+    border-color: #03a9f4;
+    outline: 0;
+}
+
+@media (max-width: 991px) {
+    .sp-guide-panel {
+        margin-top: 16px;
+    }
+    .sp-compact-field,
+    .sp-compact-number,
+    .sp-compact-time {
+        max-width: 100%;
+    }
+}
+@media (max-width: 767px) {
+    .sp-reminder-section {
+        padding: 15px;
+    }
+    .sp-rule-fields {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    .sp-rule-fields .form-group {
+        max-width: 100%;
+        min-width: 0;
+    }
+    .sp-reminder-channels {
+        display: block;
+        margin-top: 8px;
+    }
+    .sp-guide-panel {
+        padding: 14px 16px;
+    }
+    .sp-guide-panel__body {
+        font-size: 12.5px;
+    }
+}
 
 .sp-delivery-health {
     --sp-health-success: #84C529;

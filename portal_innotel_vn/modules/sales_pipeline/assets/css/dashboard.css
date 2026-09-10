@@ -1077,6 +1077,21 @@
     min-width: 980px;
 }
 
+.sp-dashboard-table.sp-deals-table {
+    min-width: 680px;
+    table-layout: auto;
+}
+
+.sp-dashboard-table.sp-deals-table th.sp-column-rank {
+    width: 60px;
+    text-align: center;
+}
+
+.sp-dashboard-table.sp-deals-table th.sp-column-staff {
+    width: 32%;
+    min-width: 220px;
+}
+
 .sp-dashboard-table th {
     height: 46px;
     padding: 10px 12px;
@@ -2453,9 +2468,43 @@ body.sp-dashboard-drawer-open {
         grid-template-columns: 64px minmax(160px, 1.5fr) repeat(4, minmax(80px, 1fr));
     }
 
+    .sp-dashboard-table.sp-deals-table {
+        min-width: 640px;
+    }
+
+    .sp-dashboard-table.sp-deals-table th,
+    .sp-dashboard-table.sp-deals-table td {
+        padding: 8px 10px;
+    }
 }
 
 @media (max-width: 767px) {
+    .sp-revenue-kpi-card {
+        margin-top: 14px;
+        padding: 14px 16px 8px;
+    }
+
+    .sp-revenue-kpi-card__title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .sp-revenue-kpi-card__legend {
+        flex-wrap: wrap;
+        gap: 10px;
+        font-size: 11px;
+    }
+
+    .sp-revenue-kpi-card__number {
+        font-size: 24px;
+    }
+
+    .sp-revenue-kpi-card__chart-wrap,
+    .sp-revenue-sparkline-chart {
+        min-height: 120px;
+    }
+
     .sp-dashboard-filterbar {
         align-items: stretch;
         flex-direction: column;
@@ -2500,18 +2549,24 @@ body.sp-dashboard-drawer-open {
     }
 
     .sp-performance-table,
+    .sp-deals-table,
     .sp-performance-table tbody,
+    .sp-deals-table tbody,
     .sp-performance-table tr,
-    .sp-performance-table td {
+    .sp-deals-table tr,
+    .sp-performance-table td,
+    .sp-deals-table td {
         display: block;
         width: 100%;
     }
 
-    .sp-dashboard-table.sp-performance-table {
+    .sp-dashboard-table.sp-performance-table,
+    .sp-dashboard-table.sp-deals-table {
         min-width: 0;
     }
 
-    .sp-performance-table thead {
+    .sp-performance-table thead,
+    .sp-deals-table thead {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -2522,29 +2577,37 @@ body.sp-dashboard-drawer-open {
         border: 0;
     }
 
-    .sp-performance-table tbody {
+    .sp-performance-table tbody,
+    .sp-deals-table tbody {
         display: grid;
         gap: 12px;
         padding: 12px;
     }
 
-    .sp-performance-table tbody tr {
+    .sp-performance-table tbody tr,
+    .sp-deals-table tbody tr {
         overflow: hidden;
         border: 1px solid var(--crm-border);
         border-radius: 8px;
         background: var(--crm-bg-white);
     }
 
-    .sp-performance-table tbody tr.sp-leaderboard-row--current {
+    .sp-performance-table tbody tr.sp-leaderboard-row--current,
+    .sp-deals-table tbody tr.sp-leaderboard-row--current {
         border-left: 3px solid var(--crm-primary);
         background: var(--crm-bg-alt);
     }
 
     .sp-performance-table tbody tr td,
+    .sp-deals-table tbody tr td,
     .sp-performance-table tbody tr td.sp-column-rank,
-    .sp-performance-table tbody tr td.sp-column-staff {
+    .sp-deals-table tbody tr td.sp-column-rank,
+    .sp-performance-table tbody tr td.sp-column-staff,
+    .sp-deals-table tbody tr td.sp-column-staff {
         display: flex;
         width: 100%;
+        max-width: 100%;
+        min-width: 0;
         min-height: 48px;
         height: auto;
         align-items: center;
@@ -2556,11 +2619,13 @@ body.sp-dashboard-drawer-open {
         text-align: right;
     }
 
-    .sp-performance-table tbody tr td:last-child {
+    .sp-performance-table tbody tr td:last-child,
+    .sp-deals-table tbody tr td:last-child {
         border-bottom: 0;
     }
 
-    .sp-performance-table td::before {
+    .sp-performance-table td::before,
+    .sp-deals-table td::before {
         flex: 0 0 42%;
         color: var(--crm-muted);
         content: attr(data-label);
@@ -2570,11 +2635,13 @@ body.sp-dashboard-drawer-open {
         text-transform: uppercase;
     }
 
-    .sp-performance-table .sp-column-staff .sp-staff-trigger {
+    .sp-performance-table .sp-column-staff .sp-staff-trigger,
+    .sp-deals-table .sp-column-staff .sp-staff-trigger {
         justify-content: flex-end;
     }
 
-    .sp-performance-table .sp-staff-copy {
+    .sp-performance-table .sp-staff-copy,
+    .sp-deals-table .sp-staff-copy {
         flex: 0 1 auto;
         text-align: left;
     }
@@ -2608,11 +2675,16 @@ body.sp-dashboard-drawer-open {
     }
 
     .sp-drawer-metrics {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
     }
 }
 
 @media (max-width: 420px) {
+
+    .sp-revenue-kpi-card__number {
+        font-size: 20px;
+    }
 
     .sp-filter-period-badge__text {
         max-width: 142px;

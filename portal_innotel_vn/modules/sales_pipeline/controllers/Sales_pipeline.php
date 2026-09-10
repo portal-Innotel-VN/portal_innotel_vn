@@ -1395,7 +1395,7 @@ class Sales_pipeline extends AdminController
             } elseif ($type == 'reminder') {
                 $errors = [];
                 $normalized = [];
-                $toggles = ['sp_reminder_global_enabled','sp_reminder_skip_weekends','sp_reminder_deal_pipeline_enabled','sp_reminder_deal_stale_enabled','sp_reminder_est_daily_enabled','sp_reminder_est_monthly_enabled','sp_reminder_est_weekly_enabled','sp_reminder_lc_draft_enabled','sp_reminder_lc_sent_enabled','sp_reminder_lc_declined_enabled','sp_reminder_lc_expired_enabled','sp_reminder_lc_accepted_enabled','sp_reminder_email_cc_manager_enabled'];
+                $toggles = ['sp_reminder_global_enabled','sp_reminder_whatsapp_enabled','sp_reminder_skip_weekends','sp_reminder_deal_pipeline_enabled','sp_reminder_deal_stale_enabled','sp_reminder_est_daily_enabled','sp_reminder_est_monthly_enabled','sp_reminder_est_weekly_enabled','sp_reminder_lc_draft_enabled','sp_reminder_lc_sent_enabled','sp_reminder_lc_declined_enabled','sp_reminder_lc_expired_enabled','sp_reminder_lc_accepted_enabled','sp_reminder_email_cc_manager_enabled'];
                 foreach ($toggles as $key) { $normalized[$key] = isset($data[$key]) ? '1' : '0'; }
                 $channels = [
                     'sp_reminder_deal_pipeline_channels' => 'sp_reminder_deal_pipeline_enabled',
@@ -1413,6 +1413,7 @@ class Sales_pipeline extends AdminController
                     $selected = [];
                     if (!empty($data[$key . '_crm'])) { $selected[] = 'crm'; }
                     if (!empty($data[$key . '_email'])) { $selected[] = 'email'; }
+                    if (!empty($data[$key . '_whatsapp'])) { $selected[] = 'whatsapp'; }
                     if ($normalized[$enabledKey] === '1' && !$selected) { $errors[] = _l('sp_reminder_error_channel_required', [$key]); }
                     $normalized[$key] = implode(',', $selected);
                 }
@@ -1433,14 +1434,32 @@ class Sales_pipeline extends AdminController
                     }
                 }
                 $normalized['sp_reminder_manager_fallback_emails'] = implode(',', array_unique($validFallbackEmails));
+
+                $endpoint = trim((string) ($data['sp_reminder_whatsapp_endpoint'] ?? ''));
+                if ($endpoint === '') {
+                    $endpoint = 'http://127.0.0.1:3050/api/v1/messages/send';
+                }
+                $secretKeyInput = trim((string) ($data['sp_reminder_whatsapp_secret_key'] ?? ''));
+                if ($secretKeyInput === '') {
+                    $normalized['sp_reminder_whatsapp_secret_key'] = (string) get_option('sp_reminder_whatsapp_secret_key');
+                } else {
+                    $normalized['sp_reminder_whatsapp_secret_key'] = $secretKeyInput;
+                }
+                $managerMode = trim((string) ($data['sp_reminder_whatsapp_manager_mode'] ?? 'group_only'));
+                $normalized['sp_reminder_whatsapp_manager_mode'] = in_array($managerMode, ['group_only', 'direct_only', 'both'], true) ? $managerMode : 'group_only';
+                $normalized['sp_reminder_whatsapp_group_jid'] = trim((string) ($data['sp_reminder_whatsapp_group_jid'] ?? ''));
+                $normalized['sp_reminder_whatsapp_base_url'] = trim((string) ($data['sp_reminder_whatsapp_base_url'] ?? ''));
+
                 $numbers = [
-                    'sp_reminder_sla_hours'              => [1, 720],
-                    'sp_reminder_deal_pipeline_min_count'=> [1, 1000],
-                    'sp_reminder_deal_stale_cutoff_days' => [1, 3650], 'sp_reminder_deal_stale_max_per_run' => [1, 1000],
-                    'sp_reminder_est_daily_threshold'    => [1, 100],  'sp_reminder_est_monthly_d10'         => [1, 100],
-                    'sp_reminder_est_monthly_d20'        => [1, 200],  'sp_reminder_est_monthly_final'       => [1, 500],
-                    'sp_reminder_est_weekly_target'      => [1, 100000000000], 'sp_reminder_lc_draft_days'  => [1, 90],
-                    'sp_reminder_lc_sent_days'           => [1, 90],   'sp_reminder_lc_sent_expiry_days'     => [1, 30], 'sp_reminder_lc_declined_days' => [1, 90],
+                    'sp_reminder_sla_hours'                      => [1, 720],
+                    'sp_reminder_deal_pipeline_min_count'        => [1, 1000],
+                    'sp_reminder_deal_stale_cutoff_days'         => [1, 3650], 'sp_reminder_deal_stale_max_per_run' => [1, 1000],
+                    'sp_reminder_est_daily_threshold'            => [1, 100],  'sp_reminder_est_monthly_d10'         => [1, 100],
+                    'sp_reminder_est_monthly_d20'                => [1, 200],  'sp_reminder_est_monthly_final'       => [1, 500],
+                    'sp_reminder_est_weekly_target'              => [1, 100000000000], 'sp_reminder_lc_draft_days'  => [1, 90],
+                    'sp_reminder_lc_sent_days'                   => [1, 90],   'sp_reminder_lc_sent_expiry_days'     => [1, 30], 'sp_reminder_lc_declined_days' => [1, 90],
+                    'sp_reminder_whatsapp_timeout_seconds'       => [1, 30],
+                    'sp_reminder_delivery_whatsapp_hourly_limit' => [1, 1000],
                 ];
                 foreach ($numbers as $key => $limits) {
                     $raw = trim((string) ($data[$key] ?? ''));
@@ -1556,6 +1575,133 @@ class Sales_pipeline extends AdminController
         $this->json_response($success,
             _l($success ? 'sales_pipeline_reminder_delivery_resume_success' : 'sales_pipeline_reminder_delivery_resume_unavailable'),
             [], $success ? 200 : 409);
+    }
+
+    public function test_whatsapp_connection()
+    {
+        if (!is_admin()) {
+            access_denied('sales_pipeline_settings');
+        }
+        if ($this->input->method(true) !== 'POST' || !$this->input->is_ajax_request()
+            || config_item('csrf_protection') !== true) {
+            show_error(_l('sales_pipeline_reminder_delivery_method_not_allowed'), 405);
+        }
+
+        $endpoint = trim((string) $this->input->post('endpoint'));
+        $secretKey = trim((string) $this->input->post('secret_key'));
+        $groupJid = trim((string) $this->input->post('group_jid'));
+
+        if ($endpoint === '') {
+            $endpoint = (string) get_option('sp_reminder_whatsapp_endpoint');
+        }
+        if ($secretKey === '') {
+            $secretKey = (string) get_option('sp_reminder_whatsapp_secret_key');
+        }
+        if ($groupJid === '') {
+            $groupJid = (string) get_option('sp_reminder_whatsapp_group_jid');
+        }
+
+        require_once module_dir_path('sales_pipeline', 'libraries/channels/Reminder_delivery_whatsapp_adapter.php');
+        $adapter = new Reminder_delivery_whatsapp_adapter();
+
+        $health = $adapter->checkHealth($endpoint, $secretKey);
+        if (!empty($health['error']) || empty($health['connected'])) {
+            $this->json_response(false, _l('sp_reminder_whatsapp_test_conn_error', [$health['error'] ?? '']), [], 500);
+            return;
+        }
+
+        if (($health['status'] ?? '') !== 'CONNECTED') {
+            $this->json_response(false, _l('sp_reminder_whatsapp_test_not_connected', [$health['status'] ?? 'UNKNOWN']), [], 400);
+            return;
+        }
+
+        $managerMode = trim((string) $this->input->post('manager_mode'));
+        if ($managerMode === '') {
+            $managerMode = (string) get_option('sp_reminder_whatsapp_manager_mode');
+        }
+
+        $recipient = '';
+        if ($managerMode === 'direct_only') {
+            $staff = $this->staff_model->get(get_staff_user_id());
+            if ($staff && !empty($staff->phonenumber)) {
+                require_once module_dir_path('sales_pipeline', 'libraries/Reminder_whatsapp_formatter.php');
+                $recipient = Reminder_whatsapp_formatter::formatPhoneNumberToJid($staff->phonenumber);
+            }
+        } else {
+            $recipient = $groupJid;
+            if ($recipient === '') {
+                $staff = $this->staff_model->get(get_staff_user_id());
+                if ($staff && !empty($staff->phonenumber)) {
+                    require_once module_dir_path('sales_pipeline', 'libraries/Reminder_whatsapp_formatter.php');
+                    $recipient = Reminder_whatsapp_formatter::formatPhoneNumberToJid($staff->phonenumber);
+                }
+            }
+        }
+
+        if (empty($recipient)) {
+            $this->json_response(true, _l('sp_reminder_whatsapp_test_connected_no_recipient'), ['health' => $health]);
+            return;
+        }
+
+        $testIdempotencyKey = 'test_conn_' . get_staff_user_id() . '_' . time();
+        $testTitle = _l('sp_reminder_whatsapp_msg_test_title');
+        $testBody = _l('sp_reminder_whatsapp_msg_test_body', [date('H:i:s d/m/Y')]);
+        $testMessage = "🔔 *[{$testTitle}]*\n{$testBody}";
+
+        $timeoutSeconds = (float) $this->input->post('timeout_seconds');
+        $sendTimeout = max(8.0, $timeoutSeconds > 0 ? $timeoutSeconds : 8.0);
+
+        $sendResult = $adapter->send($recipient, $testMessage, 0, [
+            'endpoint'        => $endpoint,
+            'secret_key'      => $secretKey,
+            'idempotency_key' => $testIdempotencyKey,
+            'timeout'         => $sendTimeout,
+        ]);
+
+        if (!empty($sendResult['success'])) {
+            $this->json_response(true, _l('sp_reminder_whatsapp_test_success', [$recipient]), ['health' => $health, 'result' => $sendResult]);
+        } else {
+            $err = (string) ($sendResult['last_error'] ?? '');
+            if (($sendResult['last_error_code'] ?? '') === 'whatsapp_delivery_uncertain' || strpos($err, 'timed out') !== false || strpos($err, 'timeout') !== false) {
+                $friendlyErr = _l('sp_reminder_whatsapp_test_timeout_friendly', [(int) $sendTimeout]);
+            } else {
+                $friendlyErr = preg_replace('/\s*\([A-Za-z0-9_\\\s-]+\)$/', '', $err);
+            }
+            $this->json_response(false, _l('sp_reminder_whatsapp_test_send_failed', [$friendlyErr]), ['health' => $health, 'result' => $sendResult], 500);
+        }
+    }
+
+    public function fetch_whatsapp_groups()
+    {
+        if (!is_admin()) {
+            access_denied('sales_pipeline_settings');
+        }
+        if ($this->input->method(true) !== 'POST' || !$this->input->is_ajax_request()
+            || config_item('csrf_protection') !== true) {
+            show_error(_l('sales_pipeline_reminder_delivery_method_not_allowed'), 405);
+        }
+
+        $endpoint = trim((string) $this->input->post('endpoint'));
+        $secretKey = trim((string) $this->input->post('secret_key'));
+
+        if ($endpoint === '') {
+            $endpoint = (string) get_option('sp_reminder_whatsapp_endpoint');
+        }
+        if ($secretKey === '') {
+            $secretKey = (string) get_option('sp_reminder_whatsapp_secret_key');
+        }
+
+        require_once module_dir_path('sales_pipeline', 'libraries/channels/Reminder_delivery_whatsapp_adapter.php');
+        $adapter = new Reminder_delivery_whatsapp_adapter();
+
+        $result = $adapter->fetchGroups($endpoint, $secretKey);
+        if (!empty($result['success'])) {
+            $this->json_response(true, _l('sp_reminder_whatsapp_fetch_groups_success', [count($result['groups'])]), [
+                'groups' => $result['groups'],
+            ]);
+        } else {
+            $this->json_response(false, $result['error'] ?: _l('sales_pipeline_reminder_delivery_request_failed'), [], 500);
+        }
     }
 
     public function delete_setting($type, $id)
