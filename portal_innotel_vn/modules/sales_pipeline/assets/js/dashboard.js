@@ -460,6 +460,13 @@
                 $matchedTrigger.addClass('sp-staff-trigger--active');
                 activeStaffTrigger = $matchedTrigger.get(0);
             }
+
+            if (staffId && window.history && window.history.replaceState) {
+                var urlParams = new URLSearchParams(window.location.search);
+                urlParams.set('staff_id', String(staffId));
+                var nextQuery = urlParams.toString();
+                window.history.replaceState({}, '', window.location.pathname + (nextQuery ? '?' + nextQuery : ''));
+            }
         }
 
         function resetCompanyEstimateKpi() {
@@ -518,6 +525,15 @@
 
             $contentWrapper.find('.sp-staff-trigger--active').removeClass('sp-staff-trigger--active');
             activeStaffTrigger = null;
+
+            if (window.history && window.history.replaceState) {
+                var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('staff_id')) {
+                    urlParams.delete('staff_id');
+                    var nextQuery = urlParams.toString();
+                    window.history.replaceState({}, '', window.location.pathname + (nextQuery ? '?' + nextQuery : ''));
+                }
+            }
         }
 
         function initializeDashboardContent() {
@@ -572,9 +588,10 @@
             $drawerContent.empty().append(createState(iconClass, message, isError));
         }
 
-        function openDrawer(trigger) {
-            var $trigger = $(trigger);
-            var staffId = $trigger.data('staff-id');
+        function filterStaffEstimateKpi(staffId, options) {
+            options = options || {};
+            var shouldOpenDrawer = !!options.openDrawer;
+            var trigger = options.trigger || $contentWrapper.find('.js-sp-open-staff[data-staff-id="' + staffId + '"]').get(0);
 
             if (!staffId || !staffUrl) {
                 return;
@@ -584,25 +601,29 @@
                 activeRequest.abort();
             }
 
-            lastTrigger = trigger;
-            $drawer = $('#sp-dashboard-drawer');
-            $drawerPanel = $drawer.find('.sp-dashboard-drawer__panel');
-            $drawerContent = $drawer.find('[data-dashboard-drawer-content]');
+            if (shouldOpenDrawer) {
+                lastTrigger = trigger;
+                $drawer = $('#sp-dashboard-drawer');
+                $drawerPanel = $drawer.find('.sp-dashboard-drawer__panel');
+                $drawerContent = $drawer.find('[data-dashboard-drawer-content]');
+
+                $drawer.addClass('is-open').attr('aria-hidden', 'false');
+                $drawerPanel.attr('aria-busy', 'true');
+                $('body').addClass('sp-dashboard-drawer-open');
+                var isEstimatesTabForDrawer = activeDashboardTab === 'estimates'
+                    || (trigger && $(trigger).closest('[data-dashboard-panel]').data('dashboard-panel') === 'estimates');
+                var drawerLoadingMessage = (isEstimatesTabForDrawer && loadingEstimatesMessage) ? loadingEstimatesMessage : loadingMessage;
+                setDrawerState('fa-circle-o-notch fa-spin', drawerLoadingMessage, false);
+                window.setTimeout(function () {
+                    $drawerPanel.trigger('focus');
+                }, 30);
+            }
 
             var period = $('#sp-dashboard-time-filter').val() || 'this_month';
-
-            $drawer.addClass('is-open').attr('aria-hidden', 'false');
-            $drawerPanel.attr('aria-busy', 'true');
-            $('body').addClass('sp-dashboard-drawer-open');
-            var isEstimatesTab = activeDashboardTab === 'estimates'
-                || $(trigger).closest('[data-dashboard-panel]').data('dashboard-panel') === 'estimates';
-            var drawerLoadingMessage = (isEstimatesTab && loadingEstimatesMessage) ? loadingEstimatesMessage : loadingMessage;
-            setDrawerState('fa-circle-o-notch fa-spin', drawerLoadingMessage, false);
-            window.setTimeout(function () {
-                $drawerPanel.trigger('focus');
-            }, 30);
-
             var thisRequestId = ++currentScopeRequestId;
+
+            var isEstimatesTab = activeDashboardTab === 'estimates'
+                || (trigger && $(trigger).closest('[data-dashboard-panel]').data('dashboard-panel') === 'estimates');
 
             var $kpiCard = $contentWrapper.find('.sp-estimate-revenue-kpi-card');
             if (isEstimatesTab && $kpiCard.length) {
@@ -629,11 +650,12 @@
                     return;
                 }
 
-                if (response && response.success && response.data
-                    && Object.prototype.hasOwnProperty.call(response.data, 'html')) {
-                    $drawerContent.html(response.data.html);
-                    if ($.fn.tooltip) {
-                        $drawerContent.find('[data-toggle="tooltip"]').tooltip();
+                if (response && response.success && response.data) {
+                    if (shouldOpenDrawer && Object.prototype.hasOwnProperty.call(response.data, 'html')) {
+                        $drawerContent.html(response.data.html);
+                        if ($.fn.tooltip) {
+                            $drawerContent.find('[data-toggle="tooltip"]').tooltip();
+                        }
                     }
 
                     if (isEstimatesTab && response.data.estimate_revenue_kpi) {
@@ -643,7 +665,9 @@
                 }
 
                 var responseMessage = response && response.message ? response.message : errorMessage;
-                setDrawerState('fa-exclamation-circle', responseMessage, true);
+                if (shouldOpenDrawer) {
+                    setDrawerState('fa-exclamation-circle', responseMessage, true);
+                }
                 if (isEstimatesTab && typeof sp_alert === 'function') {
                     sp_alert('danger', responseMessage);
                 }
@@ -655,16 +679,31 @@
                 var responseMessage = xhr.responseJSON && xhr.responseJSON.message
                     ? xhr.responseJSON.message
                     : errorMessage;
-                setDrawerState('fa-exclamation-circle', responseMessage, true);
+                if (shouldOpenDrawer) {
+                    setDrawerState('fa-exclamation-circle', responseMessage, true);
+                }
                 if (isEstimatesTab && typeof sp_alert === 'function') {
                     sp_alert('danger', responseMessage);
                 }
             }).always(function () {
                 if (thisRequestId === currentScopeRequestId) {
                     activeRequest = null;
-                    $drawerPanel.removeAttr('aria-busy');
-                    $kpiCard.removeClass('is-loading');
+                    if (shouldOpenDrawer && $drawerPanel) {
+                        $drawerPanel.removeAttr('aria-busy');
+                    }
+                    if ($kpiCard) {
+                        $kpiCard.removeClass('is-loading');
+                    }
                 }
+            });
+        }
+
+        function openDrawer(trigger) {
+            var $trigger = $(trigger);
+            var staffId = $trigger.data('staff-id');
+            filterStaffEstimateKpi(staffId, {
+                openDrawer: true,
+                trigger: trigger
             });
         }
 
@@ -929,5 +968,13 @@
         }
         updateLastUpdatedTimestamp();
         initializeDashboardContent();
+
+        var initialUrlParams = new URLSearchParams(window.location.search);
+        var initialStaffId = initialUrlParams.get('staff_id');
+        if (initialStaffId && activeDashboardTab === 'estimates') {
+            filterStaffEstimateKpi(initialStaffId, {
+                openDrawer: initialUrlParams.get('open_drawer') === '1'
+            });
+        }
     });
 })(jQuery);

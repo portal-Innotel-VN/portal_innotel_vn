@@ -2517,7 +2517,8 @@ class Sales_pipeline_model extends App_Model
                 'staff_id'                   => $staff_id,
                 'staff_name'                 => trim($staff['firstname'] . ' ' . $staff['lastname']),
                 'email'                      => $staff['email'],
-                'is_admin'                   => (int) $staff['admin'] === 1,
+                'is_manager'                 => (int) $staff['admin'] === 1
+                    || has_permission('sales_pipeline', (string) $staff_id, 'view'),
                 'estimate_count'             => 0,
                 'accepted_revenue'           => 0.0,
                 'accepted_count'             => 0,
@@ -2620,22 +2621,14 @@ class Sales_pipeline_model extends App_Model
 
         $cohort = [];
         foreach ($metrics as $metric) {
-            $has_activity = $metric['estimate_count'] > 0
+            $has_sales_activity = $metric['estimate_count'] > 0
                 || $metric['accepted_count'] > 0
-                || $metric['declined_count'] > 0
-                || (!empty($metric['eligible_reminders']) && $metric['eligible_reminders'] > 0);
-            if ($metric['is_admin'] && !$has_activity) {
+                || $metric['declined_count'] > 0;
+            if ($metric['is_manager'] && !$has_sales_activity) {
                 continue;
             }
-            unset($metric['is_admin']);
+            unset($metric['is_manager']);
             $cohort[] = $metric;
-        }
-
-        if (empty($cohort)) {
-            $cohort = array_map(function ($metric) {
-                unset($metric['is_admin']);
-                return $metric;
-            }, array_values($metrics));
         }
 
         $score_service = new Performance_score_service($this);
@@ -3678,7 +3671,8 @@ class Sales_pipeline_model extends App_Model
                 'staff_id'                 => $sid,
                 'staff_name'               => trim($staff['firstname'] . ' ' . $staff['lastname']),
                 'email'                    => $staff['email'],
-                'is_admin'                 => (int) $staff['admin'] === 1,
+                'is_manager'               => (int) $staff['admin'] === 1
+                    || has_permission('sales_pipeline', (string) $sid, 'view'),
                 'count_estimates_today'    => 0,
                 'count_estimates_month'    => 0,
                 'sum_revenue_this_week'    => 0,
@@ -3784,10 +3778,11 @@ class Sales_pipeline_model extends App_Model
 
         $result = [];
         foreach ($metrics as $metric) {
-            $has_activity = $metric['count_estimates_month'] > 0
-                || $metric['total_pipeline_deals'] > 0;
+            $has_sales_activity = $metric['period_deals'] > 0
+                || $metric['period_estimates'] > 0
+                || $metric['period_revenue'] > 0;
 
-            if ($staff_id === null && $metric['is_admin'] && !$has_activity) {
+            if ($staff_id === null && $metric['is_manager'] && !$has_sales_activity) {
                 continue;
             }
 
@@ -3815,7 +3810,7 @@ class Sales_pipeline_model extends App_Model
                 + $metric['revenue_week_progress']
             ) / 3);
             $metric['kpi_status'] = $this->resolve_dashboard_kpi_status($metric['overall_progress']);
-            unset($metric['is_admin']);
+            unset($metric['is_manager']);
             $result[] = $metric;
         }
 
