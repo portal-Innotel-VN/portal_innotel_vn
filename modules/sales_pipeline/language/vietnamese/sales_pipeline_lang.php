@@ -799,3 +799,78 @@ $lang['sales_pipeline_kpi_filtered_by'] = 'Đang lọc';
 $lang['sales_pipeline_view_all_short'] = 'Xem tất cả';
 $lang['sales_pipeline_view_company_total'] = 'Quay về tổng doanh thu công ty';
 
+// WhatsApp Baileys Gateway Reminder Channel
+$lang['sp_reminder_whatsapp_settings_title'] = 'Kênh Gửi WhatsApp (Baileys Gateway)';
+$lang['sp_reminder_whatsapp_enable_label'] = 'Kích hoạt gửi cảnh báo qua WhatsApp';
+$lang['sp_reminder_whatsapp_endpoint_label'] = 'Địa chỉ Gateway (Endpoint Send)';
+$lang['sp_reminder_whatsapp_secret_label'] = 'Secret Key bảo vệ Gateway';
+$lang['sp_reminder_whatsapp_secret_placeholder'] = 'Nhập Secret Key bảo mật...';
+$lang['sp_reminder_whatsapp_manager_mode_label'] = 'Chế độ gửi cho Quản lý';
+$lang['sp_reminder_whatsapp_mode_group_only'] = 'Chỉ gửi vào Group WhatsApp của Quản lý';
+$lang['sp_reminder_whatsapp_mode_direct_only'] = 'Chỉ gửi trực tiếp tới từng Quản lý (qua SĐT Staff)';
+$lang['sp_reminder_whatsapp_mode_both'] = 'Gửi cả vào Group và trực tiếp từng Quản lý';
+$lang['sp_reminder_whatsapp_mode_direct_hint'] = 'Hệ thống sẽ tự động quét danh sách Quản lý / Admin có số điện thoại hợp lệ trong CRM để gửi thông báo riêng tư.';
+$lang['sp_reminder_whatsapp_group_jid_label'] = 'ID Nhóm Quản lý (Group JID)';
+$lang['sp_reminder_whatsapp_base_url_label'] = 'CRM Base URL cho Deeplink (Mobile)';
+$lang['sp_reminder_whatsapp_timeout_label'] = 'Request Timeout (giây)';
+$lang['sp_reminder_whatsapp_hourly_limit_label'] = 'Hạn mức gửi WhatsApp (tin/giờ)';
+$lang['sp_reminder_whatsapp_test_button'] = 'Kiểm tra kết nối (Test Connection)';
+$lang['sp_reminder_whatsapp_test_connecting'] = 'Đang kiểm tra...';
+$lang['sp_reminder_whatsapp_test_connecting_gw'] = 'Đang kết nối tới Gateway...';
+$lang['sp_reminder_whatsapp_test_conn_error'] = 'Lỗi kết nối Gateway: %s';
+$lang['sp_reminder_whatsapp_test_not_connected'] = 'Gateway đang ở trạng thái "%s". Hãy quét QR hoặc bật session trên Gateway.';
+$lang['sp_reminder_whatsapp_test_connected_no_recipient'] = 'Kết nối Gateway thành công! (Chưa gửi tin do chưa chọn nhóm hoặc chưa có SĐT phụ trách).';
+$lang['sp_reminder_whatsapp_test_success'] = 'Gửi tin nhắn thử nghiệm thành công tới: %s';
+$lang['sp_reminder_whatsapp_test_send_failed'] = 'Gửi tin thử nghiệm thất bại: %s';
+$lang['sp_reminder_whatsapp_test_timeout_friendly'] = 'Gateway phản hồi quá thời gian chờ (hết %s giây). Nếu gửi vào nhóm đông người, hãy tăng giá trị "Request Timeout".';
+$lang['sp_reminder_whatsapp_test_status_success'] = 'Thành công';
+$lang['sp_reminder_whatsapp_test_status_failed'] = 'Thất bại';
+$lang['sp_reminder_whatsapp_msg_staff'] = 'Phụ trách';
+$lang['sp_reminder_whatsapp_msg_customer'] = 'Khách hàng';
+$lang['sp_reminder_whatsapp_msg_deal'] = 'Deal';
+$lang['sp_reminder_whatsapp_msg_estimate'] = 'Báo giá';
+$lang['sp_reminder_whatsapp_msg_issue'] = 'Vấn đề';
+$lang['sp_reminder_whatsapp_msg_content'] = 'Nội dung';
+$lang['sp_reminder_whatsapp_msg_inactive_time'] = 'Thời gian bất động';
+$lang['sp_reminder_whatsapp_msg_days'] = 'ngày';
+$lang['sp_reminder_whatsapp_msg_quick_action'] = 'Thao tác nhanh trên CRM';
+$lang['sp_reminder_whatsapp_msg_view_deal'] = 'Xem Deal';
+$lang['sp_reminder_whatsapp_msg_view_estimate'] = 'Xem Báo giá';
+$lang['sp_reminder_whatsapp_msg_view_reminder'] = 'Xem chi tiết nhắc nhở';
+$lang['sp_reminder_whatsapp_msg_test_title'] = 'Sales Pipeline - Test Connection';
+$lang['sp_reminder_whatsapp_msg_view_revenue_chart'] = 'Xem Biểu đồ Doanh thu';
+$lang['sp_reminder_whatsapp_msg_view_staff_revenue_chart'] = 'Xem Biểu đồ Doanh thu (%s)';
+$lang['sp_reminder_whatsapp_fetch_groups_btn'] = 'Tải danh sách nhóm';
+$lang['sp_reminder_whatsapp_fetch_groups_loading'] = 'Đang tải nhóm...';
+$lang['sp_reminder_whatsapp_fetch_groups_success'] = 'Đã tải thành công %s nhóm từ WhatsApp!';
+$lang['sp_reminder_whatsapp_fetch_groups_empty'] = 'Không tìm thấy nhóm WhatsApp nào hoặc Gateway chưa tham gia nhóm.';
+$lang['sp_reminder_whatsapp_select_group_placeholder'] = '-- Chọn nhóm WhatsApp từ danh sách --';
+
+// Reminder UI Guide Panels (Performance-style Documentation)
+$lang['sp_reminder_guide_global_title'] = 'Cơ chế Vận hành & Khung giờ Gửi';
+$lang['sp_reminder_guide_global_schedule'] = '<strong>Tự động quét & Cuối tuần:</strong> Hệ thống tự động kiểm tra định kỳ các cơ hội & báo giá. Khi bật "Bỏ qua Thứ 7, Chủ nhật", mọi thông báo nhắc nhở sẽ tạm dừng trong 2 ngày này.';
+$lang['sp_reminder_guide_global_holidays'] = '<strong>Danh sách Ngày nghỉ lễ:</strong> Khai báo ngày nghỉ theo định dạng <code>YYYY-MM-DD</code> (mỗi ngày một dòng, vd: <code>2026-04-30</code>). Hệ thống sẽ không kích hoạt nhắc nhở vào các ngày này.';
+$lang['sp_reminder_guide_global_quiet_hours'] = '<strong>Giờ im lặng (Quiet Hours):</strong> Các thông báo phát sinh trong khung giờ nghỉ ngơi sẽ được bảo lưu an toàn và tự động gửi bù vào đầu giờ làm việc tiếp theo.';
+$lang['sp_reminder_guide_global_sla'] = '<strong>Thời hạn SLA:</strong> Số giờ tối đa để NVKD phản hồi nhắc nhở trước khi bị tính là vi phạm SLA (kết nối trực tiếp tới Điểm hiệu suất).';
+
+$lang['sp_reminder_guide_email_title'] = 'Nguyên tắc Gửi Bản sao cho Quản lý';
+$lang['sp_reminder_guide_email_manager'] = '<strong>Truy vết Quản lý tự động:</strong> Hệ thống tự động nhận diện cấp Quản lý trực tiếp của nhân viên phụ trách thông qua cấu trúc phân quyền và phân cấp Staff trong CRM.';
+$lang['sp_reminder_guide_email_scope'] = '<strong>Lọc phạm vi gửi:</strong> Chọn "Chỉ việc khẩn cấp" để giảm tải hộp thư của Quản lý, chỉ gửi khi Deal bị bỏ quên quá hạn hoặc Báo giá sắp hết hiệu lực.';
+$lang['sp_reminder_guide_email_fallback'] = '<strong>Email dự phòng:</strong> Áp dụng gửi bản sao tới danh sách email này khi nhân sự chưa được phân bổ Quản lý trực tiếp (hỗ trợ nhiều email phân tách bằng dấu phẩy).';
+
+$lang['sp_reminder_guide_whatsapp_title'] = 'Hướng dẫn Tích hợp WhatsApp Gateway';
+$lang['sp_reminder_guide_whatsapp_gateway'] = '<strong>Baileys Gateway Độc lập:</strong> Dịch vụ Gateway Node.js riêng biệt giúp gửi tin nhắn cảnh báo trực tiếp qua giao thức WhatsApp Web ổn định, không phát sinh chi phí theo tin của Meta Business API.';
+$lang['sp_reminder_guide_whatsapp_modes'] = '<strong>Chế độ gửi Quản lý:</strong> Linh hoạt lựa chọn gửi tập trung vào Nhóm Quản lý (Group JID), gửi riêng tư tới từng Quản lý (qua SĐT Staff), hoặc gửi đồng thời cả hai.';
+$lang['sp_reminder_guide_whatsapp_deeplink'] = '<strong>Deeplink Mobile:</strong> Base URL giúp nút bấm trên tin nhắn WhatsApp mở thẳng vào Deal/Báo giá ngay trên ứng dụng hoặc trình duyệt điện thoại.';
+$lang['sp_reminder_guide_whatsapp_limits'] = '<strong>Hạn mức an toàn & Timeout:</strong> Giới hạn số tin/giờ để chống spam và tránh rủi ro số bị chặn. Tăng timeout (10-15s) nếu gửi vào các Group đông thành viên.';
+
+$lang['sp_reminder_guide_deal_title'] = 'Cơ chế Giám sát Pipeline & Deal';
+$lang['sp_reminder_guide_deal_desc'] = '<strong>Lịch kiểm tra & Cảnh báo:</strong> Quét định kỳ vào các ngày làm việc (Thứ 2, Thứ 4, Thứ 6) để cảnh báo khi số lượng Deal đang mở dưới mức tối thiểu. Đồng thời tự động phát hiện Deal không có hoạt động theo dõi (Stale) dựa trên tần suất riêng của từng Deal, có giới hạn số lượng nhắc nhở mỗi đợt.';
+
+$lang['sp_reminder_guide_kpi_title'] = 'Cơ chế Theo dõi Chỉ tiêu Báo giá';
+$lang['sp_reminder_guide_kpi_desc'] = '<strong>Tiến độ & Mốc chốt:</strong> Nhắc nhở NVKD hoàn thành chỉ tiêu tạo báo giá hằng ngày, đồng thời rà soát tiến độ doanh thu vào các mốc D10, D20, Cuối tháng và đánh giá mục tiêu tuần (Thứ 4 giữa tuần & Thứ 6 cuối tuần).';
+
+$lang['sp_reminder_guide_lifecycle_title'] = 'Quy trình Vòng đời Báo giá';
+$lang['sp_reminder_guide_lifecycle_desc'] = '<strong>Cảnh báo theo trạng thái:</strong> Thúc đẩy hoàn tất Báo giá nháp tồn đọng, bám sát các báo giá đã gửi nhưng chưa có phản hồi hoặc sắp hết hạn chót, nhắc nhở tìm hiểu nguyên nhân khi bị từ chối, và thông báo xuất hóa đơn/hợp đồng khi báo giá được chấp nhận.';
+
+

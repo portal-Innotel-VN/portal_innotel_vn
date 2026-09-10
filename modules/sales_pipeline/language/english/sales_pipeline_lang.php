@@ -799,3 +799,78 @@ $lang['sales_pipeline_kpi_filtered_by'] = 'Filtered by';
 $lang['sales_pipeline_view_all_short'] = 'View all';
 $lang['sales_pipeline_view_company_total'] = 'Return to company total revenue';
 
+// WhatsApp Baileys Gateway Reminder Channel
+$lang['sp_reminder_whatsapp_settings_title'] = 'WhatsApp Delivery Channel (Baileys Gateway)';
+$lang['sp_reminder_whatsapp_enable_label'] = 'Enable alert delivery via WhatsApp';
+$lang['sp_reminder_whatsapp_endpoint_label'] = 'Gateway URL (Endpoint Send)';
+$lang['sp_reminder_whatsapp_secret_label'] = 'Gateway Security Secret Key';
+$lang['sp_reminder_whatsapp_secret_placeholder'] = 'Enter secure secret key...';
+$lang['sp_reminder_whatsapp_manager_mode_label'] = 'Manager Routing Mode';
+$lang['sp_reminder_whatsapp_mode_group_only'] = 'Send only to Manager WhatsApp Group';
+$lang['sp_reminder_whatsapp_mode_direct_only'] = 'Send directly to each Manager (via Staff phone)';
+$lang['sp_reminder_whatsapp_mode_both'] = 'Send to both Group and individual Managers';
+$lang['sp_reminder_whatsapp_mode_direct_hint'] = 'The system will automatically scan Managers / Admins with valid phone numbers in the CRM to deliver direct notifications.';
+$lang['sp_reminder_whatsapp_group_jid_label'] = 'Manager Group ID (Group JID)';
+$lang['sp_reminder_whatsapp_base_url_label'] = 'CRM Base URL for Deeplink (Mobile)';
+$lang['sp_reminder_whatsapp_timeout_label'] = 'Request Timeout (seconds)';
+$lang['sp_reminder_whatsapp_hourly_limit_label'] = 'WhatsApp delivery quota (msgs/hour)';
+$lang['sp_reminder_whatsapp_test_button'] = 'Test Connection';
+$lang['sp_reminder_whatsapp_test_connecting'] = 'Checking...';
+$lang['sp_reminder_whatsapp_test_connecting_gw'] = 'Connecting to Gateway...';
+$lang['sp_reminder_whatsapp_test_conn_error'] = 'Gateway connection error: %s';
+$lang['sp_reminder_whatsapp_test_not_connected'] = 'Gateway is in state "%s". Please scan QR or start session on Gateway.';
+$lang['sp_reminder_whatsapp_test_connected_no_recipient'] = 'Gateway connected! (Test message omitted: unconfigured Group JID and Staff phone).';
+$lang['sp_reminder_whatsapp_test_success'] = 'Test message successfully delivered to: %s';
+$lang['sp_reminder_whatsapp_test_send_failed'] = 'Test message failed: %s';
+$lang['sp_reminder_whatsapp_test_timeout_friendly'] = 'Gateway response timed out after %ss. Please increase "Request Timeout" for large groups.';
+$lang['sp_reminder_whatsapp_test_status_success'] = 'Success';
+$lang['sp_reminder_whatsapp_test_status_failed'] = 'Failed';
+$lang['sp_reminder_whatsapp_msg_staff'] = 'Staff in charge';
+$lang['sp_reminder_whatsapp_msg_customer'] = 'Customer';
+$lang['sp_reminder_whatsapp_msg_deal'] = 'Deal';
+$lang['sp_reminder_whatsapp_msg_estimate'] = 'Estimate';
+$lang['sp_reminder_whatsapp_msg_issue'] = 'Issue';
+$lang['sp_reminder_whatsapp_msg_content'] = 'Content';
+$lang['sp_reminder_whatsapp_msg_inactive_time'] = 'Inactive duration';
+$lang['sp_reminder_whatsapp_msg_days'] = 'days';
+$lang['sp_reminder_whatsapp_msg_quick_action'] = 'Quick CRM Actions';
+$lang['sp_reminder_whatsapp_msg_view_deal'] = 'View Deal';
+$lang['sp_reminder_whatsapp_msg_view_estimate'] = 'View Estimate';
+$lang['sp_reminder_whatsapp_msg_view_reminder'] = 'View Reminder Details';
+$lang['sp_reminder_whatsapp_msg_test_title'] = 'Sales Pipeline - Test Connection';
+$lang['sp_reminder_whatsapp_msg_view_revenue_chart'] = 'View Revenue Chart';
+$lang['sp_reminder_whatsapp_msg_view_staff_revenue_chart'] = 'View Revenue Chart (%s)';
+$lang['sp_reminder_whatsapp_fetch_groups_btn'] = 'Fetch WhatsApp Groups';
+$lang['sp_reminder_whatsapp_fetch_groups_loading'] = 'Fetching groups...';
+$lang['sp_reminder_whatsapp_fetch_groups_success'] = 'Successfully loaded %s WhatsApp group(s)!';
+$lang['sp_reminder_whatsapp_fetch_groups_empty'] = 'No WhatsApp groups found or Gateway has not joined any groups.';
+$lang['sp_reminder_whatsapp_select_group_placeholder'] = '-- Select a WhatsApp group from list --';
+
+// Reminder UI Guide Panels (Performance-style Documentation)
+$lang['sp_reminder_guide_global_title'] = 'Operation Logic & Delivery Schedule';
+$lang['sp_reminder_guide_global_schedule'] = '<strong>Automated Scanning & Weekends:</strong> System periodically scans open opportunities and quotes. When "Skip Weekends" is enabled, reminders pause on Saturday and Sunday.';
+$lang['sp_reminder_guide_global_holidays'] = '<strong>Public Holiday List:</strong> Specify holidays in <code>YYYY-MM-DD</code> format (one per line, e.g. <code>2026-04-30</code>). Reminders will not trigger on these dates.';
+$lang['sp_reminder_guide_global_quiet_hours'] = '<strong>Quiet Hours:</strong> Notifications generated during rest hours are safely queued and automatically dispatched at the start of the next working day.';
+$lang['sp_reminder_guide_global_sla'] = '<strong>Response SLA:</strong> Maximum allowable hours for sales staff to respond to reminders before SLA breach (directly linked to Performance Score).';
+
+$lang['sp_reminder_guide_email_title'] = 'Manager Email CC Guidelines';
+$lang['sp_reminder_guide_email_manager'] = '<strong>Automated Manager Routing:</strong> System automatically detects the direct manager of the assigned sales rep via the CRM staff hierarchy.';
+$lang['sp_reminder_guide_email_scope'] = '<strong>Filter Scope:</strong> Select "Critical Only" to reduce manager inbox load, sending CC only for severely stale deals or near-expiry quotes.';
+$lang['sp_reminder_guide_email_fallback'] = '<strong>Fallback Emails:</strong> Sent to these addresses when staff does not have an assigned manager (comma-separated list supported).';
+
+$lang['sp_reminder_guide_whatsapp_title'] = 'WhatsApp Gateway Integration Guide';
+$lang['sp_reminder_guide_whatsapp_gateway'] = '<strong>Independent Baileys Gateway:</strong> Dedicated Node.js gateway sends alerts directly over the WhatsApp Web protocol, avoiding per-message Meta Business API fees.';
+$lang['sp_reminder_guide_whatsapp_modes'] = '<strong>Manager Dispatch Modes:</strong> Send to a manager WhatsApp Group (Group JID), directly to each manager\'s personal WhatsApp (via staff mobile), or both simultaneously.';
+$lang['sp_reminder_guide_whatsapp_deeplink'] = '<strong>Mobile Deeplinks:</strong> CRM Base URL allows buttons in WhatsApp messages to deep-link straight to the Deal/Estimate on mobile devices.';
+$lang['sp_reminder_guide_whatsapp_limits'] = '<strong>Rate Limits & Timeout:</strong> Configure hourly send limits to prevent account suspension. Increase timeout (10-15s) when posting to large groups.';
+
+$lang['sp_reminder_guide_deal_title'] = 'Pipeline & Deal Monitoring Mechanism';
+$lang['sp_reminder_guide_deal_desc'] = '<strong>Schedule & Thresholds:</strong> Scans on business days (Mon, Wed, Fri) to warn when active deals fall below the minimum threshold. Stale deal reminders track inactivity with batch limits per run.';
+
+$lang['sp_reminder_guide_kpi_title'] = 'Quote KPI Monitoring Mechanism';
+$lang['sp_reminder_guide_kpi_desc'] = '<strong>Milestone Tracking:</strong> Reminds staff of daily quote creation quotas and monitors revenue progress at D10, D20, Month-end, and mid/late week targets.';
+
+$lang['sp_reminder_guide_lifecycle_title'] = 'Quote Lifecycle Guidelines';
+$lang['sp_reminder_guide_lifecycle_desc'] = '<strong>Status-based Prompts:</strong> Expedite stale drafts, track unresponded or expiring quotes, investigate declined proposals, and prompt invoicing when accepted.';
+
+

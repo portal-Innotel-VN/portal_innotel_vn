@@ -113,60 +113,312 @@
                                 <?php $this->load->view('sales_pipeline/partials/reminder_delivery_health', ['health' => $reminder_delivery_health]); ?>
                                 <?php echo form_open(admin_url('sales_pipeline/settings'), ['id' => 'sp-reminder-settings-form', 'class' => 'sp-reminder-settings']); ?>
                                 <input type="hidden" name="setting_type" value="reminder">
+
+                                <!-- SECTION 1: CẤU HÌNH CHUNG & THỜI GIAN GỬI -->
                                 <div class="sp-reminder-section sp-reminder-section--global">
-                                    <h5><i class="fa fa-power-off" aria-hidden="true"></i> <?php echo _l('sp_reminder_global_switch'); ?></h5>
-                                    <div class="checkbox checkbox-primary"><input id="sp_reminder_global_enabled" name="sp_reminder_global_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_global_enabled'); ?>><label for="sp_reminder_global_enabled"><?php echo _l('sp_reminder_global_switch'); ?></label></div>
-                                    <div class="checkbox checkbox-primary"><input id="sp_reminder_skip_weekends" name="sp_reminder_skip_weekends" type="checkbox" value="1"<?php echo $checked('sp_reminder_skip_weekends'); ?>><label for="sp_reminder_skip_weekends"><?php echo _l('sp_reminder_skip_weekends_label'); ?></label></div>
-                                    <div class="row mtop10">
-                                        <div class="col-md-6">
-                                            <?php echo render_input('sp_reminder_sla_hours', _l('sp_reminder_sla_hours_label'), $ro['sp_reminder_sla_hours'], 'number', ['min' => 1, 'max' => 720]); ?>
+                                    <h5><i class="fa fa-sliders" aria-hidden="true"></i> <?php echo _l('sp_reminder_global_switch'); ?></h5>
+                                    <div class="row">
+                                        <div class="col-md-7 col-sm-12">
+                                            <div class="checkbox checkbox-primary">
+                                                <input id="sp_reminder_global_enabled" name="sp_reminder_global_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_global_enabled'); ?>>
+                                                <label for="sp_reminder_global_enabled" class="bold"><?php echo _l('sp_reminder_global_switch'); ?></label>
+                                            </div>
+                                            <div class="checkbox checkbox-primary">
+                                                <input id="sp_reminder_skip_weekends" name="sp_reminder_skip_weekends" type="checkbox" value="1"<?php echo $checked('sp_reminder_skip_weekends'); ?>>
+                                                <label for="sp_reminder_skip_weekends"><?php echo _l('sp_reminder_skip_weekends_label'); ?></label>
+                                            </div>
+                                            <div class="form-group sp-compact-field mtop15">
+                                                <label for="sp_reminder_sla_hours" class="control-label"><?php echo _l('sp_reminder_sla_hours_label'); ?></label>
+                                                <div class="input-group sp-compact-number">
+                                                    <input type="number" id="sp_reminder_sla_hours" name="sp_reminder_sla_hours" class="form-control" min="1" max="720" value="<?php echo html_escape($ro['sp_reminder_sla_hours']); ?>">
+                                                    <span class="input-group-addon"><?php echo _l('hours'); ?></span>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="sp_reminder_holiday_dates" class="control-label"><?php echo _l('sp_reminder_holiday_dates_label'); ?></label>
+                                                <textarea class="form-control sp-holiday-dates-textarea" rows="3" id="sp_reminder_holiday_dates" name="sp_reminder_holiday_dates" placeholder="2026-01-01&#10;2026-04-30&#10;2026-05-01"><?php echo html_escape($ro['sp_reminder_holiday_dates']); ?></textarea>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-xs-12 col-sm-6">
+                                                    <div class="form-group sp-compact-time">
+                                                        <label for="sp_reminder_quiet_hours_start" class="control-label"><?php echo _l('sp_reminder_quiet_hours_label') . ' (' . _l('sp_reminder_start') . ')'; ?></label>
+                                                        <input type="time" id="sp_reminder_quiet_hours_start" name="sp_reminder_quiet_hours_start" class="form-control" value="<?php echo html_escape($ro['sp_reminder_quiet_hours_start']); ?>">
+                                                    </div>
+                                                </div>
+                                                <div class="col-xs-12 col-sm-6">
+                                                    <div class="form-group sp-compact-time">
+                                                        <label for="sp_reminder_quiet_hours_end" class="control-label"><?php echo _l('sp_reminder_quiet_hours_label') . ' (' . _l('sp_reminder_end') . ')'; ?></label>
+                                                        <input type="time" id="sp_reminder_quiet_hours_end" name="sp_reminder_quiet_hours_end" class="form-control" value="<?php echo html_escape($ro['sp_reminder_quiet_hours_end']); ?>">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-5 col-sm-12">
+                                            <div class="sp-guide-panel sp-guide-panel--global">
+                                                <div class="sp-guide-panel__title">
+                                                    <i class="fa fa-info-circle text-success" aria-hidden="true"></i> <?php echo _l('sp_reminder_guide_global_title'); ?>
+                                                </div>
+                                                <div class="sp-guide-panel__body">
+                                                    <p><?php echo _l('sp_reminder_guide_global_schedule'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_global_holidays'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_global_quiet_hours'); ?></p>
+                                                    <p class="sp-guide-panel__note"><?php echo _l('sp_reminder_guide_global_sla'); ?></p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="row"><div class="col-md-6"><label for="sp_reminder_holiday_dates"><?php echo _l('sp_reminder_holiday_dates_label'); ?></label><textarea class="form-control" rows="3" id="sp_reminder_holiday_dates" name="sp_reminder_holiday_dates" placeholder="2026-01-01"><?php echo html_escape($ro['sp_reminder_holiday_dates']); ?></textarea></div><div class="col-md-3"><?php echo render_input('sp_reminder_quiet_hours_start', _l('sp_reminder_quiet_hours_label') . ' (' . _l('sp_reminder_start') . ')', $ro['sp_reminder_quiet_hours_start'], 'time'); ?></div><div class="col-md-3"><?php echo render_input('sp_reminder_quiet_hours_end', _l('sp_reminder_quiet_hours_label') . ' (' . _l('sp_reminder_end') . ')', $ro['sp_reminder_quiet_hours_end'], 'time'); ?></div></div>
                                 </div>
+
+                                <!-- SECTION 2: EMAIL CC QUẢN LÝ -->
                                 <div class="sp-reminder-section sp-reminder-section--cc">
-                                    <h5><i class="fa fa-envelope" aria-hidden="true"></i> <?php echo _l('sp_settings_reminder_email_cc_manager'); ?></h5>
-                                    <div class="checkbox checkbox-primary">
-                                        <input id="sp_reminder_email_cc_manager_enabled" name="sp_reminder_email_cc_manager_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_email_cc_manager_enabled'); ?>>
-                                        <label for="sp_reminder_email_cc_manager_enabled"><?php echo _l('sp_settings_reminder_email_cc_manager_help'); ?></label>
-                                    </div>
-                                    <div class="row mtop10">
-                                        <div class="col-md-4">
-                                            <div class="form-group">
-                                                <label for="sp_reminder_email_cc_scope"><?php echo _l('sp_settings_reminder_email_cc_scope'); ?></label>
+                                    <h5><i class="fa fa-envelope-o" aria-hidden="true"></i> <?php echo _l('sp_settings_reminder_email_cc_manager'); ?></h5>
+                                    <div class="row">
+                                        <div class="col-md-7 col-sm-12">
+                                            <div class="checkbox checkbox-primary">
+                                                <input id="sp_reminder_email_cc_manager_enabled" name="sp_reminder_email_cc_manager_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_email_cc_manager_enabled'); ?>>
+                                                <label for="sp_reminder_email_cc_manager_enabled" class="bold"><?php echo _l('sp_settings_reminder_email_cc_manager_help'); ?></label>
+                                            </div>
+                                            <div class="form-group sp-compact-field mtop15">
+                                                <label for="sp_reminder_email_cc_scope" class="control-label"><?php echo _l('sp_settings_reminder_email_cc_scope'); ?></label>
                                                 <select name="sp_reminder_email_cc_scope" id="sp_reminder_email_cc_scope" class="form-control selectpicker">
                                                     <option value="all"<?php echo ($ro['sp_reminder_email_cc_scope'] ?? 'all') === 'all' ? ' selected' : ''; ?>><?php echo _l('sp_settings_reminder_email_cc_scope_all'); ?></option>
                                                     <option value="critical_only"<?php echo ($ro['sp_reminder_email_cc_scope'] ?? '') === 'critical_only' ? ' selected' : ''; ?>><?php echo _l('sp_settings_reminder_email_cc_scope_critical'); ?></option>
                                                 </select>
                                             </div>
+                                            <div class="form-group">
+                                                <label for="sp_reminder_manager_fallback_emails" class="control-label"><?php echo _l('sp_settings_reminder_email_cc_fallback'); ?></label>
+                                                <input type="text" id="sp_reminder_manager_fallback_emails" name="sp_reminder_manager_fallback_emails" class="form-control" value="<?php echo html_escape($ro['sp_reminder_manager_fallback_emails'] ?? ''); ?>" placeholder="manager1@example.com, manager2@example.com">
+                                            </div>
                                         </div>
-                                        <div class="col-md-8">
-                                            <?php echo render_input('sp_reminder_manager_fallback_emails', _l('sp_settings_reminder_email_cc_fallback'), $ro['sp_reminder_manager_fallback_emails'] ?? '', 'text', ['placeholder' => 'manager1@example.com, manager2@example.com']); ?>
+                                        <div class="col-md-5 col-sm-12">
+                                            <div class="sp-guide-panel sp-guide-panel--cc">
+                                                <div class="sp-guide-panel__title">
+                                                    <i class="fa fa-envelope text-info" aria-hidden="true"></i> <?php echo _l('sp_reminder_guide_email_title'); ?>
+                                                </div>
+                                                <div class="sp-guide-panel__body">
+                                                    <p><?php echo _l('sp_reminder_guide_email_manager'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_email_scope'); ?></p>
+                                                    <p class="sp-guide-panel__note"><?php echo _l('sp_reminder_guide_email_fallback'); ?></p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- SECTION 3: KÊNH WHATSAPP GATEWAY -->
+                                <div class="sp-reminder-section sp-reminder-section--whatsapp">
+                                    <h5><i class="fa fa-whatsapp text-success" aria-hidden="true"></i> <?php echo _l('sp_reminder_whatsapp_settings_title'); ?></h5>
+                                    <div class="row">
+                                        <div class="col-md-7 col-sm-12">
+                                            <div class="checkbox checkbox-primary">
+                                                <input id="sp_reminder_whatsapp_enabled" name="sp_reminder_whatsapp_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_whatsapp_enabled'); ?>>
+                                                <label for="sp_reminder_whatsapp_enabled" class="bold"><?php echo _l('sp_reminder_whatsapp_enable_label'); ?></label>
+                                            </div>
+                                            <div class="row mtop15">
+                                                <div class="col-xs-12 col-sm-6">
+                                                    <div class="form-group">
+                                                        <label for="sp_reminder_whatsapp_endpoint" class="control-label"><?php echo _l('sp_reminder_whatsapp_endpoint_label'); ?></label>
+                                                        <input type="text" id="sp_reminder_whatsapp_endpoint" name="sp_reminder_whatsapp_endpoint" class="form-control" value="<?php echo html_escape($ro['sp_reminder_whatsapp_endpoint'] ?? 'http://127.0.0.1:3050/api/v1/messages/send'); ?>" placeholder="http://127.0.0.1:3050/api/v1/messages/send">
+                                                    </div>
+                                                </div>
+                                                <div class="col-xs-12 col-sm-6">
+                                                    <div class="form-group">
+                                                        <label for="sp_reminder_whatsapp_secret_key" class="control-label"><?php echo _l('sp_reminder_whatsapp_secret_label'); ?></label>
+                                                        <div class="input-group">
+                                                            <input type="password" id="sp_reminder_whatsapp_secret_key" name="sp_reminder_whatsapp_secret_key" class="form-control" value="<?php echo html_escape($ro['sp_reminder_whatsapp_secret_key'] ?? ''); ?>" placeholder="<?php echo html_escape(_l('sp_reminder_whatsapp_secret_placeholder')); ?>" autocomplete="new-password">
+                                                            <span class="input-group-btn">
+                                                                <button class="btn btn-default" type="button" id="btn-toggle-wa-secret"><i class="fa fa-eye"></i></button>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-xs-12 col-sm-6">
+                                                    <div class="form-group">
+                                                        <label for="sp_reminder_whatsapp_manager_mode" class="control-label"><?php echo _l('sp_reminder_whatsapp_manager_mode_label'); ?></label>
+                                                        <select name="sp_reminder_whatsapp_manager_mode" id="sp_reminder_whatsapp_manager_mode" class="form-control selectpicker">
+                                                            <option value="group_only"<?php echo ($ro['sp_reminder_whatsapp_manager_mode'] ?? 'group_only') === 'group_only' ? ' selected' : ''; ?>><?php echo _l('sp_reminder_whatsapp_mode_group_only'); ?></option>
+                                                            <option value="direct_only"<?php echo ($ro['sp_reminder_whatsapp_manager_mode'] ?? '') === 'direct_only' ? ' selected' : ''; ?>><?php echo _l('sp_reminder_whatsapp_mode_direct_only'); ?></option>
+                                                            <option value="both"<?php echo ($ro['sp_reminder_whatsapp_manager_mode'] ?? '') === 'both' ? ' selected' : ''; ?>><?php echo _l('sp_reminder_whatsapp_mode_both'); ?></option>
+                                                        </select>
+                                                        <p id="sp-wa-direct-mode-hint" class="text-info mtop5 small" style="display:none; line-height: 1.4;">
+                                                            <i class="fa fa-info-circle"></i> <?php echo _l('sp_reminder_whatsapp_mode_direct_hint'); ?>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div class="col-xs-12 col-sm-6" id="sp-wa-group-jid-wrapper">
+                                                    <div class="form-group">
+                                                        <label for="sp_reminder_whatsapp_group_jid" class="control-label"><?php echo _l('sp_reminder_whatsapp_group_jid_label'); ?></label>
+                                                        <div class="input-group">
+                                                            <input type="text" id="sp_reminder_whatsapp_group_jid" name="sp_reminder_whatsapp_group_jid" class="form-control" value="<?php echo html_escape($ro['sp_reminder_whatsapp_group_jid'] ?? ''); ?>" placeholder="120363xxxxxxxxx@g.us">
+                                                            <span class="input-group-btn">
+                                                                <button class="btn btn-default" type="button" id="btn-fetch-wa-groups" title="<?php echo html_escape(_l('sp_reminder_whatsapp_fetch_groups_btn')); ?>">
+                                                                    <i class="fa fa-refresh text-info"></i>
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div id="wa-groups-dropdown-container" class="mtop5" style="display:none;">
+                                                            <select id="wa-groups-select" class="form-control">
+                                                                <option value=""><?php echo html_escape(_l('sp_reminder_whatsapp_select_group_placeholder')); ?></option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="sp_reminder_whatsapp_base_url" class="control-label"><?php echo _l('sp_reminder_whatsapp_base_url_label'); ?></label>
+                                                <input type="text" id="sp_reminder_whatsapp_base_url" name="sp_reminder_whatsapp_base_url" class="form-control" value="<?php echo html_escape($ro['sp_reminder_whatsapp_base_url'] ?? ''); ?>" placeholder="http://192.168.1.50:8000">
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-xs-12 col-sm-4">
+                                                    <div class="form-group sp-compact-number">
+                                                        <label for="sp_reminder_whatsapp_timeout_seconds" class="control-label"><?php echo _l('sp_reminder_whatsapp_timeout_label'); ?></label>
+                                                        <div class="input-group">
+                                                            <input type="number" id="sp_reminder_whatsapp_timeout_seconds" name="sp_reminder_whatsapp_timeout_seconds" class="form-control" min="1" max="30" value="<?php echo html_escape($ro['sp_reminder_whatsapp_timeout_seconds'] ?? '5'); ?>">
+                                                            <span class="input-group-addon"><?php echo _l('seconds'); ?></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-xs-12 col-sm-4">
+                                                    <div class="form-group sp-compact-number">
+                                                        <label for="sp_reminder_delivery_whatsapp_hourly_limit" class="control-label"><?php echo _l('sp_reminder_whatsapp_hourly_limit_label'); ?></label>
+                                                        <input type="number" id="sp_reminder_delivery_whatsapp_hourly_limit" name="sp_reminder_delivery_whatsapp_hourly_limit" class="form-control" min="1" max="1000" value="<?php echo html_escape($ro['sp_reminder_delivery_whatsapp_hourly_limit'] ?? '60'); ?>">
+                                                    </div>
+                                                </div>
+                                                <div class="col-xs-12 col-sm-4" style="padding-top: 25px;">
+                                                    <button type="button" class="btn btn-default" id="btn-test-wa-conn">
+                                                        <i class="fa fa-paper-plane text-success" aria-hidden="true"></i> <?php echo _l('sp_reminder_whatsapp_test_button'); ?>
+                                                    </button>
+                                                    <div id="wa-test-status" class="mtop5 small" style="word-break: break-word; white-space: normal; max-width: 100%;"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-5 col-sm-12">
+                                            <div class="sp-guide-panel sp-guide-panel--whatsapp">
+                                                <div class="sp-guide-panel__title">
+                                                    <i class="fa fa-whatsapp text-success" aria-hidden="true"></i> <?php echo _l('sp_reminder_guide_whatsapp_title'); ?>
+                                                </div>
+                                                <div class="sp-guide-panel__body">
+                                                    <p><?php echo _l('sp_reminder_guide_whatsapp_gateway'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_whatsapp_modes'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_whatsapp_deeplink'); ?></p>
+                                                    <p class="sp-guide-panel__note"><?php echo _l('sp_reminder_guide_whatsapp_limits'); ?></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- SECTION 4, 5, 6: CÁC QUY TẮC NHẮC NHỞ NGHIỆP VỤ -->
                                 <?php
                                 $groups = [
-                                    'sp-reminder-section--deal' => ['title' => 'sp_reminder_section_deal', 'rules' => [
-                                        ['sp_reminder_deal_pipeline', 'sp_reminder_deal_pipeline_label', [['sp_reminder_deal_pipeline_min_count','sp_reminder_deal_pipeline_min_count_label','number'],['sp_reminder_deal_pipeline_check_time','sp_reminder_check_time_label','time']]],
-                                        ['sp_reminder_deal_stale', 'sp_reminder_deal_stale_label', [['sp_reminder_deal_stale_cutoff_days','sp_reminder_deal_stale_cutoff_label','number'],['sp_reminder_deal_stale_max_per_run','sp_reminder_deal_stale_max_label','number']]],
-                                    ]],
-                                    'sp-reminder-section--kpi' => ['title' => 'sp_reminder_section_kpi', 'rules' => [
-                                        ['sp_reminder_est_daily', 'sp_reminder_daily', [['sp_reminder_est_daily_threshold','sp_reminder_threshold_label','number'],['sp_reminder_est_daily_time','sp_reminder_check_time_label','time']]],
-                                        ['sp_reminder_est_monthly', 'sp_reminder_monthly', [['sp_reminder_est_monthly_d10','sp_reminder_monthly_d10','number'],['sp_reminder_est_monthly_d20','sp_reminder_monthly_d20','number'],['sp_reminder_est_monthly_final','sp_reminder_monthly_final','number'],['sp_reminder_est_monthly_time','sp_reminder_check_time_label','time']]],
-                                        ['sp_reminder_est_weekly', 'sp_reminder_weekly', [['sp_reminder_est_weekly_target','sp_reminder_weekly_target','text'],['sp_reminder_est_weekly_midweek_time','sp_reminder_weekly_midweek_time','time'],['sp_reminder_est_weekly_final_time','sp_reminder_weekly_final_time','time']]],
-                                    ]],
-                                    'sp-reminder-section--lifecycle' => ['title' => 'sp_reminder_section_lifecycle', 'rules' => [
-                                        ['sp_reminder_lc_draft','sp_reminder_lc_draft',[['sp_reminder_lc_draft_days','sp_reminder_days_label','number']]], ['sp_reminder_lc_sent','sp_reminder_lc_sent',[['sp_reminder_lc_sent_days','sp_reminder_days_label','number'],['sp_reminder_lc_sent_expiry_days','sp_reminder_lc_sent_expiry','number']]], ['sp_reminder_lc_declined','sp_reminder_lc_declined',[['sp_reminder_lc_declined_days','sp_reminder_days_label','number']]], ['sp_reminder_lc_expired','sp_reminder_lc_expired',[]], ['sp_reminder_lc_accepted','sp_reminder_lc_accepted',[]],
-                                    ]],
+                                    'sp-reminder-section--deal' => [
+                                        'title' => 'sp_reminder_section_deal',
+                                        'guide_title' => 'sp_reminder_guide_deal_title',
+                                        'guide_desc' => 'sp_reminder_guide_deal_desc',
+                                        'guide_class' => 'sp-guide-panel--deal',
+                                        'guide_icon' => 'fa-briefcase text-info',
+                                        'rules' => [
+                                            ['sp_reminder_deal_pipeline', 'sp_reminder_deal_pipeline_label', [
+                                                ['sp_reminder_deal_pipeline_min_count','sp_reminder_deal_pipeline_min_count_label','number'],
+                                                ['sp_reminder_deal_pipeline_check_time','sp_reminder_check_time_label','time']
+                                            ]],
+                                            ['sp_reminder_deal_stale', 'sp_reminder_deal_stale_label', [
+                                                ['sp_reminder_deal_stale_cutoff_days','sp_reminder_deal_stale_cutoff_label','number'],
+                                                ['sp_reminder_deal_stale_max_per_run','sp_reminder_deal_stale_max_label','number']
+                                            ]],
+                                        ]
+                                    ],
+                                    'sp-reminder-section--kpi' => [
+                                        'title' => 'sp_reminder_section_kpi',
+                                        'guide_title' => 'sp_reminder_guide_kpi_title',
+                                        'guide_desc' => 'sp_reminder_guide_kpi_desc',
+                                        'guide_class' => 'sp-guide-panel--kpi',
+                                        'guide_icon' => 'fa-line-chart text-warning',
+                                        'rules' => [
+                                            ['sp_reminder_est_daily', 'sp_reminder_daily', [
+                                                ['sp_reminder_est_daily_threshold','sp_reminder_threshold_label','number'],
+                                                ['sp_reminder_est_daily_time','sp_reminder_check_time_label','time']
+                                            ]],
+                                            ['sp_reminder_est_monthly', 'sp_reminder_monthly', [
+                                                ['sp_reminder_est_monthly_d10','sp_reminder_monthly_d10','number'],
+                                                ['sp_reminder_est_monthly_d20','sp_reminder_monthly_d20','number'],
+                                                ['sp_reminder_est_monthly_final','sp_reminder_monthly_final','number'],
+                                                ['sp_reminder_est_monthly_time','sp_reminder_check_time_label','time']
+                                            ]],
+                                            ['sp_reminder_est_weekly', 'sp_reminder_weekly', [
+                                                ['sp_reminder_est_weekly_target','sp_reminder_weekly_target','text'],
+                                                ['sp_reminder_est_weekly_midweek_time','sp_reminder_weekly_midweek_time','time'],
+                                                ['sp_reminder_est_weekly_final_time','sp_reminder_weekly_final_time','time']
+                                            ]],
+                                        ]
+                                    ],
+                                    'sp-reminder-section--lifecycle' => [
+                                        'title' => 'sp_reminder_section_lifecycle',
+                                        'guide_title' => 'sp_reminder_guide_lifecycle_title',
+                                        'guide_desc' => 'sp_reminder_guide_lifecycle_desc',
+                                        'guide_class' => 'sp-guide-panel--lifecycle',
+                                        'guide_icon' => 'fa-refresh text-danger',
+                                        'rules' => [
+                                            ['sp_reminder_lc_draft','sp_reminder_lc_draft',[['sp_reminder_lc_draft_days','sp_reminder_days_label','number']]],
+                                            ['sp_reminder_lc_sent','sp_reminder_lc_sent',[['sp_reminder_lc_sent_days','sp_reminder_days_label','number'],['sp_reminder_lc_sent_expiry_days','sp_reminder_lc_sent_expiry','number']]],
+                                            ['sp_reminder_lc_declined','sp_reminder_lc_declined',[['sp_reminder_lc_declined_days','sp_reminder_days_label','number']]],
+                                            ['sp_reminder_lc_expired','sp_reminder_lc_expired',[]],
+                                            ['sp_reminder_lc_accepted','sp_reminder_lc_accepted',[]],
+                                        ]
+                                    ],
                                 ];
                                 foreach ($groups as $class => $group) { ?>
-                                    <div class="sp-reminder-section <?php echo $class; ?> sp-reminder-section--rule"><h5><?php echo _l($group['title']); ?></h5>
-                                    <?php foreach ($group['rules'] as $rule) { $prefix = $rule[0]; $enabled = $prefix . '_enabled'; $channel = $prefix . '_channels'; $saved = explode(',', (string) $ro[$channel]); ?>
-                                        <div class="sp-reminder-rule-row"><div class="checkbox checkbox-primary sp-reminder-rule-toggle"><input id="<?php echo $enabled; ?>" name="<?php echo $enabled; ?>" type="checkbox" value="1"<?php echo $checked($enabled); ?>><label for="<?php echo $enabled; ?>"><?php echo _l($rule[1]); ?></label></div><div class="sp-reminder-channels"><label class="checkbox-inline"><input name="<?php echo $channel; ?>_crm" type="checkbox" value="1"<?php echo in_array('crm', $saved, true) ? ' checked' : ''; ?>> <i class="fa fa-bell-o" aria-hidden="true"></i> CRM</label><label class="checkbox-inline"><input name="<?php echo $channel; ?>_email" type="checkbox" value="1"<?php echo in_array('email', $saved, true) ? ' checked' : ''; ?>> <i class="fa fa-envelope-o" aria-hidden="true"></i> Email</label></div><div class="sp-rule-fields"><?php foreach ($rule[2] as $field) { echo render_input($field[0], _l($field[1]), $ro[$field[0]], $field[2]); } ?></div></div>
-                                    <?php } ?></div>
+                                    <div class="sp-reminder-section <?php echo $class; ?> sp-reminder-section--rule">
+                                        <h5><?php echo _l($group['title']); ?></h5>
+                                        <div class="row">
+                                            <div class="col-md-7 col-sm-12">
+                                                <?php foreach ($group['rules'] as $rule) {
+                                                    $prefix = $rule[0];
+                                                    $enabled = $prefix . '_enabled';
+                                                    $channel = $prefix . '_channels';
+                                                    $saved = explode(',', (string) $ro[$channel]);
+                                                ?>
+                                                    <div class="sp-reminder-rule-row">
+                                                        <div class="checkbox checkbox-primary sp-reminder-rule-toggle">
+                                                            <input id="<?php echo $enabled; ?>" name="<?php echo $enabled; ?>" type="checkbox" value="1"<?php echo $checked($enabled); ?>>
+                                                            <label for="<?php echo $enabled; ?>" class="bold"><?php echo _l($rule[1]); ?></label>
+                                                        </div>
+                                                        <div class="sp-reminder-channels">
+                                                            <label class="checkbox-inline"><input name="<?php echo $channel; ?>_crm" type="checkbox" value="1"<?php echo in_array('crm', $saved, true) ? ' checked' : ''; ?>> <i class="fa fa-bell-o" aria-hidden="true"></i> CRM</label>
+                                                            <label class="checkbox-inline"><input name="<?php echo $channel; ?>_email" type="checkbox" value="1"<?php echo in_array('email', $saved, true) ? ' checked' : ''; ?>> <i class="fa fa-envelope-o" aria-hidden="true"></i> Email</label>
+                                                            <label class="checkbox-inline"><input name="<?php echo $channel; ?>_whatsapp" type="checkbox" value="1"<?php echo in_array('whatsapp', $saved, true) ? ' checked' : ''; ?>> <i class="fa fa-whatsapp text-success" aria-hidden="true"></i> WhatsApp</label>
+                                                        </div>
+                                                        <?php if (!empty($rule[2])) { ?>
+                                                            <div class="sp-rule-fields">
+                                                                <?php foreach ($rule[2] as $field) {
+                                                                    echo render_input($field[0], _l($field[1]), $ro[$field[0]], $field[2]);
+                                                                } ?>
+                                                            </div>
+                                                        <?php } ?>
+                                                    </div>
+                                                <?php } ?>
+                                            </div>
+                                            <div class="col-md-5 col-sm-12">
+                                                <div class="sp-guide-panel <?php echo $group['guide_class']; ?>">
+                                                    <div class="sp-guide-panel__title">
+                                                        <i class="fa <?php echo $group['guide_icon']; ?>" aria-hidden="true"></i> <?php echo _l($group['guide_title']); ?>
+                                                    </div>
+                                                    <div class="sp-guide-panel__body">
+                                                        <p><?php echo _l($group['guide_desc']); ?></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 <?php } ?>
-                                <div class="text-right"><button type="submit" class="btn btn-info"><i class="fa fa-save" aria-hidden="true"></i> <?php echo _l('sp_reminder_save_changes'); ?></button></div>
+
+                                <div class="text-right mtop15">
+                                    <button type="submit" class="btn btn-info">
+                                        <i class="fa fa-floppy-o" aria-hidden="true"></i> <?php echo _l('sp_reminder_save_changes'); ?>
+                                    </button>
+                                </div>
                                 <?php echo form_close(); ?>
                             </div>
 
@@ -320,6 +572,10 @@
         $('.sp-reminder-rule-toggle input').on('change', function () { $(this).closest('.sp-reminder-rule-row').find('.sp-reminder-channels,.sp-rule-fields').toggleClass('sp-reminder-section--dimmed', !this.checked); }).trigger('change');
         $('#sp-reminder-settings-form').on('submit', function () { $('.sp-reminder-section--dimmed').removeClass('sp-reminder-section--dimmed'); });
 
+        function escapeHtml(str) {
+            return $('<div>').text(str || '').html();
+        }
+
         function postDeliveryAction(url, $button) {
             var data = {};
             if (typeof csrfData !== 'undefined' && csrfData.token_name) {
@@ -327,14 +583,174 @@
             }
             $button.prop('disabled', true);
             $.post(url, data).done(function (response) {
-                alert_float('success', response.message);
+                alert_float('success', escapeHtml(response.message));
                 window.location.reload();
             }).fail(function (xhr) {
                 var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : <?php echo json_encode(_l('sales_pipeline_reminder_delivery_request_failed'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-                alert_float('danger', message);
+                alert_float('danger', escapeHtml(message));
                 $button.prop('disabled', false);
             });
         }
+        $('#btn-toggle-wa-secret').on('click', function () {
+            var $input = $('#sp_reminder_whatsapp_secret_key');
+            var $icon = $(this).find('i');
+            if ($input.attr('type') === 'password') {
+                $input.attr('type', 'text');
+                $icon.removeClass('fa-eye').addClass('fa-eye-slash');
+            } else {
+                $input.attr('type', 'password');
+                $icon.removeClass('fa-eye-slash').addClass('fa-eye');
+            }
+        });
+
+        $('#btn-test-wa-conn').on('click', function () {
+            var $btn = $(this);
+            var $status = $('#wa-test-status');
+            var endpoint = $('#sp_reminder_whatsapp_endpoint').val();
+            var secretKey = $('#sp_reminder_whatsapp_secret_key').val();
+            var groupJid = $('#sp_reminder_whatsapp_group_jid').val();
+
+            var testConnectingText = <?php echo json_encode(_l('sp_reminder_whatsapp_test_connecting'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+            var testConnectingGwText = <?php echo json_encode(_l('sp_reminder_whatsapp_test_connecting_gw'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+            var testDefaultBtnText = <?php echo json_encode(_l('sp_reminder_whatsapp_test_button'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+            var connFailedText = <?php echo json_encode(_l('sales_pipeline_reminder_delivery_request_failed'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+
+            var data = {
+                endpoint: endpoint,
+                secret_key: secretKey,
+                manager_mode: $('#sp_reminder_whatsapp_manager_mode').val(),
+                group_jid: groupJid,
+                timeout_seconds: $('#sp_reminder_whatsapp_timeout_seconds').val()
+            };
+            if (typeof csrfData !== 'undefined' && csrfData.token_name) {
+                data[csrfData.token_name] = csrfData.hash;
+            }
+
+            var successBadgeText = <?php echo json_encode(_l('sp_reminder_whatsapp_test_status_success'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+            var failedBadgeText = <?php echo json_encode(_l('sp_reminder_whatsapp_test_status_failed'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> ' + testConnectingText);
+            $status.empty().append($('<span class="text-muted"><i class="fa fa-spinner fa-spin"></i> </span>').append(document.createTextNode(testConnectingGwText)));
+
+            $.post('<?php echo admin_url('sales_pipeline/test_whatsapp_connection'); ?>', data).done(function (res) {
+                if (typeof res === 'string') {
+                    try { res = JSON.parse(res); } catch (e) {}
+                }
+                var isOk = Boolean(res && res.success);
+                var msg = res && res.message ? res.message : '';
+                alert_float(isOk ? 'success' : 'danger', escapeHtml(msg));
+
+                var badgeClass = isOk ? 'label-success' : 'label-danger';
+                var badgeIcon = isOk ? 'fa-check' : 'fa-times';
+                var badgeLabel = isOk ? successBadgeText : failedBadgeText;
+                var textColor = isOk ? 'text-muted' : 'text-danger';
+
+                var html = '<div class="mtop5" style="white-space: normal; word-break: break-word; line-height: 1.3;">'
+                    + '<span class="label ' + badgeClass + '"><i class="fa ' + badgeIcon + '"></i> ' + escapeHtml(badgeLabel) + '</span>'
+                    + '<div class="' + textColor + ' small mtop5">' + escapeHtml(msg) + '</div>'
+                    + '</div>';
+                $status.html(html);
+            }).fail(function (xhr) {
+                var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : connFailedText;
+                alert_float('danger', escapeHtml(msg));
+
+                var html = '<div class="mtop5" style="white-space: normal; word-break: break-word; line-height: 1.3;">'
+                    + '<span class="label label-danger"><i class="fa fa-times"></i> ' + escapeHtml(failedBadgeText) + '</span>'
+                    + '<div class="text-danger small mtop5">' + escapeHtml(msg) + '</div>'
+                    + '</div>';
+                $status.html(html);
+            }).always(function () {
+                $btn.prop('disabled', false).html('<i class="fa fa-paper-plane text-success" aria-hidden="true"></i> ' + testDefaultBtnText);
+            });
+        });
+
+        $('#btn-fetch-wa-groups').on('click', function () {
+            var $btn = $(this);
+            var $container = $('#wa-groups-dropdown-container');
+            var $select = $('#wa-groups-select');
+            var endpoint = $('#sp_reminder_whatsapp_endpoint').val();
+            var secretKey = $('#sp_reminder_whatsapp_secret_key').val();
+
+            var loadingText = <?php echo json_encode(_l('sp_reminder_whatsapp_fetch_groups_loading'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+            var placeholderText = <?php echo json_encode(_l('sp_reminder_whatsapp_select_group_placeholder'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+            var emptyText = <?php echo json_encode(_l('sp_reminder_whatsapp_fetch_groups_empty'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+
+            var data = {
+                endpoint: endpoint,
+                secret_key: secretKey,
+                timeout_seconds: $('#sp_reminder_whatsapp_timeout_seconds').val()
+            };
+            if (typeof csrfData !== 'undefined' && csrfData.token_name) {
+                data[csrfData.token_name] = csrfData.hash;
+            }
+
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin text-info"></i>');
+
+            $.post('<?php echo admin_url('sales_pipeline/fetch_whatsapp_groups'); ?>', data).done(function (res) {
+                if (typeof res === 'string') {
+                    try { res = JSON.parse(res); } catch (e) {}
+                }
+                if (res && res.success && res.data && res.data.groups && res.data.groups.length > 0) {
+                    alert_float('success', escapeHtml(res.message));
+                    $select.empty().append($('<option>').val('').text(placeholderText));
+                    var currentJid = $('#sp_reminder_whatsapp_group_jid').val();
+                    $.each(res.data.groups, function (idx, grp) {
+                        var countText = grp.participants_count ? ' (' + grp.participants_count + ' thành viên)' : '';
+                        var label = (grp.subject || 'Không tên') + countText;
+                        var $opt = $('<option>').val(grp.id).text(label);
+                        if (grp.id === currentJid) {
+                            $opt.prop('selected', true);
+                        }
+                        $select.append($opt);
+                    });
+                    $container.slideDown(200);
+                } else {
+                    alert_float('warning', escapeHtml(res && res.message ? res.message : emptyText));
+                }
+            }).fail(function (xhr) {
+                var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : emptyText;
+                alert_float('danger', escapeHtml(msg));
+            }).always(function () {
+                $btn.prop('disabled', false).html('<i class="fa fa-refresh text-info"></i>');
+            });
+        });
+
+        $('#wa-groups-select').on('change', function () {
+            var selectedJid = $(this).val();
+            if (selectedJid) {
+                $('#sp_reminder_whatsapp_group_jid').val(selectedJid).trigger('change');
+            }
+        });
+
+        function toggleWhatsAppGroupJidVisibility(isInitial) {
+            var mode = $('#sp_reminder_whatsapp_manager_mode').val();
+            var $groupWrapper = $('#sp-wa-group-jid-wrapper');
+            var $directHint = $('#sp-wa-direct-mode-hint');
+
+            if (mode === 'direct_only') {
+                if (isInitial) {
+                    $groupWrapper.hide();
+                    $directHint.show();
+                } else {
+                    $groupWrapper.slideUp(200);
+                    $directHint.slideDown(200);
+                }
+            } else {
+                if (isInitial) {
+                    $groupWrapper.show();
+                    $directHint.hide();
+                } else {
+                    $groupWrapper.slideDown(200);
+                    $directHint.slideUp(200);
+                }
+            }
+        }
+
+        $('#sp_reminder_whatsapp_manager_mode').on('change', function () {
+            toggleWhatsAppGroupJidVisibility(false);
+        });
+        toggleWhatsAppGroupJidVisibility(true);
+
         $('.sp-delivery-retry').on('click', function () {
             if (window.confirm(<?php echo json_encode(_l('sales_pipeline_reminder_delivery_retry_confirm'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>)) {
                 postDeliveryAction($(this).data('url'), $(this));

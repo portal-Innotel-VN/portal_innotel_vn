@@ -183,5 +183,23 @@ if (!function_exists('sales_pipeline_ensure_reminder_repository_schema')) {
                 KEY `idx_rate_bucket_minute` (`bucket_minute`)
             ) ENGINE=InnoDB DEFAULT CHARSET=" . $charset . ';');
         }
+
+        // WhatsApp Baileys Gateway options initialization
+        if (function_exists('add_option')) {
+            add_option('sp_reminder_whatsapp_enabled', '0');
+            add_option('sp_reminder_whatsapp_endpoint', 'http://127.0.0.1:3050/api/v1/messages/send');
+            add_option('sp_reminder_whatsapp_secret_key', '');
+            add_option('sp_reminder_whatsapp_group_jid', '');
+            add_option('sp_reminder_whatsapp_manager_mode', 'group_only');
+            add_option('sp_reminder_whatsapp_timeout_seconds', '5');
+            add_option('sp_reminder_delivery_whatsapp_hourly_limit', '60');
+            add_option('sp_reminder_whatsapp_base_url', '');
+
+            $existingInstanceId = get_option('sp_reminder_whatsapp_instance_id');
+            if (empty($existingInstanceId)) {
+                $newInstanceId = bin2hex(random_bytes(6));
+                add_option('sp_reminder_whatsapp_instance_id', $newInstanceId);
+            }
+        }
     }
 }

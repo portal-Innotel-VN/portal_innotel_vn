@@ -214,3 +214,225 @@
     font-size: 12.5px;
 }
 
+/* ==========================================================================
+   Responsive Adaptations (Tablet, Mobile & Small Screens)
+   ========================================================================== */
+
+/* Smooth fluid transitions */
+.sp-version-tree,
+.sp-vtree-card,
+.sp-vtree-card::before,
+.sp-vtree-card::after,
+.sp-vtree-badge,
+.sp-audit-item {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-vtree-card {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.sp-vtree-top a {
+    word-break: break-all;
+}
+
+@media (max-width: 991px) {
+    .sp-version-tree {
+        padding-left: 20px;
+        margin-left: 8px;
+    }
+
+    .sp-vtree-card::before {
+        left: -26px;
+    }
+
+    .sp-vtree-card::after {
+        left: -20px;
+        width: 20px;
+    }
+}
+
+@media (max-width: 767px) {
+    .sp-vh-header-card {
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    }
+
+    .sp-vh-header-card .col-md-5.text-right {
+        text-align: left !important;
+        margin-top: 10px;
+    }
+
+    .sp-version-tree {
+        padding-left: 16px;
+        margin-left: 6px;
+        margin-top: 12px;
+        margin-bottom: 16px;
+        gap: 10px;
+    }
+
+    .sp-vtree-card {
+        padding: 10px 14px;
+        gap: 10px;
+    }
+
+    .sp-vtree-card::before {
+        left: -22px;
+        top: 16px;
+    }
+
+    .sp-vtree-card::after {
+        left: -16px;
+        width: 16px;
+        top: 20px;
+    }
+
+    .sp-vtree-top {
+        gap: 6px 8px;
+    }
+
+    .sp-vtree-top a {
+        font-size: 13px;
+    }
+
+    .sp-vtree-total {
+        font-size: 12.5px;
+    }
+
+    .sp-audit-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .sp-audit-header .pull-right {
+        float: none !important;
+        margin-top: 2px;
+    }
+}
+
+@media (max-width: 576px) {
+    .sp-vh-header-card {
+        padding: 12px 14px;
+    }
+
+    .sp-version-tree {
+        padding-left: 14px;
+        margin-left: 4px;
+        gap: 8px;
+    }
+
+    .sp-vtree-card {
+        padding: 9px 12px;
+        gap: 8px;
+        border-radius: 6px;
+    }
+
+    .sp-vtree-card::before {
+        left: -19px;
+        width: 8px;
+        height: 8px;
+        top: 15px;
+    }
+
+    .sp-vtree-card::after {
+        left: -14px;
+        width: 14px;
+        top: 18px;
+    }
+
+    .sp-vtree-badge {
+        font-size: 10px;
+        padding: 2px 7px;
+    }
+
+    .sp-vtree-top {
+        gap: 4px 6px;
+    }
+
+    .sp-vtree-top .label {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+
+    .sp-vtree-meta {
+        font-size: 11px;
+        gap: 4px;
+        margin-top: 4px;
+    }
+
+    .sp-audit-item {
+        padding: 8px 10px;
+        gap: 8px;
+        border-radius: 5px;
+    }
+
+    .sp-audit-icon {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 380px) {
+    .sp-vh-header-card {
+        padding: 10px 12px;
+    }
+
+    .sp-vh-header-card h4 {
+        font-size: 13.5px;
+    }
+
+    .sp-version-tree {
+        padding-left: 10px;
+        margin-left: 2px;
+        gap: 6px;
+    }
+
+    .sp-vtree-card {
+        padding: 8px 9px;
+        gap: 6px;
+    }
+
+    .sp-vtree-card::before {
+        left: -14px;
+        width: 6px;
+        height: 6px;
+        top: 14px;
+    }
+
+    .sp-vtree-card::after {
+        left: -10px;
+        width: 10px;
+        top: 16px;
+    }
+
+    .sp-vtree-badge {
+        font-size: 9px;
+        padding: 2px 5px;
+        border-radius: 6px;
+    }
+
+    .sp-vtree-top a {
+        font-size: 12px;
+    }
+
+    .sp-vtree-total {
+        font-size: 11.5px;
+    }
+
+    .sp-vtree-top .label {
+        font-size: 9px;
+        padding: 1px 4px;
+    }
+
+    .sp-vtree-meta {
+        font-size: 10px;
+    }
+
+    #sp-link-modal .modal-dialog,
+    #sp-unlink-modal .modal-dialog {
+        margin: 8px;
+    }
+}
+
+

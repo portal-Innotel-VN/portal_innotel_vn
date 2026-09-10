@@ -18,7 +18,7 @@ $period_label = !empty($selected_range['start']) && !empty($selected_range['end'
 
     <?php if (!empty($staff_metrics)) { ?>
         <div class="sp-dashboard-table-wrap">
-            <table class="sp-dashboard-table">
+            <table class="sp-dashboard-table sp-deals-table">
                 <thead>
                     <tr>
                         <th scope="col" class="sp-column-rank"><?php echo _l('sales_pipeline_dashboard_rank'); ?></th>

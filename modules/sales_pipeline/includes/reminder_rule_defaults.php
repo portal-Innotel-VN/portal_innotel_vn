@@ -66,6 +66,16 @@ function sales_pipeline_reminder_rule_default_options()
         // Canary-safe: Core Bell remains authoritative until an administrator
         // explicitly enables the module-owned Reminder Inbox.
         'sp_reminder_crm_inbox_enabled'        => '0',
+
+        // WhatsApp Baileys Gateway options
+        'sp_reminder_whatsapp_enabled'               => '0',
+        'sp_reminder_whatsapp_endpoint'              => 'http://127.0.0.1:3050/api/v1/messages/send',
+        'sp_reminder_whatsapp_secret_key'            => '',
+        'sp_reminder_whatsapp_manager_mode'          => 'group_only',
+        'sp_reminder_whatsapp_group_jid'             => '',
+        'sp_reminder_whatsapp_base_url'              => '',
+        'sp_reminder_whatsapp_timeout_seconds'       => '5',
+        'sp_reminder_delivery_whatsapp_hourly_limit' => '60',
     ], sales_pipeline_reminder_delivery_default_options());
 }
 

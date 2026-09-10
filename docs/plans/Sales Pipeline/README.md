@@ -20,6 +20,7 @@
 | `../phase25_execution_20260907.md` | Nghiệm thu Phase 2.5: Benchmark PHP-FPM, macOS launchd, advisory lock và kiểm chứng cấp trường |
 | `../phase7_client_mailbox_acceptance_20260907.md` | Nghiệm thu Phase 7: Giao vận email thực tế qua MDaemon Webmail & Mobile, phê duyệt rollout |
 | `../master_acceptance_and_rollout_matrix.md` | Bảng ma trận tổng hợp 7 Phase giải quyết 6 Blockers, phê duyệt Go Production |
+| `plan_reminder_whatsapp_baileys_gateway.md` | Kế hoạch tích hợp kênh cảnh báo WhatsApp (Baileys Gateway) cho Sales Pipeline |
 
 Nguồn sự thật hiện hành sau khi chuẩn hóa:
 
