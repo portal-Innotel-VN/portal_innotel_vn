@@ -84,7 +84,7 @@ class Reminder_delivery_selector
             . ' FROM `' . db_prefix() . 'sales_pipeline_reminder_deliveries` d'
             . ' JOIN `' . db_prefix() . 'sales_pipeline_reminders_log` r ON r.id=d.reminder_id'
             . " WHERE d.channel='whatsapp' AND d.status='failed' AND d.last_error_code='whatsapp_delivery_uncertain'"
-            . ' ORDER BY d.id ASC LIMIT ' . $limit)->result_array();
+            . ' ORDER BY COALESCE(d.updated_at, d.created_at) ASC, d.id ASC LIMIT ' . $limit)->result_array();
     }
 
     public function defer($deliveryId, $nextRetryAt, $code, $message = null)

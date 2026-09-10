@@ -661,7 +661,8 @@ class Reminder_engine
 
         $anySent = false;
         $batchStart = microtime(true);
-        $timeBudget = 15.0;
+        $timeBudgetOpt = $this->option('sp_reminder_whatsapp_time_budget');
+        $timeBudget = is_numeric($timeBudgetOpt) && (float) $timeBudgetOpt > 0 ? (float) $timeBudgetOpt : 15.0;
         $minSafety = 5.0;
 
         $this->CI->load->library('sales_pipeline/channels/Reminder_delivery_whatsapp_adapter');
@@ -690,14 +691,31 @@ class Reminder_engine
                     ]);
                     $anySent = true;
                 } elseif ($statusResult['status'] === 'failed') {
-                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
-                        'status'           => 'failed',
-                        'last_error'       => $statusResult['error'] ?? 'Gateway reported message delivery failure during reconciliation',
-                        'last_error_code'  => 'gateway_reported_failed',
-                        'last_error_class' => 'permanent',
-                        'next_retry_at'    => null,
-                        'updated_at'       => date('Y-m-d H:i:s'),
-                    ]);
+                    $rawRetrySafe = $statusResult['retry_safe'] ?? ($statusResult['raw']['retry_safe'] ?? null);
+
+                    if ($rawRetrySafe === true) {
+                        $attemptCount = (int) $row['attempt_count'] + 1;
+                        $nextRetryAt = $this->CI->reminder_delivery_backoff->nextRetryAt(
+                            $attemptCount, new DateTimeImmutable('now')
+                        )->format('Y-m-d H:i:s');
+
+                        $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                            'status'           => 'failed',
+                            'last_error'       => $statusResult['error'] ?? 'Gateway reported message delivery failure during reconciliation (retry_safe=true)',
+                            'last_error_code'  => 'gateway_reported_failed',
+                            'last_error_class' => 'transient',
+                            'next_retry_at'    => $nextRetryAt,
+                            'updated_at'       => date('Y-m-d H:i:s'),
+                        ]);
+                    } else {
+                        $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                            'last_error'       => $statusResult['error'] ?? 'Delivery result unverified or retry unsafe on Gateway (retry_safe != true); manual verification required',
+                            'last_error_code'  => 'whatsapp_reconcile_unverified',
+                            'last_error_class' => 'unverified',
+                            'next_retry_at'    => null,
+                            'updated_at'       => date('Y-m-d H:i:s'),
+                        ]);
+                    }
                 } elseif ($statusResult['status'] === 'not_found') {
                     // Gateway has no record of this delivery after timeout; isolate permanently to prevent duplicates
                     $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
@@ -706,6 +724,10 @@ class Reminder_engine
                         'last_error_class' => 'unverified',
                         'next_retry_at'    => null,
                         'updated_at'       => date('Y-m-d H:i:s'),
+                    ]);
+                } elseif (in_array($statusResult['status'], ['in_progress', 'uncertain'], true)) {
+                    $this->CI->db->where('id', (int) $row['id'])->update(db_prefix() . 'sales_pipeline_reminder_deliveries', [
+                        'updated_at' => date('Y-m-d H:i:s'),
                     ]);
                 }
             }

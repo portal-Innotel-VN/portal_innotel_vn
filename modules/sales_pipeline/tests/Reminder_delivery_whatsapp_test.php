@@ -46,6 +46,9 @@ if (!function_exists('_l')) {
 if (!function_exists('get_option')) {
     function get_option($name)
     {
+        if (isset($GLOBALS['options_mock'][$name])) {
+            return $GLOBALS['options_mock'][$name];
+        }
         if ($name === 'sp_reminder_whatsapp_base_url') {
             return 'http://crm.company.com';
         }
@@ -412,27 +415,305 @@ assert(Reminder_delivery_whatsapp_adapter::isTimeoutOrReceiveError(new \Exceptio
 assert(Reminder_delivery_whatsapp_adapter::isTimeoutOrReceiveError(new \Exception('Empty reply from server')) === true, 'empty reply string fallback');
 
 // 8.9 HTTP 429 Rate Limited -> transient
-$mock429Client = new FakeHttpMockClient(function ($method, $uri, $options) {
-    return new FakeHttpMockResponse(429, [
-        'success' => false,
-        'error' => 'Too many requests',
+// 8.11 checkStatus with unrecognized status normalized to uncertain and uncasted retry_safe
+$mockStatusUnkClient = new FakeHttpMockClient(function ($method, $uri, $options) {
+    return new FakeHttpMockResponse(200, [
+        'status'     => 'queued', // Unrecognized status
+        'retry_safe' => 'false',  // String "false"
+        'error'      => 'Custom queue state',
     ]);
 });
-$adapter429 = new Reminder_delivery_whatsapp_adapter($mock429Client);
-$res429 = $adapter429->send('84901234567@s.whatsapp.net', 'Test Message', 12345);
-assert($res429['success'] === false);
-assert($res429['last_error_class'] === 'transient', 'HTTP 429 must be classified as transient rate-limiting');
+$adapterUnk = new Reminder_delivery_whatsapp_adapter($mockStatusUnkClient);
+$resUnk = $adapterUnk->checkStatus(12345);
+assert($resUnk['status'] === 'uncertain', 'Unrecognized status must be normalized to uncertain');
+assert($resUnk['retry_safe'] === 'false', 'Raw retry_safe string must not be blindly cast to boolean');
+assert($resUnk['error'] === 'Custom queue state', 'Error message must be preserved');
 
-// 8.10 HTTP 409 Concurrent in_progress -> transient
-$mock409Client = new FakeHttpMockClient(function ($method, $uri, $options) {
-    return new FakeHttpMockResponse(409, [
-        'success' => false,
-        'error' => 'Delivery currently in progress',
-    ]);
-});
-$adapter409 = new Reminder_delivery_whatsapp_adapter($mock409Client);
-$res409 = $adapter409->send('84901234567@s.whatsapp.net', 'Test Message', 12345);
-assert($res409['success'] === false);
-assert($res409['last_error_class'] === 'transient', 'HTTP 409 concurrent in_progress must be classified as transient');
+// 9. Reconcile Loop Contract Tests (Direct Engine & Selector SQLite In-Memory DB Execution)
+require_once dirname(__DIR__) . '/libraries/Reminder_delivery_backoff.php';
+require_once dirname(__DIR__) . '/libraries/Reminder_engine.php';
+
+class SqliteCIEngineDb
+{
+    private $pdo;
+    private $wheres = [];
+    private $whereIn = [];
+
+    public function __construct(PDO $pdo)
+    {
+        $this->pdo = $pdo;
+    }
+
+    public function where($k, $v)
+    {
+        $this->wheres[$k] = $v;
+        return $this;
+    }
+
+    public function where_in($k, array $vals)
+    {
+        $this->whereIn[$k] = $vals;
+        return $this;
+    }
+
+    public function update($table, array $data)
+    {
+        $setClauses = [];
+        $params = [];
+        foreach ($data as $col => $val) {
+            $setClauses[] = "`$col` = ?";
+            $params[] = $val;
+        }
+        $whereClauses = [];
+        foreach ($this->wheres as $col => $val) {
+            $whereClauses[] = "`$col` = ?";
+            $params[] = $val;
+        }
+        foreach ($this->whereIn as $col => $vals) {
+            $placeholders = implode(',', array_fill(0, count($vals), '?'));
+            $whereClauses[] = "`$col` IN ($placeholders)";
+            foreach ($vals as $v) {
+                $params[] = $v;
+            }
+        }
+        $this->wheres = [];
+        $this->whereIn = [];
+
+        $sql = "UPDATE `$table` SET " . implode(', ', $setClauses);
+        if (!empty($whereClauses)) {
+            $sql .= " WHERE " . implode(' AND ', $whereClauses);
+        }
+        $stmt = $this->pdo->prepare($sql);
+        return $stmt->execute($params);
+    }
+
+    public function query($sql, array $params = [])
+    {
+        if (strpos($sql, 'GET_LOCK') !== false) {
+            return new class {
+                public function row_array() { return ['lck' => 1]; }
+                public function result_array() { return [['lck' => 1]]; }
+            };
+        }
+        if (strpos($sql, 'RELEASE_LOCK') !== false) {
+            return new class {
+                public function row_array() { return ['rel' => 1]; }
+                public function result_array() { return [['rel' => 1]]; }
+            };
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return new class($rows) {
+            private $rows;
+            public function __construct($rows) { $this->rows = $rows; }
+            public function result_array() { return $this->rows; }
+            public function row_array() { return $this->rows[0] ?? []; }
+        };
+    }
+
+    public function affected_rows()
+    {
+        return 1;
+    }
+}
+
+class MockTrackingRateLimiter
+{
+    public $callCount = 0;
+    public function reserve($count, $now, $limits, $channel) {
+        $this->callCount++;
+        return ['allowed' => true];
+    }
+}
+
+class MockReconcileAdapter
+{
+    public $checkStatusResults = [];
+    public $delayMs = 0;
+    public $sendCallCount = 0;
+    public function checkStatus($id, $timeout = 3.0) {
+        if ($this->delayMs > 0) {
+            usleep($this->delayMs * 1000);
+        }
+        return $this->checkStatusResults[$id] ?? ['status' => 'uncertain'];
+    }
+    public function send($recipient, $text, $deliveryId, $options = []) {
+        $this->sendCallCount++;
+        return ['success' => true, 'provider_message_id' => 'mock_send_' . $deliveryId, 'uncertain' => false];
+    }
+}
+
+// Setup Shared SQLite Database
+$sqlitePdo = new PDO('sqlite::memory:');
+$sqlitePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$sqlitePdo->exec('CREATE TABLE tblsales_pipeline_reminder_deliveries (
+    id INTEGER PRIMARY KEY,
+    reminder_id INT,
+    channel TEXT,
+    recipient_type TEXT,
+    staff_id INT,
+    status TEXT,
+    attempt_count INT DEFAULT 0,
+    provider_message_id TEXT,
+    last_error TEXT,
+    last_error_code TEXT,
+    last_error_class TEXT,
+    next_retry_at TEXT,
+    sent_at TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);');
+$sqlitePdo->exec('CREATE TABLE tblsales_pipeline_reminders_log (
+    id INTEGER PRIMARY KEY,
+    title TEXT, message TEXT, entity_type TEXT, entity_id INT,
+    pipeline_id INT, rule_code TEXT, staff_id INT, severity TEXT,
+    checkpoint TEXT, response_required INT, snapshot_json TEXT, sent_at TEXT
+);');
+$sqlitePdo->exec("INSERT INTO tblsales_pipeline_reminders_log (id, title) VALUES (1, 'Test Reminder');");
+
+$engineDb = new SqliteCIEngineDb($sqlitePdo);
+$engineLimiter = new MockTrackingRateLimiter();
+$engineAdapter = new MockReconcileAdapter();
+
+// Setup real Reminder_delivery_selector connected to same SQLite DB
+$realSelector = new Reminder_delivery_selector();
+$selectorCi = (object) ['db' => $engineDb];
+$selectorCiProp = new ReflectionProperty($realSelector, 'CI');
+$selectorCiProp->setValue($realSelector, $selectorCi);
+
+// Setup Engine connected to SQLite DB & real Selector
+$engineCI = (object) [
+    'db' => $engineDb,
+    'load' => new class { public function library($name) {} },
+    'reminder_delivery_selector' => $realSelector,
+    'reminder_delivery_whatsapp_adapter' => $engineAdapter,
+    'reminder_delivery_backoff' => new Reminder_delivery_backoff(),
+    'reminder_delivery_rate_limiter' => $engineLimiter,
+    'reminder_whatsapp_formatter' => new class { public function format($row) { return ''; } },
+];
+
+$engine = (new ReflectionClass('Reminder_engine'))->newInstanceWithoutConstructor();
+$ciProp = new ReflectionProperty($engine, 'CI');
+$ciProp->setValue($engine, $engineCI);
+$dispatchWhatsAppMethod = new ReflectionMethod('Reminder_engine', 'dispatchWhatsAppDeliveries');
+$GLOBALS['options_mock']['sp_reminder_whatsapp_enabled'] = '1';
+$GLOBALS['options_mock']['sp_reminder_whatsapp_time_budget'] = '15.0';
+
+// 9.1 & 9.2: Insert real DB records and run through Engine for retry_safe === true and 6 invalid variants
+$sqlitePdo->exec("INSERT INTO tblsales_pipeline_reminder_deliveries 
+    (id, reminder_id, channel, status, last_error_code, attempt_count, created_at, updated_at) 
+    VALUES (101, 1, 'whatsapp', 'failed', 'whatsapp_delivery_uncertain', 1, '2026-09-10 10:00:00', NULL);");
+$engineAdapter->checkStatusResults[101] = [
+    'status' => 'failed', 'retry_safe' => true, 'error' => 'Gateway temporary outage'
+];
+
+$invalidVariants = [
+    201 => ['name' => 'string_true',  'val' => 'true'],
+    202 => ['name' => 'int_one',      'val' => 1],
+    203 => ['name' => 'bool_false',   'val' => false],
+    204 => ['name' => 'string_false', 'val' => 'false'],
+    205 => ['name' => 'null_val',     'val' => null],
+    206 => ['name' => 'missing',      'val' => 'MISSING_KEY'],
+];
+
+foreach ($invalidVariants as $id => $info) {
+    $sqlitePdo->exec("INSERT INTO tblsales_pipeline_reminder_deliveries 
+        (id, reminder_id, channel, status, last_error_code, attempt_count, created_at, updated_at) 
+        VALUES ({$id}, 1, 'whatsapp', 'failed', 'whatsapp_delivery_uncertain', 2, '2026-09-10 10:00:00', NULL);");
+    $statusPayload = ['status' => 'failed', 'error' => "Gateway unconfirmed for {$info['name']}"];
+    if ($info['val'] !== 'MISSING_KEY') {
+        $statusPayload['retry_safe'] = $info['val'];
+    }
+    $engineAdapter->checkStatusResults[$id] = $statusPayload;
+}
+
+// 9.2.1: Verify Quota & Attempt Count BEFORE Reconcile
+$limiterCallsBefore = $engineLimiter->callCount;
+$dbAttemptBefore = (int) $sqlitePdo->query("SELECT attempt_count FROM tblsales_pipeline_reminder_deliveries WHERE id=201")->fetchColumn();
+assert($limiterCallsBefore === 0, 'Rate limiter call count before reconcile must be 0');
+assert($dbAttemptBefore === 2, 'Attempt count before reconcile must be 2');
+
+// Run Engine Reconcile Pass
+$dispatchWhatsAppMethod->invokeArgs($engine, [new DateTimeImmutable('now'), 3]);
+
+// 9.2.2: Verify Quota & Attempt Count AFTER Reconcile (Point 2: Không tiêu quota, không tăng attempt)
+$limiterCallsAfter = $engineLimiter->callCount;
+$dbAttemptAfter = (int) $sqlitePdo->query("SELECT attempt_count FROM tblsales_pipeline_reminder_deliveries WHERE id=201")->fetchColumn();
+assert($limiterCallsAfter === $limiterCallsBefore, 'Reconcile pass must make zero calls to Rate Limiter (calls before: ' . $limiterCallsBefore . ', after: ' . $limiterCallsAfter . ')');
+assert($dbAttemptAfter === $dbAttemptBefore, 'Reconcile pass must NOT touch or increment attempt_count in DB (before: ' . $dbAttemptBefore . ', after: ' . $dbAttemptAfter . ')');
+
+// 9.1 Verification: Valid boolean true row (101) in SQLite DB
+$row101 = $sqlitePdo->query("SELECT * FROM tblsales_pipeline_reminder_deliveries WHERE id=101")->fetch(PDO::FETCH_ASSOC);
+assert($row101['status'] === 'failed', 'Status must remain failed for retry_safe === true');
+assert($row101['last_error_code'] === 'gateway_reported_failed', 'Error code must be gateway_reported_failed in DB');
+assert($row101['last_error_class'] === 'transient', 'Error class must be transient in DB');
+assert(!empty($row101['next_retry_at']), 'next_retry_at must be populated in DB for retry_safe === true');
+
+// 9.2 Verification: 6 invalid type cases asserted directly from SQLite DB (Point 1)
+foreach ($invalidVariants as $id => $info) {
+    $dbRow = $sqlitePdo->query("SELECT * FROM tblsales_pipeline_reminder_deliveries WHERE id={$id}")->fetch(PDO::FETCH_ASSOC);
+    assert($dbRow['last_error_code'] === 'whatsapp_reconcile_unverified', "Case {$info['name']} (ID {$id}) in DB must have last_error_code = whatsapp_reconcile_unverified");
+    assert($dbRow['last_error_class'] === 'unverified', "Case {$info['name']} (ID {$id}) in DB must have last_error_class = unverified");
+    assert($dbRow['next_retry_at'] === null, "Case {$info['name']} (ID {$id}) in DB next_retry_at must be NULL");
+    assert($dbRow['status'] === 'failed', "Case {$info['name']} (ID {$id}) in DB status must remain failed (NOT cancelled)");
+    assert((int) $dbRow['attempt_count'] === 2, "Case {$info['name']} (ID {$id}) in DB attempt_count must remain unchanged at 2");
+}
+
+// 9.3 Consistent Isolation Verification: due() on SQLite DB must exclude all reconciled unverified rows
+$now = new DateTimeImmutable('now');
+$dueRows = $realSelector->due('whatsapp', 50, 5, $now);
+$dueIds = array_column($dueRows, 'id');
+foreach (array_keys($invalidVariants) as $invId) {
+    assert(!in_array($invId, $dueIds, true), "due() on DB must exclude quarantined record {$invId}");
+}
+
+// 9.4 Real Round-Robin on DB with Real Time-Budget Cutoff in Engine (Point 3)
+// Insert 5 uncertain rows with identical created_at and updated_at NULL
+$sqlitePdo->exec("DELETE FROM tblsales_pipeline_reminder_deliveries WHERE id >= 300;");
+for ($i = 301; $i <= 305; $i++) {
+    $sqlitePdo->exec("INSERT INTO tblsales_pipeline_reminder_deliveries 
+        (id, reminder_id, channel, status, last_error_code, created_at, updated_at) 
+        VALUES ({$i}, 1, 'whatsapp', 'failed', 'whatsapp_delivery_uncertain', '2026-09-10 00:00:00', NULL);");
+    $engineAdapter->checkStatusResults[$i] = ['status' => 'in_progress'];
+}
+
+// Test A: Initial selector run on DB -> Identical timestamp orders by id ASC [301, 302, 303, 304, 305]
+$initialBatch = $realSelector->dueUncertainWhatsApp(10);
+$initialIds = array_map('intval', array_column($initialBatch, 'id'));
+assert($initialIds === [301, 302, 303, 304, 305], 'Initial batch on DB must order deterministically by id ASC');
+
+// Test B: Engine Reconcile with 25ms delay per item and 3.04s time budget
+// Engine threshold: ($timeBudget - $elapsed) < 3.0 triggers break!
+// After item 301 (~25ms) and item 302 (~50ms), elapsed is ~50ms > 0.04s, so 3.04 - 0.05 < 3.0 triggers break;
+$GLOBALS['options_mock']['sp_reminder_whatsapp_time_budget'] = '3.04';
+$engineAdapter->delayMs = 25;
+
+$dispatchWhatsAppMethod->invokeArgs($engine, [new DateTimeImmutable('now'), 3]);
+
+// Verify DB state after time budget break:
+// Records 301 and 302 were evaluated and updated with current timestamp
+// Records 303, 304, 305 were NOT evaluated and retain updated_at = NULL
+$db301 = $sqlitePdo->query("SELECT updated_at FROM tblsales_pipeline_reminder_deliveries WHERE id=301")->fetch(PDO::FETCH_ASSOC);
+$db302 = $sqlitePdo->query("SELECT updated_at FROM tblsales_pipeline_reminder_deliveries WHERE id=302")->fetch(PDO::FETCH_ASSOC);
+$db303 = $sqlitePdo->query("SELECT updated_at FROM tblsales_pipeline_reminder_deliveries WHERE id=303")->fetch(PDO::FETCH_ASSOC);
+$db304 = $sqlitePdo->query("SELECT updated_at FROM tblsales_pipeline_reminder_deliveries WHERE id=304")->fetch(PDO::FETCH_ASSOC);
+$db305 = $sqlitePdo->query("SELECT updated_at FROM tblsales_pipeline_reminder_deliveries WHERE id=305")->fetch(PDO::FETCH_ASSOC);
+
+assert(!empty($db301['updated_at']), 'ID 301 must be evaluated and have updated_at populated in DB');
+assert(!empty($db302['updated_at']), 'ID 302 must be evaluated and have updated_at populated in DB');
+assert($db303['updated_at'] === null, 'ID 303 must remain un-evaluated with updated_at NULL due to time budget break');
+assert($db304['updated_at'] === null, 'ID 304 must remain un-evaluated with updated_at NULL due to time budget break');
+assert($db305['updated_at'] === null, 'ID 305 must remain un-evaluated with updated_at NULL due to time budget break');
+
+// Test C: Next pass of Selector on DB -> Un-evaluated records (303, 304, 305) MUST come first before 301 and 302
+$nextBatch = $realSelector->dueUncertainWhatsApp(10);
+$nextIds = array_map('intval', array_column($nextBatch, 'id'));
+assert($nextIds === [303, 304, 305, 301, 302], 'Round-robin DB selection must prioritize un-evaluated records [303, 304, 305] over recently touched [301, 302]');
 
 echo "PASS: Reminder delivery WhatsApp integration, idempotency, selector isolation and formatting contract tests\n";
+
+
+

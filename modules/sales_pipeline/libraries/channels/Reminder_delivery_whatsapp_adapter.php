@@ -202,9 +202,16 @@ class Reminder_delivery_whatsapp_adapter
             $body = json_decode((string) $response->getBody(), true) ?: [];
 
             if ($statusCode === 200 && !empty($body['status'])) {
+                $status = (string) $body['status'];
+                $knownStatuses = ['sent', 'failed', 'not_found', 'in_progress'];
+                if (!in_array($status, $knownStatuses, true)) {
+                    $status = 'uncertain';
+                }
                 return [
-                    'status'     => (string) $body['status'],
+                    'status'     => $status,
                     'message_id' => $body['message_id'] ?? null,
+                    'error'      => $body['error'] ?? null,
+                    'retry_safe' => $body['retry_safe'] ?? null,
                     'raw'        => $body,
                 ];
             }

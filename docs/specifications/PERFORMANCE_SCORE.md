@@ -223,6 +223,8 @@ ranking_score = ROUND(92,0, 1) = 92,0
 
 ## 8. Quy tắc xếp hạng
 
+Từ 2026-09-10, cohort loại nhân sự quản lý (Admin hoặc có `sales_pipeline:view`) khi không có hoạt động bán hàng trong kỳ đang xem (`estimate_count`, `accepted_count`, `declined_count` đều bằng 0). Yếu tố nhắc nhở (`eligible_reminders`) và hoạt động ngoài kỳ không được dùng để giữ quản lý. Quản lý chỉ có `declined_count` trong kỳ vẫn được giữ lại. NVKD không có quyền global vẫn nằm trong cohort dù chưa có hoạt động. Cohort rỗng được giữ rỗng; không thêm lại các quản lý đã bị loại. Việc lọc diễn ra trước tính rank và role projection, không thay đổi trọng số/công thức điểm.
+
 1. Tính toàn bộ cohort trong cùng kỳ và bộ lọc.
 2. Sắp xếp `ranking_score DESC`.
 3. Tên chỉ dùng để ổn định thứ tự hiển thị khi đồng điểm.
