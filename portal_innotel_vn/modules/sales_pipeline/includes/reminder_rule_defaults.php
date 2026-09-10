@@ -63,6 +63,12 @@ function sales_pipeline_reminder_rule_default_options()
         'sp_reminder_email_cc_scope'           => 'all',
         'sp_reminder_manager_fallback_emails'  => '',
 
+        // Policy V2 Manager Recipient options
+        'sp_reminder_manager_recipient_source'       => 'explicit_view',
+        'sp_reminder_manager_recipient_staff_ids'    => '[]',
+        'sp_reminder_recipient_policy_version'       => '2.0',
+        'sp_reminder_recipient_policy_v2_enabled'    => '0',
+
         // Canary-safe: Core Bell remains authoritative until an administrator
         // explicitly enables the module-owned Reminder Inbox.
         'sp_reminder_crm_inbox_enabled'        => '0',

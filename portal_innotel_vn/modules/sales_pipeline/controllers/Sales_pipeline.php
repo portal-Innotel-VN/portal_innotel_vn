@@ -1395,8 +1395,31 @@ class Sales_pipeline extends AdminController
             } elseif ($type == 'reminder') {
                 $errors = [];
                 $normalized = [];
-                $toggles = ['sp_reminder_global_enabled','sp_reminder_whatsapp_enabled','sp_reminder_skip_weekends','sp_reminder_deal_pipeline_enabled','sp_reminder_deal_stale_enabled','sp_reminder_est_daily_enabled','sp_reminder_est_monthly_enabled','sp_reminder_est_weekly_enabled','sp_reminder_lc_draft_enabled','sp_reminder_lc_sent_enabled','sp_reminder_lc_declined_enabled','sp_reminder_lc_expired_enabled','sp_reminder_lc_accepted_enabled','sp_reminder_email_cc_manager_enabled'];
+                $toggles = [
+                    'sp_reminder_global_enabled', 'sp_reminder_whatsapp_enabled', 'sp_reminder_skip_weekends',
+                    'sp_reminder_deal_pipeline_enabled', 'sp_reminder_deal_stale_enabled', 'sp_reminder_est_daily_enabled',
+                    'sp_reminder_est_monthly_enabled', 'sp_reminder_est_weekly_enabled', 'sp_reminder_lc_draft_enabled',
+                    'sp_reminder_lc_sent_enabled', 'sp_reminder_lc_declined_enabled', 'sp_reminder_lc_expired_enabled',
+                    'sp_reminder_lc_accepted_enabled', 'sp_reminder_email_cc_manager_enabled',
+                    'sp_reminder_recipient_policy_v2_enabled',
+                ];
                 foreach ($toggles as $key) { $normalized[$key] = isset($data[$key]) ? '1' : '0'; }
+
+                $v2Source = trim((string) ($data['sp_reminder_manager_recipient_source'] ?? 'explicit_view'));
+                $normalized['sp_reminder_manager_recipient_source'] = in_array($v2Source, ['explicit_view', 'selected_staff'], true) ? $v2Source : 'explicit_view';
+
+                $rawStaffIds = $data['sp_reminder_manager_recipient_staff_ids'] ?? [];
+                if (is_string($rawStaffIds)) {
+                    $decoded = json_decode($rawStaffIds, true);
+                    $rawStaffIds = is_array($decoded) ? $decoded : explode(',', $rawStaffIds);
+                }
+                if (!is_array($rawStaffIds)) {
+                    $rawStaffIds = [];
+                }
+                $this->load->library('sales_pipeline/Reminder_recipient_resolver');
+                $validatedStaffIds = $this->reminder_recipient_resolver->selectedStaffIds($rawStaffIds);
+                $normalized['sp_reminder_manager_recipient_staff_ids'] = json_encode($validatedStaffIds);
+
                 $channels = [
                     'sp_reminder_deal_pipeline_channels' => 'sp_reminder_deal_pipeline_enabled',
                     'sp_reminder_deal_stale_channels' => 'sp_reminder_deal_stale_enabled',
@@ -1540,6 +1563,7 @@ class Sales_pipeline extends AdminController
         }
         $this->load->library('sales_pipeline/Reminder_delivery_operations');
         $data['reminder_delivery_health'] = $this->reminder_delivery_operations->health();
+        $data['staff_members'] = $this->staff_model->get('', ['active' => 1]);
         $data['title'] = _l('sales_pipeline_settings');
 
         $this->load->view('sales_pipeline/settings', $data);
@@ -1958,5 +1982,42 @@ class Sales_pipeline extends AdminController
             'entity_id' => $entityId,
             'locked_at' => $result['locked_at'],
         ]);
+    }
+
+    /**
+     * Preview manager recipients for Policy V2 without dispatching any messages.
+     * Accessible exclusively by administrators via POST + CSRF.
+     */
+    public function preview_manager_recipients()
+    {
+        if (!is_admin()) {
+            ajax_access_denied();
+        }
+
+        if (!$this->input->is_ajax_request() || strtolower($this->input->method()) !== 'post') {
+            show_404();
+        }
+
+        $this->load->library('sales_pipeline/Reminder_recipient_resolver');
+
+        $v2Enabled = $this->input->post('v2_enabled');
+        $source = $this->input->post('source');
+        $selectedStaffIds = $this->input->post('selected_staff_ids');
+        if (is_string($selectedStaffIds)) {
+            $decoded = json_decode($selectedStaffIds, true);
+            $selectedStaffIds = is_array($decoded) ? $decoded : array_filter(array_map('trim', explode(',', $selectedStaffIds)));
+        }
+
+        $preview = $this->reminder_recipient_resolver->previewManagerRecipients([
+            'v2_enabled'         => $v2Enabled !== null ? (string) $v2Enabled : null,
+            'source'             => $source ? (string) $source : null,
+            'selected_staff_ids' => is_array($selectedStaffIds) ? $selectedStaffIds : null,
+        ]);
+
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode($preview);
+        return;
     }
 }

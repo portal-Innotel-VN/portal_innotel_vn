@@ -873,4 +873,28 @@ $lang['sp_reminder_guide_kpi_desc'] = '<strong>Milestone Tracking:</strong> Remi
 $lang['sp_reminder_guide_lifecycle_title'] = 'Quote Lifecycle Guidelines';
 $lang['sp_reminder_guide_lifecycle_desc'] = '<strong>Status-based Prompts:</strong> Expedite stale drafts, track unresponded or expiring quotes, investigate declined proposals, and prompt invoicing when accepted.';
 
+// Policy V2 Manager Recipient Roles & Preview
+$lang['sp_settings_reminder_manager_roles_title'] = 'Manager Alert Recipients & Email CC (Policy V2)';
+$lang['sp_settings_reminder_policy_v2_enabled_label'] = 'Enable Recipient Policy V2 (Decouples data access from alert responsibility)';
+$lang['sp_settings_reminder_policy_v2_enabled_help'] = 'When enabled, only verified business managers receive CC/WhatsApp alerts; pure technical admins receive infrastructure alerts only; zero external fallback.';
+$lang['sp_settings_reminder_manager_source_label'] = 'Business Manager Resolution Source:';
+$lang['sp_settings_reminder_source_explicit_view'] = 'Only staff with explicit View (Global) permission granted in Permissions matrix';
+$lang['sp_settings_reminder_source_selected_staff'] = 'Designated list of Business Managers (recommended for Admin executive managers)';
+$lang['sp_settings_reminder_selected_staff_label'] = 'Designated Business Managers:';
+$lang['sp_settings_reminder_selected_staff_help'] = 'Only active staff with global view access are eligible. Staff with view_own only will be rejected to prevent data leakage.';
+$lang['sp_settings_reminder_email_cc_fallback_help'] = 'Note: Under Policy V2, if the manager list is empty, manager alerts are safely paused (zero dispatch to this fallback email).';
+$lang['sp_reminder_preview_recipients_btn'] = 'Preview Recipients';
+$lang['sp_reminder_preview_panel_title'] = 'Live Recipient Analysis & Preview';
+$lang['sp_reminder_preview_empty_warning'] = 'WARNING: Business Manager recipient list is currently empty!';
+$lang['sp_reminder_preview_included_managers'] = 'Eligible Business Managers receiving alerts';
+$lang['sp_reminder_preview_none_included'] = 'No business managers resolved under current configuration.';
+$lang['sp_reminder_preview_excluded_candidates'] = 'Excluded Candidates';
+$lang['sp_reminder_preview_technical_admins'] = 'Technical Admins receiving infrastructure alerts (SMTP / BCC / Gateway)';
+$lang['sp_reminder_preview_technical_admins_desc'] = 'These accounts only receive technical incident alerts, never commercial business alerts.';
+$lang['sp_reminder_guide_roles_title'] = 'Recipient Role Principles (V2)';
+$lang['sp_reminder_guide_roles_p1'] = '<strong>Decouple Access from Alerts:</strong> Staff with dashboard view permissions do not automatically receive daily notification spam.';
+$lang['sp_reminder_guide_roles_p2'] = '<strong>Protect Technical Admins:</strong> Pure IT Admins receive infrastructure failure notices only, never deal or quote prompts.';
+$lang['sp_reminder_guide_roles_p3'] = '<strong>Safe Isolation & No Fallback:</strong> If no valid manager is configured, manager alerts are safely omitted rather than leaking data externally.';
+$lang['sp_reminder_guide_roles_note'] = 'The assigned sales rep (Owner) always receives their personal reminders via CRM Bell and Email.';
+
 

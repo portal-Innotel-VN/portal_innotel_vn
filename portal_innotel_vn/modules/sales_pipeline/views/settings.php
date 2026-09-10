@@ -169,11 +169,61 @@
                                     </div>
                                 </div>
 
-                                <!-- SECTION 2: EMAIL CC QUẢN LÝ -->
+                                <!-- SECTION 2: NGƯỜI NHẬN CẢNH BÁO QUẢN LÝ (V2) & EMAIL CC -->
                                 <div class="sp-reminder-section sp-reminder-section--cc">
-                                    <h5><i class="fa fa-envelope-o" aria-hidden="true"></i> <?php echo _l('sp_settings_reminder_email_cc_manager'); ?></h5>
+                                    <h5><i class="fa fa-users text-primary" aria-hidden="true"></i> <?php echo _l('sp_settings_reminder_manager_roles_title'); ?></h5>
                                     <div class="row">
                                         <div class="col-md-7 col-sm-12">
+                                            <!-- Switch Policy V2 -->
+                                            <div class="checkbox checkbox-primary">
+                                                <input id="sp_reminder_recipient_policy_v2_enabled" name="sp_reminder_recipient_policy_v2_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_recipient_policy_v2_enabled'); ?>>
+                                                <label for="sp_reminder_recipient_policy_v2_enabled" class="bold text-primary">
+                                                    <?php echo _l('sp_settings_reminder_policy_v2_enabled_label'); ?>
+                                                </label>
+                                                <p class="text-muted small mtop5"><?php echo _l('sp_settings_reminder_policy_v2_enabled_help'); ?></p>
+                                            </div>
+
+                                            <!-- Source Mode Selection -->
+                                            <div class="form-group mtop15" id="sp-manager-source-container">
+                                                <label class="control-label bold"><?php echo _l('sp_settings_reminder_manager_source_label'); ?></label>
+                                                <div class="radio radio-primary">
+                                                    <input type="radio" id="sp_source_explicit_view" name="sp_reminder_manager_recipient_source" value="explicit_view"<?php echo ($ro['sp_reminder_manager_recipient_source'] ?? 'explicit_view') === 'explicit_view' ? ' checked' : ''; ?>>
+                                                    <label for="sp_source_explicit_view"><?php echo _l('sp_settings_reminder_source_explicit_view'); ?></label>
+                                                </div>
+                                                <div class="radio radio-primary">
+                                                    <input type="radio" id="sp_source_selected_staff" name="sp_reminder_manager_recipient_source" value="selected_staff"<?php echo ($ro['sp_reminder_manager_recipient_source'] ?? '') === 'selected_staff' ? ' checked' : ''; ?>>
+                                                    <label for="sp_source_selected_staff"><?php echo _l('sp_settings_reminder_source_selected_staff'); ?></label>
+                                                </div>
+                                            </div>
+
+                                            <!-- Multiselect for selected_staff -->
+                                            <?php
+                                            $selectedStaffIds = json_decode((string) ($ro['sp_reminder_manager_recipient_staff_ids'] ?? '[]'), true);
+                                            if (!is_array($selectedStaffIds)) { $selectedStaffIds = []; }
+                                            ?>
+                                            <div class="form-group mtop15" id="sp-selected-staff-wrapper" style="<?php echo ($ro['sp_reminder_manager_recipient_source'] ?? 'explicit_view') === 'selected_staff' ? '' : 'display:none;'; ?>">
+                                                <label for="sp_reminder_manager_recipient_staff_ids" class="control-label bold"><?php echo _l('sp_settings_reminder_selected_staff_label'); ?></label>
+                                                <select name="sp_reminder_manager_recipient_staff_ids[]" id="sp_reminder_manager_recipient_staff_ids" class="form-control selectpicker" multiple data-live-search="true" data-actions-box="true">
+                                                    <?php if (!empty($staff_members)): ?>
+                                                        <?php foreach ($staff_members as $member): ?>
+                                                            <?php
+                                                            $sid = (int) $member['staffid'];
+                                                            $isSelected = in_array($sid, $selectedStaffIds, true);
+                                                            $fullName = trim($member['firstname'] . ' ' . $member['lastname']);
+                                                            $adminBadge = (int) $member['admin'] === 1 ? ' [' . _l('admin') . ']' : '';
+                                                            ?>
+                                                            <option value="<?php echo $sid; ?>"<?php echo $isSelected ? ' selected' : ''; ?>>
+                                                                <?php echo html_escape($fullName . $adminBadge); ?> (<?php echo html_escape($member['email']); ?>)
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </select>
+                                                <p class="text-muted small mtop5"><?php echo _l('sp_settings_reminder_selected_staff_help'); ?></p>
+                                            </div>
+
+                                            <hr class="hr-10">
+
+                                            <!-- Email CC options -->
                                             <div class="checkbox checkbox-primary">
                                                 <input id="sp_reminder_email_cc_manager_enabled" name="sp_reminder_email_cc_manager_enabled" type="checkbox" value="1"<?php echo $checked('sp_reminder_email_cc_manager_enabled'); ?>>
                                                 <label for="sp_reminder_email_cc_manager_enabled" class="bold"><?php echo _l('sp_settings_reminder_email_cc_manager_help'); ?></label>
@@ -185,20 +235,33 @@
                                                     <option value="critical_only"<?php echo ($ro['sp_reminder_email_cc_scope'] ?? '') === 'critical_only' ? ' selected' : ''; ?>><?php echo _l('sp_settings_reminder_email_cc_scope_critical'); ?></option>
                                                 </select>
                                             </div>
-                                            <div class="form-group">
+                                            <div class="form-group" id="sp-fallback-emails-wrapper">
                                                 <label for="sp_reminder_manager_fallback_emails" class="control-label"><?php echo _l('sp_settings_reminder_email_cc_fallback'); ?></label>
                                                 <input type="text" id="sp_reminder_manager_fallback_emails" name="sp_reminder_manager_fallback_emails" class="form-control" value="<?php echo html_escape($ro['sp_reminder_manager_fallback_emails'] ?? ''); ?>" placeholder="manager1@example.com, manager2@example.com">
+                                                <p class="text-muted small mtop5"><?php echo _l('sp_settings_reminder_email_cc_fallback_help'); ?></p>
                                             </div>
+
+                                            <!-- Live Preview Trigger -->
+                                            <div class="mtop15">
+                                                <button type="button" class="btn btn-info btn-sm" id="sp-btn-preview-recipients">
+                                                    <i class="fa fa-eye" aria-hidden="true"></i> <?php echo _l('sp_reminder_preview_recipients_btn'); ?>
+                                                </button>
+                                                <span id="sp-preview-loading" style="display:none;" class="mleft10 text-muted">
+                                                    <i class="fa fa-spinner fa-spin"></i> <?php echo _l('loading'); ?>...
+                                                </span>
+                                            </div>
+                                            <div id="sp-recipients-preview-container" class="mtop15" style="display:none;"></div>
                                         </div>
                                         <div class="col-md-5 col-sm-12">
                                             <div class="sp-guide-panel sp-guide-panel--cc">
                                                 <div class="sp-guide-panel__title">
-                                                    <i class="fa fa-envelope text-info" aria-hidden="true"></i> <?php echo _l('sp_reminder_guide_email_title'); ?>
+                                                    <i class="fa fa-shield text-primary" aria-hidden="true"></i> <?php echo _l('sp_reminder_guide_roles_title'); ?>
                                                 </div>
                                                 <div class="sp-guide-panel__body">
-                                                    <p><?php echo _l('sp_reminder_guide_email_manager'); ?></p>
-                                                    <p><?php echo _l('sp_reminder_guide_email_scope'); ?></p>
-                                                    <p class="sp-guide-panel__note"><?php echo _l('sp_reminder_guide_email_fallback'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_roles_p1'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_roles_p2'); ?></p>
+                                                    <p><?php echo _l('sp_reminder_guide_roles_p3'); ?></p>
+                                                    <p class="sp-guide-panel__note text-warning"><?php echo _l('sp_reminder_guide_roles_note'); ?></p>
                                                 </div>
                                             </div>
                                         </div>
@@ -760,6 +823,90 @@
             if (window.confirm(<?php echo json_encode(_l('sales_pipeline_reminder_delivery_resume_confirm'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>)) {
                 postDeliveryAction($(this).data('url'), $(this));
             }
+        });
+
+        // Policy V2 Manager Source mode toggle
+        $('input[name="sp_reminder_manager_recipient_source"]').on('change', function () {
+            if ($(this).val() === 'selected_staff') {
+                $('#sp-selected-staff-wrapper').slideDown(200);
+            } else {
+                $('#sp-selected-staff-wrapper').slideUp(200);
+            }
+        });
+
+        // Live Preview Recipients
+        $('#sp-btn-preview-recipients').on('click', function () {
+            var $btn = $(this);
+            var $loading = $('#sp-preview-loading');
+            var $container = $('#sp-recipients-preview-container');
+
+            $btn.prop('disabled', true);
+            $loading.show();
+
+            var postData = {
+                v2_enabled: $('#sp_reminder_recipient_policy_v2_enabled').is(':checked') ? 1 : 0,
+                source: $('input[name="sp_reminder_manager_recipient_source"]:checked').val() || 'explicit_view',
+                selected_staff_ids: $('#sp_reminder_manager_recipient_staff_ids').val() || []
+            };
+
+            if (typeof csrfData !== 'undefined') {
+                postData[csrfData.token_name] = csrfData.hash;
+            }
+
+            $.ajax({
+                url: admin_url + 'sales_pipeline/preview_manager_recipients',
+                type: 'POST',
+                data: postData,
+                dataType: 'json'
+            }).done(function (res) {
+                var html = '<div class="panel panel-info" style="border-radius:4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+                html += '<div class="panel-heading" style="font-weight:600; font-size:13px;"><i class="fa fa-users"></i> ' + <?php echo json_encode(_l('sp_reminder_preview_panel_title')); ?> + '</div>';
+                html += '<div class="panel-body" style="padding:15px;">';
+
+                if (res.empty_warning) {
+                    html += '<div class="alert alert-danger" style="margin-bottom:15px;"><i class="fa fa-exclamation-triangle"></i> <strong>' + <?php echo json_encode(_l('sp_reminder_preview_empty_warning')); ?> + '</strong><br>' + res.no_fallback_note + '</div>';
+                }
+
+                html += '<h5 class="bold text-success"><i class="fa fa-check-circle"></i> ' + <?php echo json_encode(_l('sp_reminder_preview_included_managers')); ?> + ' (' + res.included_managers.length + ')</h5>';
+                if (res.included_managers.length > 0) {
+                    html += '<div class="table-responsive"><table class="table table-bordered table-condensed table-striped" style="margin-bottom:15px;">';
+                    html += '<thead><tr class="active"><th>Staff ID</th><th>' + <?php echo json_encode(_l('name')); ?> + '</th><th>Email</th><th>' + <?php echo json_encode(_l('phonenumber')); ?> + '</th><th>' + <?php echo json_encode(_l('reason')); ?> + '</th></tr></thead><tbody>';
+                    $.each(res.included_managers, function (idx, m) {
+                        html += '<tr><td>' + m.staff_id + '</td><td class="bold">' + m.name + '</td><td>' + m.email_masked + '</td><td>' + m.phone_masked + '</td><td><span class="label label-success">' + m.reason + '</span></td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                } else {
+                    html += '<p class="text-danger"><em>' + <?php echo json_encode(_l('sp_reminder_preview_none_included')); ?> + '</em></p>';
+                }
+
+                if (res.excluded_candidates && res.excluded_candidates.length > 0) {
+                    html += '<h5 class="bold text-warning mtop15"><i class="fa fa-ban"></i> ' + <?php echo json_encode(_l('sp_reminder_preview_excluded_candidates')); ?> + ' (' + res.excluded_candidates.length + ')</h5>';
+                    html += '<div class="table-responsive"><table class="table table-bordered table-condensed" style="margin-bottom:15px;">';
+                    html += '<thead><tr class="active"><th>Staff ID</th><th>' + <?php echo json_encode(_l('name')); ?> + '</th><th>' + <?php echo json_encode(_l('reason')); ?> + '</th></tr></thead><tbody>';
+                    $.each(res.excluded_candidates, function (idx, e) {
+                        html += '<tr><td>' + e.staff_id + '</td><td>' + e.name + '</td><td><span class="label label-default">' + e.reason + '</span></td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+
+                if (res.technical_admins && res.technical_admins.length > 0) {
+                    html += '<h5 class="bold text-info mtop15"><i class="fa fa-wrench"></i> ' + <?php echo json_encode(_l('sp_reminder_preview_technical_admins')); ?> + ' (' + res.technical_admins.length + ')</h5>';
+                    html += '<p class="text-muted small">' + <?php echo json_encode(_l('sp_reminder_preview_technical_admins_desc')); ?> + '</p>';
+                    html += '<ul class="list-inline">';
+                    $.each(res.technical_admins, function (idx, a) {
+                        html += '<li class="label label-info mright5">' + a.name + ' (' + a.email_masked + ')</li>';
+                    });
+                    html += '</ul>';
+                }
+
+                html += '</div></div>';
+                $container.html(html).slideDown(200);
+            }).fail(function () {
+                alert_float('danger', 'Failed to generate recipient preview.');
+            }).always(function () {
+                $btn.prop('disabled', false);
+                $loading.hide();
+            });
         });
     });
 
