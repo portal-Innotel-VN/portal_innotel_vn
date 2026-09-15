@@ -56,13 +56,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "$DEPLOY_PATH" in
+          # Tự động loại bỏ khoảng trắng và dấu gạch chéo cuối nếu có
+          CLEAN_PATH=$(echo "$DEPLOY_PATH" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's:/*$::')
+          case "$CLEAN_PATH" in
             /home/*/portal.innotel.vn/modules/sales_pipeline|/home/*/public_html/modules/sales_pipeline) ;;
             *)
-              echo 'CPANEL_SALES_PIPELINE_PATH must be /home/<cpanel-user>/portal.innotel.vn/modules/sales_pipeline.' >&2
+              echo "CPANEL_SALES_PIPELINE_PATH nhan duoc: '$CLEAN_PATH'" >&2
+              echo 'CPANEL_SALES_PIPELINE_PATH must be /home/<cpanel-user>/portal.innotel.vn/modules/sales_pipeline' >&2
               exit 1
               ;;
           esac
+          echo "DEPLOY_PATH=$CLEAN_PATH" >> "$GITHUB_ENV"
 
       - name: Configure verified SSH access
         shell: bash
