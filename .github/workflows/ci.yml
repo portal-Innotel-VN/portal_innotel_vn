@@ -57,9 +57,9 @@ jobs:
         run: |
           set -euo pipefail
           case "$DEPLOY_PATH" in
-            /home/*/public_html/modules/sales_pipeline) ;;
+            /home/*/portal.innotel.vn/modules/sales_pipeline|/home/*/public_html/modules/sales_pipeline) ;;
             *)
-              echo 'CPANEL_SALES_PIPELINE_PATH must be /home/<cpanel-user>/public_html/modules/sales_pipeline.' >&2
+              echo 'CPANEL_SALES_PIPELINE_PATH must be /home/<cpanel-user>/portal.innotel.vn/modules/sales_pipeline.' >&2
               exit 1
               ;;
           esac
