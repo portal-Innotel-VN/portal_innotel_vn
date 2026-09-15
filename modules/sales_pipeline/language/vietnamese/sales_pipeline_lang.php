@@ -868,9 +868,28 @@ $lang['sp_reminder_guide_deal_title'] = 'Cơ chế Giám sát Pipeline & Deal';
 $lang['sp_reminder_guide_deal_desc'] = '<strong>Lịch kiểm tra & Cảnh báo:</strong> Quét định kỳ vào các ngày làm việc (Thứ 2, Thứ 4, Thứ 6) để cảnh báo khi số lượng Deal đang mở dưới mức tối thiểu. Đồng thời tự động phát hiện Deal không có hoạt động theo dõi (Stale) dựa trên tần suất riêng của từng Deal, có giới hạn số lượng nhắc nhở mỗi đợt.';
 
 $lang['sp_reminder_guide_kpi_title'] = 'Cơ chế Theo dõi Chỉ tiêu Báo giá';
-$lang['sp_reminder_guide_kpi_desc'] = '<strong>Tiến độ & Mốc chốt:</strong> Nhắc nhở NVKD hoàn thành chỉ tiêu tạo báo giá hằng ngày, đồng thời rà soát tiến độ doanh thu vào các mốc D10, D20, Cuối tháng và đánh giá mục tiêu tuần (Thứ 4 giữa tuần & Thứ 6 cuối tuần).';
-
-$lang['sp_reminder_guide_lifecycle_title'] = 'Quy trình Vòng đời Báo giá';
-$lang['sp_reminder_guide_lifecycle_desc'] = '<strong>Cảnh báo theo trạng thái:</strong> Thúc đẩy hoàn tất Báo giá nháp tồn đọng, bám sát các báo giá đã gửi nhưng chưa có phản hồi hoặc sắp hết hạn chót, nhắc nhở tìm hiểu nguyên nhân khi bị từ chối, và thông báo xuất hóa đơn/hợp đồng khi báo giá được chấp nhận.';
+// Policy V2 Manager Recipient Roles & Preview
+$lang['sp_settings_reminder_manager_roles_title'] = 'Người nhận Cảnh báo Quản lý & Email CC (Chính sách V2)';
+$lang['sp_settings_reminder_policy_v2_enabled_label'] = 'Kích hoạt Chính sách Người nhận V2 (Tách biệt quyền xem và trách nhiệm nhận cảnh báo)';
+$lang['sp_settings_reminder_policy_v2_enabled_help'] = 'Khi bật, chỉ Quản lý kinh doanh hợp lệ mới nhận CC/WhatsApp; Admin kỹ thuật thuần túy chỉ nhận cảnh báo hạ tầng; không tự động fallback ra ngoài.';
+$lang['sp_settings_reminder_manager_source_label'] = 'Nguồn xác định Quản lý kinh doanh:';
+$lang['sp_settings_reminder_source_explicit_view'] = 'Chỉ nhân sự có dòng quyền Xem (Chung) được cấp rõ ràng trong Phân quyền';
+$lang['sp_settings_reminder_source_selected_staff'] = 'Chỉ định danh sách Quản lý kinh doanh cụ thể (khuyến nghị cho Admin kiêm nhiệm)';
+$lang['sp_settings_reminder_selected_staff_label'] = 'Danh sách Quản lý kinh doanh nhận cảnh báo:';
+$lang['sp_settings_reminder_selected_staff_help'] = 'Chỉ các nhân sự đang hoạt động và có quyền xem toàn cục mới hợp lệ. Nhân sự chỉ có quyền xem riêng (view_own) sẽ bị loại bỏ.';
+$lang['sp_settings_reminder_email_cc_fallback_help'] = 'Lưu ý: Trong Chính sách V2, nếu danh sách Quản lý rỗng, hệ thống sẽ tạm dừng gửi cảnh báo Quản lý để bảo mật dữ liệu, không tự động gửi tới email dự phòng này.';
+$lang['sp_reminder_preview_recipients_btn'] = 'Xem trước Người nhận';
+$lang['sp_reminder_preview_panel_title'] = 'Kết quả Phân tích Người nhận Cảnh báo (Live Preview)';
+$lang['sp_reminder_preview_empty_warning'] = 'CẢNH BÁO: Danh sách Quản lý kinh doanh đang rỗng!';
+$lang['sp_reminder_preview_included_managers'] = 'Quản lý kinh doanh hợp lệ sẽ nhận cảnh báo';
+$lang['sp_reminder_preview_none_included'] = 'Chưa có Quản lý kinh doanh nào được xác định theo cấu hình hiện tại.';
+$lang['sp_reminder_preview_excluded_candidates'] = 'Các trường hợp bị loại trừ';
+$lang['sp_reminder_preview_technical_admins'] = 'Admin Kỹ thuật nhận cảnh báo lỗi hạ tầng (SMTP / BCC / Gateway)';
+$lang['sp_reminder_preview_technical_admins_desc'] = 'Các tài khoản này chỉ nhận thông báo khi có sự cố kỹ thuật hạ tầng, không nhận cảnh báo kinh doanh.';
+$lang['sp_reminder_guide_roles_title'] = 'Nguyên tắc Phân quyền Người nhận (V2)';
+$lang['sp_reminder_guide_roles_p1'] = '<strong>Tách quyền xem khỏi nhận tin:</strong> Nhân sự có quyền xem Dashboard không mặc định phải nhận cảnh báo nhắc nhở hằng ngày.';
+$lang['sp_reminder_guide_roles_p2'] = '<strong>Bảo vệ Admin kỹ thuật:</strong> Tài khoản Admin IT thuần túy chỉ nhận lỗi hạ tầng, không bị làm phiền bởi thông báo Deal hay Báo giá.';
+$lang['sp_reminder_guide_roles_p3'] = '<strong>An toàn dữ liệu & Không fallback ngầm:</strong> Nếu không có Quản lý hợp lệ, hệ thống không tự ý chuyển tiếp cảnh báo ra ngoài danh sách kiểm soát.';
+$lang['sp_reminder_guide_roles_note'] = 'Nhân viên phụ trách (Owner) luôn nhận thông báo riêng của chính mình qua Bell CRM và Email.';
 
 

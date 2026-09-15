@@ -1,0 +1,11 @@
+---
+deployment:
+  tasks:
+    # Runs as the cPanel account. Change `public_html` only when the domain has
+    # a different document root in cPanel's Domains screen.
+    - export DEPLOYPATH="$HOME/public_html/modules/sales_pipeline"
+    - /bin/mkdir -p "$DEPLOYPATH"
+    # The trailing slashes copy the module contents, never the repository root.
+    # --delete-delay keeps Production equal to the checked-out module, including
+    # removal of obsolete, Git-tracked code files after the copy succeeds.
+    - /usr/bin/rsync -a --delete-delay modules/sales_pipeline/ "$DEPLOYPATH/"

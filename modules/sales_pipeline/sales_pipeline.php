@@ -5,7 +5,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /*
 Module Name: Sales Pipeline
 Description: Quản lý Tiến Độ Kinh Doanh - Số hóa quy trình bán hàng, theo dõi deal, nhắc nhở tự động
-Version: 1.1.4
+Version: 1.1.5
 Requires at least: 2.3.*
 Author: Hiệp - Innotel Developer
 */

@@ -28,10 +28,13 @@ class Reminder_engine
         $this->CI->load->library('sales_pipeline/Reminder_delivery_error_sanitizer');
         $this->CI->load->library('sales_pipeline/Reminder_delivery_error_classifier');
         $this->CI->load->library('sales_pipeline/Reminder_delivery_backoff');
+        $this->CI->load->library('sales_pipeline/Reminder_recipient_resolver');
     }
 
     public function process()
     {
+        $this->CI->reminder_recipient_resolver->clearCache();
+
         if ($this->option('sp_reminder_global_enabled') !== '1') {
             return;
         }
@@ -76,9 +79,16 @@ class Reminder_engine
                 continue;
             }
             $summary = $summariesByStaff[$staffId] ?? [];
+            $openDealCount = (int) ($summary['open_deal_count'] ?? 0);
+
+            // Quota cohort rule: pure supervisory managers without sales activity are excluded from deal quota reminders
+            if ($this->isPureSupervisoryManager($staffId) && $openDealCount === 0) {
+                continue;
+            }
+
             $event = $this->CI->deal_reminder_rule_evaluator->evaluatePipelineMinimum([
                 'staff_id' => $staffId,
-                'open_deal_count' => (int) ($summary['open_deal_count'] ?? 0),
+                'open_deal_count' => $openDealCount,
                 'open_pipeline_value' => (float) ($summary['open_pipeline_value'] ?? 0),
             ], $now, [
                 'enabled' => true,
@@ -151,6 +161,10 @@ class Reminder_engine
         foreach ($staffRows as $row) {
             $staffId = (int) $row['staffid'];
             if (!staff_can('view', 'sales_pipeline', $staffId) && !staff_can('view_own', 'sales_pipeline', $staffId)) {
+                continue;
+            }
+            // Quota cohort rule: pure supervisory managers without estimate activity in the period are excluded
+            if ($this->isPureSupervisoryManager($staffId) && !$this->hasStaffEstimateActivity($staffId, $now)) {
                 continue;
             }
             $monthly = $this->monthlyEvent($staffId, $now);
@@ -406,7 +420,11 @@ class Reminder_engine
         $maxValidAgeHours = (int) $this->option('sp_reminder_delivery_default_max_valid_age_hours');
         $recipients = [['type' => 'staff', 'id' => $event['staff_id']]];
         if (in_array('manager', $event['recipients'], true)) {
-            foreach ($this->activeManagerStaff() as $manager) {
+            $managers = $this->isV2Enabled()
+                ? $this->CI->reminder_recipient_resolver->businessManagers()
+                : $this->activeManagerStaff();
+
+            foreach ($managers as $manager) {
                 if ((int) $manager->staffid !== (int) $event['staff_id']) {
                     $recipients[] = ['type' => 'manager', 'id' => (int) $manager->staffid];
                 }
@@ -420,6 +438,10 @@ class Reminder_engine
             foreach ($event['channels'] as $channel) {
                 if ($channel === 'whatsapp') {
                     // WhatsApp is materialized dedicatedly for managers per configured mode
+                    continue;
+                }
+                if ($this->isV2Enabled() && $recipient['type'] === 'manager' && $channel === 'crm') {
+                    // In V2 target model, CRM Bell is strictly for the staff owner; omit manager Bell
                     continue;
                 }
                 if ($recipient['type'] === 'manager' && $channel === 'email' && $isCCApplicable) {
@@ -462,7 +484,14 @@ class Reminder_engine
 
         if ($mode === 'direct_only' || $mode === 'both') {
             $this->CI->load->library('sales_pipeline/Reminder_whatsapp_formatter');
-            foreach ($this->activeManagerStaff() as $manager) {
+            $managers = $this->isV2Enabled()
+                ? $this->CI->reminder_recipient_resolver->businessManagers()
+                : $this->activeManagerStaff();
+
+            foreach ($managers as $manager) {
+                if ($this->isV2Enabled() && (int) $manager->staffid === (int) $event['staff_id']) {
+                    continue;
+                }
                 $staffObj = $this->activeStaff($manager->staffid);
                 if (!$staffObj || empty($staffObj->phonenumber)) {
                     continue;
@@ -518,6 +547,10 @@ class Reminder_engine
 
     private function resolveManagerCCEmails($staffId, $severity = 'warning', $eventAllowsCC = null)
     {
+        if ($this->isV2Enabled()) {
+            return $this->CI->reminder_recipient_resolver->resolveManagerEmails($staffId, $severity, $eventAllowsCC);
+        }
+
         if (!$this->isManagerCCApplicable($severity, $eventAllowsCC)) {
             return [];
         }
@@ -773,6 +806,18 @@ class Reminder_engine
                     continue;
                 }
 
+                if ($this->isV2Enabled()) {
+                    $reval = $this->CI->reminder_recipient_resolver->revalidateDeliveryRecipient($row);
+                    if (empty($reval['valid'])) {
+                        $this->CI->reminder_delivery_selector->cancel(
+                            (int) $row['id'],
+                            $reval['reason'] ?: 'recipient_revoked',
+                            'Recipient eligibility revalidation failed before dispatch'
+                        );
+                        continue;
+                    }
+                }
+
                 $text = $this->CI->reminder_whatsapp_formatter->format($row);
                 $remainingTimeout = max(1.0, min(5.0, $timeBudget - (microtime(true) - $batchStart)));
                 $result = $this->CI->reminder_delivery_whatsapp_adapter->send(
@@ -849,6 +894,19 @@ class Reminder_engine
             )) {
                 continue;
             }
+
+            if ($this->isV2Enabled()) {
+                $reval = $this->CI->reminder_recipient_resolver->revalidateDeliveryRecipient($row);
+                if (empty($reval['valid'])) {
+                    $this->CI->reminder_delivery_selector->cancel(
+                        (int) $row['id'],
+                        $reval['reason'] ?: 'recipient_revoked',
+                        'Recipient eligibility revalidation failed before dispatch'
+                    );
+                    continue;
+                }
+            }
+
             $success = false; $error = null; $classification = null;
             if ($row['channel'] === 'crm') {
                 $inboxEnabled = (int) $this->option('sp_reminder_crm_inbox_enabled', '0');
@@ -1154,12 +1212,14 @@ class Reminder_engine
         update_option('sp_reminder_delivery_email_circuit_opened_at', $openedAt);
         update_option('sp_reminder_delivery_email_circuit_reason', (string) $reasonCode);
 
-        $admins = $this->CI->db->select('staffid')->where('admin', 1)->where('active', 1)
-            ->get(db_prefix() . 'staff')->result_array();
+        $admins = $this->isV2Enabled()
+            ? $this->CI->reminder_recipient_resolver->technicalAdmins()
+            : $this->CI->db->select('staffid')->where('admin', 1)->where('active', 1)->get(db_prefix() . 'staff')->result();
         foreach ($admins as $admin) {
+            $adminStaffId = is_object($admin) ? (int) $admin->staffid : (int) $admin['staffid'];
             add_notification([
                 'description' => 'sales_pipeline_reminder_email_authentication_alert',
-                'touserid' => (int) $admin['staffid'],
+                'touserid' => $adminStaffId,
                 'fromuserid' => null,
                 'link' => 'sales_pipeline/settings#reminders',
                 'additional_data' => serialize([]),
@@ -1174,12 +1234,14 @@ class Reminder_engine
             return;
         }
         update_option('sp_reminder_delivery_bcc_incident_alerted_at', date('Y-m-d H:i:s'));
-        $admins = $this->CI->db->select('staffid')->where('admin', 1)->where('active', 1)
-            ->get(db_prefix() . 'staff')->result_array();
+        $admins = $this->isV2Enabled()
+            ? $this->CI->reminder_recipient_resolver->technicalAdmins()
+            : $this->CI->db->select('staffid')->where('admin', 1)->where('active', 1)->get(db_prefix() . 'staff')->result();
         foreach ($admins as $admin) {
+            $adminStaffId = is_object($admin) ? (int) $admin->staffid : (int) $admin['staffid'];
             add_notification([
                 'description' => 'sales_pipeline_reminder_email_bcc_quota_alert',
-                'touserid' => (int) $admin['staffid'],
+                'touserid' => $adminStaffId,
                 'fromuserid' => null,
                 'link' => 'sales_pipeline/settings#reminders',
                 'additional_data' => serialize([]),
@@ -1313,5 +1375,50 @@ class Reminder_engine
             }
         }
         return $this->activeManagerStaffCache;
+    }
+
+    private function isV2Enabled()
+    {
+        if (isset($this->CI->reminder_recipient_resolver)) {
+            return $this->CI->reminder_recipient_resolver->isV2Enabled();
+        }
+        return (string) $this->option('sp_reminder_recipient_policy_v2_enabled') === '1';
+    }
+
+    private function isPureSupervisoryManager($staffId)
+    {
+        $staffId = (int) $staffId;
+        if ($staffId <= 0) {
+            return false;
+        }
+        $staff = $this->staffById($staffId);
+        if (!$staff) {
+            return false;
+        }
+        if ((int) $staff->admin === 1) {
+            return true;
+        }
+        if ($this->isV2Enabled() && isset($this->CI->reminder_recipient_resolver)) {
+            $managers = $this->CI->reminder_recipient_resolver->businessManagers();
+            foreach ($managers as $m) {
+                if ((int) $m->staffid === $staffId) {
+                    return true;
+                }
+            }
+            return in_array($staffId, $this->CI->reminder_recipient_resolver->explicitViewStaffIds(), true);
+        }
+        return has_permission('sales_pipeline', (string) $staffId, 'view');
+    }
+
+    private function hasStaffEstimateActivity($staffId, DateTimeImmutable $now)
+    {
+        $monthStart = $now->modify('first day of this month')->format('Y-m-d 00:00:00');
+        $monthEnd = $now->modify('first day of next month')->format('Y-m-d 00:00:00');
+        $count = $this->validEstimateCount($staffId, $monthStart, $monthEnd);
+        if ($count > 0) {
+            return true;
+        }
+        $revenue = $this->acceptedRevenue($staffId, $monthStart, $monthEnd);
+        return $revenue > 0;
     }
 }

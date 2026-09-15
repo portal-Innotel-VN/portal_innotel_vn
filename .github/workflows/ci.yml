@@ -1,0 +1,95 @@
+name: Validate and deploy Sales Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'modules/sales_pipeline/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'modules/sales_pipeline/**'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-sales-pipeline
+  cancel-in-progress: false
+
+jobs:
+  php-lint:
+    name: PHP syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Lint every PHP file in the module
+        shell: bash
+        run: |
+          set -euo pipefail
+          find modules/sales_pipeline -type f -name '*.php' -print0 \
+            | xargs -0 -r -n 1 php -l
+
+  deploy:
+    name: Deploy Sales Pipeline to cPanel
+    needs: php-lint
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_PATH: ${{ vars.CPANEL_SALES_PIPELINE_PATH }}
+      SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
+      SSH_PORT: ${{ secrets.CPANEL_SSH_PORT }}
+      SSH_USER: ${{ secrets.CPANEL_SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.CPANEL_SSH_KNOWN_HOSTS }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate deploy target
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DEPLOY_PATH" in
+            /home/*/public_html/modules/sales_pipeline) ;;
+            *)
+              echo 'CPANEL_SALES_PIPELINE_PATH must be /home/<cpanel-user>/public_html/modules/sales_pipeline.' >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Configure verified SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Confirm the existing Production module directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "test -d '$DEPLOY_PATH'"
+
+      - name: Synchronize the module
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -az --delete-delay --itemize-changes \
+            -e "ssh -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -p $SSH_PORT" \
+            modules/sales_pipeline/ \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"

@@ -56,6 +56,33 @@ class Reminder_delivery_operations
     public function retry($deliveryId, $staffId)
     {
         $now = date('Y-m-d H:i:s');
+        $delivery = $this->CI->db->select('*')
+            ->where('id', (int) $deliveryId)
+            ->get(db_prefix() . 'sales_pipeline_reminder_deliveries')
+            ->row_array();
+
+        if (!$delivery) {
+            return false;
+        }
+
+        if (!in_array($delivery['status'], ['failed', 'cancelled'], true)) {
+            return false;
+        }
+
+        if (!empty($delivery['expires_at']) && $delivery['expires_at'] <= $now) {
+            return false;
+        }
+
+        $this->CI->load->library('sales_pipeline/Reminder_recipient_resolver');
+        if ($this->CI->reminder_recipient_resolver->isV2Enabled()) {
+            $reval = $this->CI->reminder_recipient_resolver->revalidateDeliveryRecipient($delivery);
+            if (empty($reval['valid'])) {
+                log_activity('Sales Pipeline reminder delivery #' . (int) $deliveryId
+                    . ' retry rejected: recipient revalidation failed (' . ($reval['reason'] ?? 'unknown') . ')');
+                return false;
+            }
+        }
+
         $this->CI->db->query('UPDATE `' . db_prefix() . 'sales_pipeline_reminder_deliveries`'
             . " SET `status`='pending',`attempt_count`=0,`next_retry_at`=NULL,`last_error`=NULL,"
             . ' `last_error_code`=NULL,`last_error_class`=NULL,`sent_at`=NULL,`updated_at`=?'
