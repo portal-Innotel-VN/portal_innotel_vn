@@ -535,6 +535,7 @@ $lang['sp_reminder_error_invalid_number'] = 'Invalid value for %s (between %s an
 $lang['sp_reminder_error_invalid_time'] = 'Invalid time format for %s.';
 $lang['sp_reminder_error_invalid_date'] = 'Invalid holiday date: %s.';
 $lang['sp_reminder_error_quiet_hours_incomplete'] = 'Both quiet-hour times are required.';
+$lang['sp_reminder_error_invalid_url']              = 'Invalid URL format for %s.';
 
 // Reminder Email Carbon Copy (CC) Settings
 $lang['sp_settings_reminder_email_cc_manager']          = 'Carbon Copy (CC) reminder emails to Managers';

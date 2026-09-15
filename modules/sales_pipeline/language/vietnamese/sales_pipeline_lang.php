@@ -535,6 +535,7 @@ $lang['sp_reminder_error_invalid_number'] = 'Giá trị %s không hợp lệ (t�
 $lang['sp_reminder_error_invalid_time'] = 'Định dạng giờ không hợp lệ cho %s.';
 $lang['sp_reminder_error_invalid_date'] = 'Ngày nghỉ %s không hợp lệ.';
 $lang['sp_reminder_error_quiet_hours_incomplete'] = 'Cần nhập đủ giờ bắt đầu và kết thúc của Giờ im lặng.';
+$lang['sp_reminder_error_invalid_url']              = 'Định dạng đường dẫn URL không hợp lệ cho %s.';
 
 // Reminder Email Carbon Copy (CC) Settings
 $lang['sp_settings_reminder_email_cc_manager']          = 'Gửi bản sao (CC) email nhắc nhở đến Quản lý';
@@ -836,7 +837,7 @@ $lang['sp_reminder_whatsapp_msg_days'] = 'ngày';
 $lang['sp_reminder_whatsapp_msg_quick_action'] = 'Thao tác nhanh trên CRM';
 $lang['sp_reminder_whatsapp_msg_view_deal'] = 'Xem Deal';
 $lang['sp_reminder_whatsapp_msg_view_estimate'] = 'Xem Báo giá';
-$lang['sp_reminder_whatsapp_msg_view_reminder'] = 'Xem chi tiết nhắc nhở';
+$lang['sp_reminder_whatsapp_msg_view_reminder'] = 'Xem chi tiết & Phản hồi';
 $lang['sp_reminder_whatsapp_msg_test_title'] = 'Sales Pipeline - Test Connection';
 $lang['sp_reminder_whatsapp_msg_view_revenue_chart'] = 'Xem Biểu đồ Doanh thu';
 $lang['sp_reminder_whatsapp_msg_view_staff_revenue_chart'] = 'Xem Biểu đồ Doanh thu (%s)';
@@ -868,6 +869,11 @@ $lang['sp_reminder_guide_deal_title'] = 'Cơ chế Giám sát Pipeline & Deal';
 $lang['sp_reminder_guide_deal_desc'] = '<strong>Lịch kiểm tra & Cảnh báo:</strong> Quét định kỳ vào các ngày làm việc (Thứ 2, Thứ 4, Thứ 6) để cảnh báo khi số lượng Deal đang mở dưới mức tối thiểu. Đồng thời tự động phát hiện Deal không có hoạt động theo dõi (Stale) dựa trên tần suất riêng của từng Deal, có giới hạn số lượng nhắc nhở mỗi đợt.';
 
 $lang['sp_reminder_guide_kpi_title'] = 'Cơ chế Theo dõi Chỉ tiêu Báo giá';
+$lang['sp_reminder_guide_kpi_desc'] = '<strong>Các mốc chỉ tiêu:</strong> Nhắc nhở định mức lập báo giá hằng ngày, theo dõi tiến độ doanh thu vào các ngày D10, D20, cuối tháng và giữa/cuối tuần.';
+
+$lang['sp_reminder_guide_lifecycle_title'] = 'Quy tắc Vòng đời Báo giá';
+$lang['sp_reminder_guide_lifecycle_desc'] = '<strong>Theo dõi trạng thái:</strong> Thúc đẩy báo giá nháp tồn đọng, theo dõi khách hàng chưa phản hồi hoặc báo giá sắp hết hạn, rà soát lý do từ chối và nhắc lập hóa đơn khi báo giá được chấp nhận.';
+
 // Policy V2 Manager Recipient Roles & Preview
 $lang['sp_settings_reminder_manager_roles_title'] = 'Người nhận Cảnh báo Quản lý & Email CC (Chính sách V2)';
 $lang['sp_settings_reminder_policy_v2_enabled_label'] = 'Kích hoạt Chính sách Người nhận V2 (Tách biệt quyền xem và trách nhiệm nhận cảnh báo)';
@@ -891,5 +897,3 @@ $lang['sp_reminder_guide_roles_p1'] = '<strong>Tách quyền xem khỏi nhận t
 $lang['sp_reminder_guide_roles_p2'] = '<strong>Bảo vệ Admin kỹ thuật:</strong> Tài khoản Admin IT thuần túy chỉ nhận lỗi hạ tầng, không bị làm phiền bởi thông báo Deal hay Báo giá.';
 $lang['sp_reminder_guide_roles_p3'] = '<strong>An toàn dữ liệu & Không fallback ngầm:</strong> Nếu không có Quản lý hợp lệ, hệ thống không tự ý chuyển tiếp cảnh báo ra ngoài danh sách kiểm soát.';
 $lang['sp_reminder_guide_roles_note'] = 'Nhân viên phụ trách (Owner) luôn nhận thông báo riêng của chính mình qua Bell CRM và Email.';
-
-

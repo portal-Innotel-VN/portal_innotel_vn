@@ -327,7 +327,7 @@ class Reminder_delivery_whatsapp_adapter
             if ($statusCode === 200 && !empty($body['success'])) {
                 return [
                     'success' => true,
-                    'groups'  => $body['groups'] ?? [],
+                    'groups'  => $body['groups'] ?? ($body['data'] ?? []),
                     'error'   => null,
                 ];
             }

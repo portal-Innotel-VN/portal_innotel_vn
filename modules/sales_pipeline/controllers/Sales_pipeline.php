@@ -1462,6 +1462,11 @@ class Sales_pipeline extends AdminController
                 if ($endpoint === '') {
                     $endpoint = 'http://127.0.0.1:3050/api/v1/messages/send';
                 }
+                if (!filter_var($endpoint, FILTER_VALIDATE_URL) || (!preg_match('#^https?://#i', $endpoint))) {
+                    $errors[] = _l('sp_reminder_error_invalid_url', [_l('sp_reminder_whatsapp_endpoint_label')]);
+                }
+                $normalized['sp_reminder_whatsapp_endpoint'] = $endpoint;
+
                 $secretKeyInput = trim((string) ($data['sp_reminder_whatsapp_secret_key'] ?? ''));
                 if ($secretKeyInput === '') {
                     $normalized['sp_reminder_whatsapp_secret_key'] = (string) get_option('sp_reminder_whatsapp_secret_key');

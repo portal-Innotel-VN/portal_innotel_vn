@@ -37,17 +37,17 @@ class Reminder_whatsapp_formatter
         $lines = [];
         $lines[] = "{$icon} *[" . mb_strtoupper($badgeText, 'UTF-8') . " - SALES PIPELINE]*";
         $lines[] = "*{$title}*";
-        $lines[] = "━━━━━━━━━━━━━━━━━━━━━━";
+        $lines[] = "";
 
         // Staff in charge
         $staffName = $this->resolveStaffName((int) ($row['staff_id'] ?? 0));
         if ($staffName !== '') {
-            $lines[] = "👤 *" . _l('sp_reminder_whatsapp_msg_staff') . ":* {$staffName}";
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_staff') . ":* {$staffName}";
         }
 
         // Entity details from snapshot
         if (!empty($snapshot['customer_name'])) {
-            $lines[] = "🏢 *" . _l('sp_reminder_whatsapp_msg_customer') . ":* " . trim((string) $snapshot['customer_name']);
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_customer') . ":* " . trim((string) $snapshot['customer_name']);
         }
 
         if (!empty($snapshot['deal_name'])) {
@@ -55,41 +55,41 @@ class Reminder_whatsapp_formatter
             if (isset($snapshot['deal_value']) && is_numeric($snapshot['deal_value'])) {
                 $dealValStr = ' (' . number_format((float) $snapshot['deal_value'], 0, ',', '.') . ' đ)';
             }
-            $lines[] = "💼 *" . _l('sp_reminder_whatsapp_msg_deal') . ":* " . trim((string) $snapshot['deal_name']) . $dealValStr;
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_deal') . ":* " . trim((string) $snapshot['deal_name']) . $dealValStr;
         } elseif (!empty($snapshot['estimate_number'])) {
             $estValStr = '';
             if (isset($snapshot['estimate_total']) && is_numeric($snapshot['estimate_total'])) {
                 $estValStr = ' (' . number_format((float) $snapshot['estimate_total'], 0, ',', '.') . ' đ)';
             }
-            $lines[] = "📄 *" . _l('sp_reminder_whatsapp_msg_estimate') . ":* #" . trim((string) $snapshot['estimate_number']) . $estValStr;
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_estimate') . ":* #" . trim((string) $snapshot['estimate_number']) . $estValStr;
         }
 
         if (!empty($snapshot['risk_reason'])) {
-            $lines[] = "⚠️ *" . _l('sp_reminder_whatsapp_msg_issue') . ":* " . trim((string) $snapshot['risk_reason']);
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_issue') . ":* " . trim((string) $snapshot['risk_reason']);
         } elseif ($message !== '') {
             $cleanMsg = strip_tags($message);
             if (mb_strlen($cleanMsg) > 200) {
                 $cleanMsg = mb_substr($cleanMsg, 0, 197) . '...';
             }
-            $lines[] = "⚠️ *" . _l('sp_reminder_whatsapp_msg_content') . ":* {$cleanMsg}";
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_content') . ":* {$cleanMsg}";
         }
 
         if (!empty($snapshot['inactive_days'])) {
-            $lines[] = "⏳ *" . _l('sp_reminder_whatsapp_msg_inactive_time') . ":* " . (int) $snapshot['inactive_days'] . " " . _l('sp_reminder_whatsapp_msg_days');
+            $lines[] = "• *" . _l('sp_reminder_whatsapp_msg_inactive_time') . ":* " . (int) $snapshot['inactive_days'] . " " . _l('sp_reminder_whatsapp_msg_days');
         }
 
         // Action links with custom base URL if configured
         $lines[] = "";
-        $lines[] = "👇 *" . _l('sp_reminder_whatsapp_msg_quick_action') . ":*";
+        $lines[] = "🔗 *" . _l('sp_reminder_whatsapp_msg_quick_action') . ":*";
 
         $staffId = !empty($row['staff_id']) ? (int) $row['staff_id'] : 0;
         $dealId = !empty($row['pipeline_id']) ? (int) $row['pipeline_id'] : (int) ($row['entity_id'] ?? 0);
         if ($row['entity_type'] === 'deal' && $dealId > 0) {
             $dealUrl = $this->buildMobileUrl('sales_pipeline/deal/' . $dealId);
-            $lines[] = "👉 *" . _l('sp_reminder_whatsapp_msg_view_deal') . ":* {$dealUrl}";
+            $lines[] = "↳ " . _l('sp_reminder_whatsapp_msg_view_deal') . ": {$dealUrl}";
         } elseif ($row['entity_type'] === 'estimate' && !empty($row['entity_id'])) {
             $estUrl = $this->buildMobileUrl('estimates/list_estimates/' . (int) $row['entity_id']);
-            $lines[] = "👉 *" . _l('sp_reminder_whatsapp_msg_view_estimate') . ":* {$estUrl}";
+            $lines[] = "↳ " . _l('sp_reminder_whatsapp_msg_view_estimate') . ": {$estUrl}";
         }
 
         // Deeplink to Estimates Revenue Chart (filtered by staff for Management review)
@@ -98,15 +98,15 @@ class Reminder_whatsapp_formatter
             $chartLabel = $staffName !== ''
                 ? sprintf(_l('sp_reminder_whatsapp_msg_view_staff_revenue_chart'), $staffName)
                 : _l('sp_reminder_whatsapp_msg_view_revenue_chart');
-            $lines[] = "📊 *{$chartLabel}:* {$chartUrl}";
+            $lines[] = "↳ {$chartLabel}: {$chartUrl}";
         } elseif ($row['entity_type'] === 'estimate') {
             $chartUrl = $this->buildMobileUrl('sales_pipeline/dashboard?dashboard_tab=estimates');
-            $lines[] = "📊 *" . _l('sp_reminder_whatsapp_msg_view_revenue_chart') . ":* {$chartUrl}";
+            $lines[] = "↳ " . _l('sp_reminder_whatsapp_msg_view_revenue_chart') . ": {$chartUrl}";
         }
 
         if (!empty($row['reminder_id'])) {
             $respUrl = $this->buildMobileUrl('sales_pipeline/reminder_response/' . (int) $row['reminder_id'] . '?src=wa');
-            $lines[] = "👉 *" . _l('sp_reminder_whatsapp_msg_view_reminder') . ":* {$respUrl}";
+            $lines[] = "↳ " . _l('sp_reminder_whatsapp_msg_view_reminder') . ": {$respUrl}";
         }
 
         return implode("\n", $lines);
@@ -174,7 +174,7 @@ class Reminder_whatsapp_formatter
         }
         $staff = $this->CI->db->select('firstname, lastname')->where('staffid', $staffId)->get(db_prefix() . 'staff')->row();
         if ($staff) {
-            return trim($staff->firstname . ' ' . $staff->lastname);
+            return trim(preg_replace('/\s+/', ' ', $staff->firstname . ' ' . $staff->lastname));
         }
         return '#' . $staffId;
     }
